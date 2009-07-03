@@ -471,6 +471,8 @@ static inline void __raise_softirq_irqoff(unsigned int nr)
 extern void raise_softirq_irqoff(unsigned int nr);
 extern void raise_softirq(unsigned int nr);
 
+extern void softirq_check_pending_idle(void);
+
 /* This is the worklist that queues up per-cpu softirq work.
  *
  * send_remote_sendirq() adds work to these lists, and
