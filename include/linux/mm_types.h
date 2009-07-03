@@ -118,7 +118,11 @@ struct page {
 						 * system if PG_buddy is set.
 						 */
 #if USE_SPLIT_PTLOCKS
-		spinlock_t ptl;
+# ifndef CONFIG_PREEMPT_RT_FULL
+	    spinlock_t ptl;
+# else
+	    spinlock_t *ptl;
+# endif
 #endif
 		struct kmem_cache *slab;	/* SLUB: Pointer to slab */
 		struct page *first_page;	/* Compound tail pages */
