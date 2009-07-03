@@ -75,6 +75,7 @@
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
 #include <linux/random.h>
+#include <linux/posix-timers.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
