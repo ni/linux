@@ -1294,6 +1294,22 @@ unsigned long get_next_timer_interrupt(unsigned long now)
 	 */
 	if (cpu_is_offline(smp_processor_id()))
 		return now + NEXT_TIMER_MAX_DELTA;
+
+#ifdef CONFIG_PREEMPT_RT_FULL
+	/*
+	 * On PREEMPT_RT we cannot sleep here. If the trylock does not
+	 * succeed then we return the worst-case 'expires in 1 tick'
+	 * value:
+	 */
+	if (spin_trylock(&base->lock)) {
+		if (time_before_eq(base->next_timer, base->timer_jiffies))
+			base->next_timer = __next_timer_interrupt(base);
+		expires = base->next_timer;
+		spin_unlock(&base->lock);
+	} else {
+		expires = now + 1;
+	}
+#else
 	spin_lock(&base->lock);
 	if (time_before_eq(base->next_timer, base->timer_jiffies))
 		base->next_timer = __next_timer_interrupt(base);
@@ -1302,7 +1318,7 @@ unsigned long get_next_timer_interrupt(unsigned long now)
 
 	if (time_before_eq(expires, now))
 		return now;
-
+#endif
 	return cmp_next_hrtimer_event(now, expires);
 }
 #endif
