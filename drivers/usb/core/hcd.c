@@ -2145,7 +2145,7 @@ irqreturn_t usb_hcd_irq (int irq, void *__hcd)
 	 * when the first handler doesn't use it.  So let's just
 	 * assume it's never used.
 	 */
-	local_irq_save(flags);
+	local_irq_save_nort(flags);
 
 	if (unlikely(HCD_DEAD(hcd) || !HCD_HW_ACCESSIBLE(hcd))) {
 		rc = IRQ_NONE;
@@ -2158,7 +2158,7 @@ irqreturn_t usb_hcd_irq (int irq, void *__hcd)
 		rc = IRQ_HANDLED;
 	}
 
-	local_irq_restore(flags);
+	local_irq_restore_nort(flags);
 	return rc;
 }
 EXPORT_SYMBOL_GPL(usb_hcd_irq);
