@@ -357,6 +357,7 @@ static void watchdog_enable(unsigned int cpu)
 	/* kick off the timer for the hardlockup detector */
 	hrtimer_init(hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	hrtimer->function = watchdog_timer_fn;
+	hrtimer->irqsafe = 1;
 
 	if (!watchdog_enabled) {
 		kthread_park(current);
