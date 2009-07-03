@@ -135,6 +135,7 @@ void stop_one_cpu_nowait(unsigned int cpu, cpu_stop_fn_t fn, void *arg,
 
 /* static data for stop_cpus */
 static DEFINE_MUTEX(stop_cpus_mutex);
+static DEFINE_MUTEX(stopper_lock);
 static DEFINE_PER_CPU(struct cpu_stop_work, stop_cpus_work);
 
 static void queue_stop_cpus_work(const struct cpumask *cpumask,
@@ -153,15 +154,14 @@ static void queue_stop_cpus_work(const struct cpumask *cpumask,
 	}
 
 	/*
-	 * Disable preemption while queueing to avoid getting
-	 * preempted by a stopper which might wait for other stoppers
-	 * to enter @fn which can lead to deadlock.
+	 * Make sure that all work is queued on all cpus before we
+	 * any of the cpus can execute it.
 	 */
-	preempt_disable();
+	mutex_lock(&stopper_lock);
 	for_each_cpu(cpu, cpumask)
 		cpu_stop_queue_work(&per_cpu(cpu_stopper, cpu),
 				    &per_cpu(stop_cpus_work, cpu));
-	preempt_enable();
+	mutex_unlock(&stopper_lock);
 }
 
 static int __stop_cpus(const struct cpumask *cpumask,
@@ -274,6 +274,16 @@ repeat:
 		char ksym_buf[KSYM_NAME_LEN] __maybe_unused;
 
 		__set_current_state(TASK_RUNNING);
+
+		/*
+		 * Wait until the stopper finished scheduling on all
+		 * cpus
+		 */
+		mutex_lock(&stopper_lock);
+		/*
+		 * Let other cpu threads continue as well
+		 */
+		mutex_unlock(&stopper_lock);
 
 		/* cpu stop callbacks are not allowed to sleep */
 		preempt_disable();
