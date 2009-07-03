@@ -2521,7 +2521,8 @@ static void ack_apic_level(struct irq_data *data)
 	irq_complete_move(cfg);
 #ifdef CONFIG_GENERIC_PENDING_IRQ
 	/* If we are moving the irq we need to mask it */
-	if (unlikely(irqd_is_setaffinity_pending(data))) {
+	if (unlikely(irqd_is_setaffinity_pending(data) &&
+		     !irqd_irq_inprogress(data))) {
 		do_unmask_irq = 1;
 		mask_ioapic(cfg);
 	}
