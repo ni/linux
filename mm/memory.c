@@ -4328,3 +4328,35 @@ void copy_user_huge_page(struct page *dst, struct page *src,
 	}
 }
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE || CONFIG_HUGETLBFS */
+
+#if defined(CONFIG_PREEMPT_RT_FULL) && (USE_SPLIT_PTLOCKS > 0)
+/*
+ * Heinous hack, relies on the caller doing something like:
+ *
+ *   pte = alloc_pages(PGALLOC_GFP, 0);
+ *   if (pte)
+ *     pgtable_page_ctor(pte);
+ *   return pte;
+ *
+ * This ensures we release the page and return NULL when the
+ * lock allocation fails.
+ */
+struct page *pte_lock_init(struct page *page)
+{
+	page->ptl = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
+	if (page->ptl) {
+		spin_lock_init(__pte_lockptr(page));
+	} else {
+		__free_page(page);
+		page = NULL;
+	}
+	return page;
+}
+
+void pte_lock_deinit(struct page *page)
+{
+	kfree(page->ptl);
+	page->mapping = NULL;
+}
+
+#endif
