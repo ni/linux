@@ -341,8 +341,14 @@ int mnt_want_write(struct vfsmount *mnt)
 	 * incremented count after it has set MNT_WRITE_HOLD.
 	 */
 	smp_mb();
-	while (mnt->mnt_flags & MNT_WRITE_HOLD)
+	/*
+	 * No need to keep preemption disabled accross the spin loop.
+	 */
+	while (mnt->mnt_flags & MNT_WRITE_HOLD) {
+		preempt_enable();
 		cpu_relax();
+		preempt_disable();
+	}
 	/*
 	 * After the slowpath clears MNT_WRITE_HOLD, mnt_is_readonly will
 	 * be set to match its requirements. So we must not load that until
@@ -352,9 +358,7 @@ int mnt_want_write(struct vfsmount *mnt)
 	if (__mnt_is_readonly(mnt)) {
 		mnt_dec_writers(mnt);
 		ret = -EROFS;
-		goto out;
 	}
-out:
 	preempt_enable();
 	return ret;
 }
