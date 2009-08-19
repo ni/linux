@@ -17,6 +17,7 @@ static void __meminit init_page_cgroup(struct page_cgroup *pc, unsigned long id)
 	set_page_cgroup_array_id(pc, id);
 	pc->mem_cgroup = NULL;
 	INIT_LIST_HEAD(&pc->lru);
+	page_cgroup_lock_init(pc);
 }
 static unsigned long total_usage;
 
