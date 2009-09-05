@@ -177,6 +177,7 @@ int of_mm_gpiochip_add(struct device_node *np,
 	int ret = -ENOMEM;
 	struct of_gpio_chip *of_gc = &mm_gc->of_gc;
 	struct gpio_chip *gc = &of_gc->gc;
+	const void *prop;
 
 	gc->label = kstrdup(np->full_name, GFP_KERNEL);
 	if (!gc->label)
@@ -186,7 +187,12 @@ int of_mm_gpiochip_add(struct device_node *np,
 	if (!mm_gc->regs)
 		goto err1;
 
-	gc->base = -1;
+	prop = of_get_property(np, "base", NULL);
+
+	if (prop)
+		gc->base = simple_strtoul(prop, NULL, 10);
+	else
+		gc->base = -1;
 
 	if (!of_gc->xlate)
 		of_gc->xlate = of_gpio_simple_xlate;
