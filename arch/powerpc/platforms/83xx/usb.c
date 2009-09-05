@@ -181,8 +181,11 @@ int mpc831x_usb_cfg(void)
 		if (of_device_is_compatible(immr_node, "fsl,mpc8308-immr"))
 			goto out;
 
-		if (of_device_is_compatible(immr_node, "fsl,mpc8315-immr"))
+		if (of_device_is_compatible(immr_node, "fsl,mpc8315-immr") ||
+			of_get_property(np, "usb_clock_24_MHz", NULL))
+		{
 			refsel = CONTROL_REFSEL_24MHZ;
+		}
 		else
 			refsel = CONTROL_REFSEL_48MHZ;
 		/* Set UTMI_PHY_EN and REFSEL */
