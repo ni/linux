@@ -99,11 +99,11 @@ static int __devinit create_gpio_led(const struct gpio_led *template,
 		led_dat->cdev.blink_set = gpio_blink_set;
 	}
 	led_dat->cdev.brightness_set = gpio_led_set;
-	led_dat->cdev.brightness = LED_OFF;
+	led_dat->cdev.brightness = template->initial_state ? LED_FULL : LED_OFF;
 	if (!template->retain_state_suspended)
 		led_dat->cdev.flags |= LED_CORE_SUSPENDRESUME;
 
-	ret = gpio_direction_output(led_dat->gpio, led_dat->active_low);
+	ret = gpio_direction_output(led_dat->gpio, led_dat->active_low ^ template->initial_state);
 	if (ret < 0)
 		goto err;
 
@@ -225,7 +225,8 @@ static int __devinit of_gpio_leds_probe(struct of_device *ofdev,
 		enum of_gpio_flags flags;
 
 		led.gpio = of_get_gpio_flags(child, 0, &flags);
-		led.active_low = flags & OF_GPIO_ACTIVE_LOW;
+		led.active_low = (flags & OF_GPIO_ACTIVE_LOW) != 0;
+		led.initial_state = (flags & OF_GPIO_INITIAL_STATE_ACTIVE) != 0;
 		led.name = of_get_property(child, "label", NULL) ? : child->name;
 		led.default_trigger =
 			of_get_property(child, "linux,default-trigger", NULL);
