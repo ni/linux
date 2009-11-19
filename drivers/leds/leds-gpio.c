@@ -129,7 +129,7 @@ static int __devinit create_gpio_led(const struct gpio_led *template,
 	ret = gpio_direction_output(led_dat->gpio, led_dat->active_low ^ state);
 	if (ret < 0)
 		goto err;
-		
+
 	INIT_WORK(&led_dat->work, gpio_led_work);
 
 	ret = led_classdev_register(parent, &led_dat->cdev);
@@ -248,7 +248,7 @@ static int __devinit of_gpio_leds_probe(struct platform_device *ofdev,
 		const char *state;
 
 		led.gpio = of_get_gpio_flags(child, 0, &flags);
-		led.active_low = flags & OF_GPIO_ACTIVE_LOW;
+		led.active_low = (flags & OF_GPIO_ACTIVE_LOW) != 0;
 		led.name = of_get_property(child, "label", NULL) ? : child->name;
 		led.default_trigger =
 			of_get_property(child, "linux,default-trigger", NULL);
