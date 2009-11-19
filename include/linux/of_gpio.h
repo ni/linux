@@ -28,6 +28,7 @@ struct device_node;
  */
 enum of_gpio_flags {
 	OF_GPIO_ACTIVE_LOW = 0x1,
+	OF_GPIO_INITIAL_STATE_ACTIVE = 0x2,
 };
 
 #ifdef CONFIG_OF_GPIO
