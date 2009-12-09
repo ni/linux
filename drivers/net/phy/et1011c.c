@@ -35,6 +35,7 @@
 
 #define ET1011C_STATUS_REG	(0x1A)
 #define ET1011C_CONFIG_REG	(0x16)
+#define ET1011C_LINK_MASK		(0x0040)
 #define ET1011C_SPEED_MASK		(0x0300)
 #define ET1011C_GIGABIT_SPEED		(0x0200)
 #define ET1011C_TX_FIFO_MASK		(0x3000)
@@ -81,14 +82,31 @@ MODULE_LICENSE("GPL");
 
 static int et1011c_config_aneg(struct phy_device *phydev)
 {
+	u32 val;
 	int ctl = 0;
-	ctl = phy_read(phydev, MII_BMCR);
-	if (ctl < 0)
-		return ctl;
-	ctl &= ~(BMCR_FULLDPLX | BMCR_SPEED100 | BMCR_SPEED1000 |
-		 BMCR_ANENABLE);
-	/* First clear the PHY */
-	phy_write(phydev, MII_BMCR, ctl | BMCR_RESET);
+	val = phy_read(phydev, ET1011C_STATUS_REG);
+	/* Only reset the phy if there is no link.  u-boot may already have set up the phy. */
+	if ((val & ET1011C_LINK_MASK) == 0)
+	{
+		ctl = phy_read(phydev, MII_BMCR);
+		if (ctl < 0)
+			return ctl;
+		ctl &= ~(BMCR_FULLDPLX | BMCR_SPEED100 | BMCR_SPEED1000 |
+			 BMCR_ANENABLE);
+		/* First clear the PHY */
+		phy_write(phydev, MII_BMCR, ctl | BMCR_RESET);
+
+		/* Configure the phy's LEDs.  */
+		phy_write(phydev, MIIM_ET1011_PHY_LED1,
+			MIIM_ET1011_PHY_LED1_PULSE_STRETCH_0 |
+			MIIM_ET1011_PHY_LED1_STRETCH_EVENT_60MS);
+
+		phy_write(phydev, MIIM_ET1011_PHY_LED2,
+			(MIIM_ET1011_PHY_LED2_OFF << MIIM_ET1011_PHY_LED2_TXRX_LED_SHIFT) |
+			(MIIM_ET1011_PHY_LED2_LINK_ON_ACTIVITY_BLINK << MIIM_ET1011_PHY_LED2_LINK_LED_SHIFT) |
+			(MIIM_ET1011_PHY_LED2_100 << MIIM_ET1011_PHY_LED2_100_LED_SHIFT) |
+			(MIIM_ET1011_PHY_LED2_1000 << MIIM_ET1011_PHY_LED2_1000_LED_SHIFT));
+	}
 
 	return genphy_config_aneg(phydev);
 }
