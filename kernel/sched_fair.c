@@ -2899,6 +2899,10 @@ balance_tasks(struct rq *this_rq, int this_cpu, struct rq *busiest,
 		 */
 		if (idle == CPU_NEWLY_IDLE)
 			break;
+
+		if (raw_spin_is_contended(&this_rq->lock) ||
+		    raw_spin_is_contended(&busiest->lock))
+			break;
 #endif
 
 		/*
@@ -3039,6 +3043,20 @@ load_balance_fair(struct rq *this_rq, int this_cpu, struct rq *busiest,
 		rem_load_move -= moved_load;
 		if (rem_load_move < 0)
 			break;
+
+#ifdef CONFIG_PREEMPT
+		/*
+		 * NEWIDLE balancing is a source of latency, so preemptible
+		 * kernels will stop after the first task is pulled to minimize
+		 * the critical section.
+		 */
+		if (idle == CPU_NEWLY_IDLE && this_rq->nr_running)
+			break;
+
+		if (raw_spin_is_contended(&this_rq->lock) ||
+		    raw_spin_is_contended(&busiest->lock))
+			break;
+#endif
 	}
 	rcu_read_unlock();
 
