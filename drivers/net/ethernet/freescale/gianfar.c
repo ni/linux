@@ -1716,7 +1716,7 @@ void stop_gfar(struct net_device *dev)
 
 
 	/* Lock it down */
-	local_irq_save(flags);
+	local_irq_save_nort(flags);
 	lock_tx_qs(priv);
 	lock_rx_qs(priv);
 
@@ -1724,7 +1724,7 @@ void stop_gfar(struct net_device *dev)
 
 	unlock_rx_qs(priv);
 	unlock_tx_qs(priv);
-	local_irq_restore(flags);
+	local_irq_restore_nort(flags);
 
 	/* Free the IRQs */
 	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_MULTI_INTR) {
@@ -3105,7 +3105,7 @@ static void adjust_link(struct net_device *dev)
 	struct phy_device *phydev = priv->phydev;
 	int new_state = 0;
 
-	local_irq_save(flags);
+	local_irq_save_nort(flags);
 	lock_tx_qs(priv);
 
 	if (phydev->link) {
@@ -3179,7 +3179,7 @@ static void adjust_link(struct net_device *dev)
 	if (new_state && netif_msg_link(priv))
 		phy_print_status(phydev);
 	unlock_tx_qs(priv);
-	local_irq_restore(flags);
+	local_irq_restore_nort(flags);
 }
 
 /* Update the hash table based on the current list of multicast
