@@ -54,9 +54,9 @@ struct rlimit {
 
 /*
  * Limit the stack by to some sane default: root can always
- * increase this limit if needed..  8MB seems reasonable.
+ * increase this limit if needed..  256kB seems reasonable for an embedded target.
  */
-#define _STK_LIM	(8*1024*1024)
+#define _STK_LIM	(256*1024)
 
 /*
  * GPG2 wants 64kB of mlocked memory, to make sure pass phrases
