@@ -861,6 +861,12 @@ out_err:
 	return sk_stream_error(sk, flags, err);
 }
 
+ssize_t tcp_sendpages(struct sock *sk, struct page **pages, int poffset,
+                      size_t psize, int flags)
+{
+	return do_tcp_sendpages(sk, pages, poffset, psize, flags);
+}
+
 ssize_t tcp_sendpage(struct socket *sock, struct page *page, int offset,
 		     size_t size, int flags)
 {
@@ -3304,6 +3310,7 @@ EXPORT_SYMBOL(tcp_read_sock);
 EXPORT_SYMBOL(tcp_recvmsg);
 EXPORT_SYMBOL(tcp_sendmsg);
 EXPORT_SYMBOL(tcp_splice_read);
+EXPORT_SYMBOL(tcp_sendpages);
 EXPORT_SYMBOL(tcp_sendpage);
 EXPORT_SYMBOL(tcp_setsockopt);
 EXPORT_SYMBOL(tcp_shutdown);
