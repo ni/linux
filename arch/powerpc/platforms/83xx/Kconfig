@@ -31,6 +31,13 @@ config NI_YELLOWFIN
 	help
 	  This option enables support for the National Instruments cDAQ-9188 board.
 
+config NI_BONITO
+	bool "NI cDAQ-9191"
+	select DEFAULT_UIMAGE
+	select PPC_MPC831x
+	help
+	  This option enables support for the National Instruments cDAQ-9191 board.
+
 config MPC832x_MDS
 	bool "Freescale MPC832x MDS"
 	select DEFAULT_UIMAGE
