@@ -526,6 +526,7 @@ int ath5k_hw_on_hold(struct ath5k_hw *ah)
 	ret = ath5k_hw_set_power(ah, AR5K_PM_AWAKE, true, 0);
 	if (ret) {
 		ATH5K_ERR(ah->ah_sc, "failed to wakeup the MAC Chip\n");
+                panic("Panic from ESD event");
 		return ret;
 	}
 
@@ -582,6 +583,7 @@ int ath5k_hw_nic_wakeup(struct ath5k_hw *ah, int flags, bool initial)
 		ret = ath5k_hw_set_power(ah, AR5K_PM_AWAKE, true, 0);
 		if (ret) {
 			ATH5K_ERR(ah->ah_sc, "failed to wakeup the MAC Chip\n");
+			panic("Panic from ESD event");
 			return ret;
 		}
 	}
