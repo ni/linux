@@ -69,6 +69,11 @@ static int modparam_all_channels;
 module_param_named(all_channels, modparam_all_channels, bool, S_IRUGO);
 MODULE_PARM_DESC(all_channels, "Expose all channels the device can use.");
 
+// Default to an unlocked region code.
+static unsigned int modparam_locked_regd = 0x60;
+module_param_named(locked_regd, modparam_locked_regd, uint, S_IRUGO);
+MODULE_PARM_DESC(locked_regd, "Specify the country code the device is locked to.");
+
 /* Module info */
 MODULE_AUTHOR("Jiri Slaby");
 MODULE_AUTHOR("Nick Kossifidis");
@@ -2877,7 +2882,9 @@ ath5k_init(struct ieee80211_hw *hw)
 	/* All MAC address bits matter for ACKs */
 	ath5k_update_bssid_mask_and_opmode(sc, NULL);
 
-	regulatory->current_rd = ah->ah_capabilities.cap_eeprom.ee_regdomain;
+	//regulatory->current_rd = ah->ah_capabilities.cap_eeprom.ee_regdomain;
+	// Use a modprobe parameter instead of the eeprom on the device.
+	regulatory->current_rd = modparam_locked_regd;
 	ret = ath_regd_init(regulatory, hw->wiphy, ath5k_reg_notifier);
 	if (ret) {
 		ATH5K_ERR(sc, "can't initialize regulatory system\n");
