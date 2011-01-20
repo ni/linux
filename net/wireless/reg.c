@@ -1562,6 +1562,7 @@ static int regulatory_hint_core(const char *alpha2)
 	if (!request)
 		return -ENOMEM;
 
+	REG_DBG_PRINT("cfg80211: Core regulatory hint: %c%c\n", alpha2[0], alpha2[1]);
 	request->alpha2[0] = alpha2[0];
 	request->alpha2[1] = alpha2[1];
 	request->initiator = NL80211_REGDOM_SET_BY_CORE;
@@ -1582,6 +1583,7 @@ int regulatory_hint_user(const char *alpha2)
 	if (!request)
 		return -ENOMEM;
 
+	REG_DBG_PRINT("cfg80211: User regulatory hint: %c%c\n", alpha2[0], alpha2[1]);
 	request->wiphy_idx = WIPHY_IDX_STALE;
 	request->alpha2[0] = alpha2[0];
 	request->alpha2[1] = alpha2[1];
@@ -1609,6 +1611,7 @@ int regulatory_hint(struct wiphy *wiphy, const char *alpha2)
 	/* Must have registered wiphy first */
 	BUG_ON(!wiphy_idx_valid(request->wiphy_idx));
 
+	REG_DBG_PRINT("cfg80211: Driver regulatory hint: %c%c\n", alpha2[0], alpha2[1]);
 	request->alpha2[0] = alpha2[0];
 	request->alpha2[1] = alpha2[1];
 	request->initiator = NL80211_REGDOM_SET_BY_DRIVER;
