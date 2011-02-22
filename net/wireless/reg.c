@@ -1151,8 +1151,9 @@ static int freq_reg_info_regd(struct wiphy *wiphy,
 	 * Follow the driver's regulatory domain, if present, unless a country
 	 * IE has been processed or a user wants to help complaince further
 	 */
-	if (last_request->initiator != NL80211_REGDOM_SET_BY_COUNTRY_IE &&
-	    last_request->initiator != NL80211_REGDOM_SET_BY_USER &&
+	if (last_request &&
+            last_request->initiator != NL80211_REGDOM_SET_BY_COUNTRY_IE &&
+            last_request->initiator != NL80211_REGDOM_SET_BY_USER &&
 	    wiphy->regd)
 		regd = wiphy->regd;
 
@@ -1215,8 +1216,10 @@ int freq_reg_info(struct wiphy *wiphy,
  * on the wiphy with the target_bw specified. Then we can simply use
  * that below for the desired_bw_khz below.
  */
-static void handle_channel(struct wiphy *wiphy, enum ieee80211_band band,
-			   unsigned int chan_idx)
+static void handle_channel(struct wiphy *wiphy,
+		           enum nl80211_reg_initiator initiator,
+		           enum ieee80211_band band,
+		           unsigned int chan_idx)
 {
 	int r;
 	u32 flags, bw_flags = 0;
@@ -1244,39 +1247,24 @@ static void handle_channel(struct wiphy *wiphy, enum ieee80211_band band,
 			  &reg_rule);
 
 	if (r) {
-		/*
-		 * This means no regulatory rule was found in the country IE
-		 * with a frequency range on the center_freq's band, since
-		 * IEEE-802.11 allows for a country IE to have a subset of the
-		 * regulatory information provided in a country we ignore
-		 * disabling the channel unless at least one reg rule was
-		 * found on the center_freq's band. For details see this
-		 * clarification:
-		 *
-		 * http://tinyurl.com/11d-clarification
-		 */
-		if (r == -ERANGE &&
-		    last_request->initiator ==
-		    NL80211_REGDOM_SET_BY_COUNTRY_IE) {
-			REG_DBG_PRINT("cfg80211: Leaving channel %d MHz "
-				"intact on %s - no rule found in band on "
-				"Country IE\n",
-			chan->center_freq, wiphy_name(wiphy));
-		} else {
-		/*
-		 * In this case we know the country IE has at least one reg rule
-		 * for the band so we respect its band definitions
-		 */
-			if (last_request->initiator ==
-			    NL80211_REGDOM_SET_BY_COUNTRY_IE)
-				REG_DBG_PRINT("cfg80211: Disabling "
-					"channel %d MHz on %s due to "
-					"Country IE\n",
-					chan->center_freq, wiphy_name(wiphy));
-			flags |= IEEE80211_CHAN_DISABLED;
-			chan->flags = flags;
-		}
-		return;
+		 /*
+                  * We will disable all channels that do not match our
+                  * recieved regulatory rule unless the hint is coming
+                  * from a Country IE and the Country IE had no information
+                  * about a band. The IEEE 802.11 spec allows for an AP
+                  * to send only a subset of the regulatory rules allowed,
+                  * so an AP in the US that only supports 2.4 GHz may only send
+                  * a country IE with information for the 2.4 GHz band
+                  * while 5 GHz is still supported.
+                  */
+                 if (initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE &&
+                     r == -ERANGE)
+                          return;
+
+                  REG_DBG_PRINT("cfg80211: Disabling freq %d MHz\n",
+                                 chan->center_freq);
+                  chan->flags = IEEE80211_CHAN_DISABLED;
+                  return;
 	}
 
 	power_rule = &reg_rule->power_rule;
@@ -1312,7 +1300,9 @@ static void handle_channel(struct wiphy *wiphy, enum ieee80211_band band,
 		chan->max_power = (int) MBM_TO_DBM(power_rule->max_eirp);
 }
 
-static void handle_band(struct wiphy *wiphy, enum ieee80211_band band)
+static void handle_band(struct wiphy *wiphy, 
+                        enum ieee80211_band band,
+                        enum nl80211_reg_initiator initiator)
 {
 	unsigned int i;
 	struct ieee80211_supported_band *sband;
@@ -1321,7 +1311,7 @@ static void handle_band(struct wiphy *wiphy, enum ieee80211_band band)
 	sband = wiphy->bands[band];
 
 	for (i = 0; i < sband->n_channels; i++)
-		handle_channel(wiphy, band, i);
+		handle_channel(wiphy, initiator, band, i);
 }
 
 static bool ignore_reg_update(struct wiphy *wiphy,
@@ -1558,7 +1548,7 @@ void wiphy_update_regulatory(struct wiphy *wiphy,
 		goto out;
 	for (band = 0; band < IEEE80211_NUM_BANDS; band++) {
 		if (wiphy->bands[band])
-			handle_band(wiphy, band);
+			handle_band(wiphy, band, initiator);
 	}
 out:
 	reg_process_beacons(wiphy);
