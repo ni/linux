@@ -2163,7 +2163,8 @@ done:
 static void
 ath5k_get_rate_pcal_data(struct ath5k_hw *ah,
 			struct ieee80211_channel *channel,
-			struct ath5k_rate_pcal_info *rates)
+			struct ath5k_rate_pcal_info *rates_ofdm,
+			struct ath5k_rate_pcal_info *rates_cck)
 {
 	struct ath5k_eeprom_info *ee = &ah->ah_capabilities.cap_eeprom;
 	struct ath5k_rate_pcal_info *rpinfo;
@@ -2214,27 +2215,53 @@ ath5k_get_rate_pcal_data(struct ath5k_hw *ah,
 
 done:
 	/* Now interpolate power value, based on the frequency */
-	rates->freq = target;
-
-	rates->target_power_6to24 =
+	rates_ofdm->freq = target;
+	rates_ofdm->target_power_6to24 =
 		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
 					rpinfo[idx_r].freq,
 					rpinfo[idx_l].target_power_6to24,
 					rpinfo[idx_r].target_power_6to24);
 
-	rates->target_power_36 =
+	rates_ofdm->target_power_36 =
 		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
 					rpinfo[idx_r].freq,
 					rpinfo[idx_l].target_power_36,
 					rpinfo[idx_r].target_power_36);
 
-	rates->target_power_48 =
+	rates_ofdm->target_power_48 =
 		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
 					rpinfo[idx_r].freq,
 					rpinfo[idx_l].target_power_48,
 					rpinfo[idx_r].target_power_48);
 
-	rates->target_power_54 =
+	rates_ofdm->target_power_54 =
+		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
+					rpinfo[idx_r].freq,
+					rpinfo[idx_l].target_power_54,
+					rpinfo[idx_r].target_power_54);
+
+	/* Now fill in the CCK targets */
+	rates_cck->freq = target;
+	rpinfo = ee->ee_rate_tpwr_b;
+	rates_cck->target_power_6to24 =
+		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
+					rpinfo[idx_r].freq,
+					rpinfo[idx_l].target_power_6to24,
+					rpinfo[idx_r].target_power_6to24);
+
+	rates_cck->target_power_36 =
+		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
+					rpinfo[idx_r].freq,
+					rpinfo[idx_l].target_power_36,
+					rpinfo[idx_r].target_power_36);
+
+	rates_cck->target_power_48 =
+		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
+					rpinfo[idx_r].freq,
+					rpinfo[idx_l].target_power_48,
+					rpinfo[idx_r].target_power_48);
+
+	rates_cck->target_power_54 =
 		ath5k_get_interpolated_value(target, rpinfo[idx_l].freq,
 					rpinfo[idx_r].freq,
 					rpinfo[idx_l].target_power_54,
@@ -2909,8 +2936,9 @@ ath5k_setup_channel_powertable(struct ath5k_hw *ah,
  */
 static void
 ath5k_setup_rate_powertable(struct ath5k_hw *ah, u16 max_pwr,
-			struct ath5k_rate_pcal_info *rate_info,
-			u8 ee_mode)
+			struct ath5k_rate_pcal_info *rate_info_ofdm,
+			    struct ath5k_rate_pcal_info *rate_info_cck,
+			    u8 ee_mode, struct ieee80211_channel *channel)
 {
 	unsigned int i;
 	u16 *rates;
@@ -2924,32 +2952,32 @@ ath5k_setup_rate_powertable(struct ath5k_hw *ah, u16 max_pwr,
 	rates = ah->ah_txpower.txp_rates_power_table;
 
 	/* OFDM rates 6 to 24Mb/s */
-	for (i = 0; i < 5; i++)
-		rates[i] = min(max_pwr, rate_info->target_power_6to24);
+	for (i = 0; i < 5; i++) {
+		rates[i] = min(max_pwr, rate_info_ofdm->target_power_6to24);
+	}
 
 	/* Rest OFDM rates */
-	rates[5] = min(rates[0], rate_info->target_power_36);
-	rates[6] = min(rates[0], rate_info->target_power_48);
-	rates[7] = min(rates[0], rate_info->target_power_54);
+	rates[5] = min(rates[0], rate_info_ofdm->target_power_36);
+	rates[6] = min(rates[0], rate_info_ofdm->target_power_48);
+	rates[7] = min(rates[0], rate_info_ofdm->target_power_54);
 
 	/* CCK rates */
 	/* 1L */
-	rates[8] = min(rates[0], rate_info->target_power_6to24);
+	rates[8] = min(max_pwr, rate_info_cck->target_power_6to24);
 	/* 2L */
-	rates[9] = min(rates[0], rate_info->target_power_36);
+	rates[9] = min(max_pwr, rate_info_cck->target_power_36);
 	/* 2S */
-	rates[10] = min(rates[0], rate_info->target_power_36);
+	rates[10] = min(max_pwr, rate_info_cck->target_power_36);
 	/* 5L */
-	rates[11] = min(rates[0], rate_info->target_power_48);
+	rates[11] = min(max_pwr, rate_info_cck->target_power_48);
 	/* 5S */
-	rates[12] = min(rates[0], rate_info->target_power_48);
+	rates[12] = min(max_pwr, rate_info_cck->target_power_48);
 	/* 11L */
-	rates[13] = min(rates[0], rate_info->target_power_54);
+	rates[13] = min(max_pwr, rate_info_cck->target_power_54);
 	/* 11S */
-	rates[14] = min(rates[0], rate_info->target_power_54);
-
+	rates[14] = min(max_pwr, rate_info_cck->target_power_54);
 	/* XR rates */
-	rates[15] = min(rates[0], rate_info->target_power_6to24);
+	rates[15] = min(rates[0], rate_info_ofdm->target_power_6to24);
 
 	/* CCK rates have different peak to average ratio
 	 * so we have to tweak their power so that gainf
@@ -2973,6 +3001,15 @@ ath5k_setup_rate_powertable(struct ath5k_hw *ah, u16 max_pwr,
 	/* Min/max in 0.25dB units */
 	ah->ah_txpower.txp_min_pwr = 2 * rates[7];
 	ah->ah_txpower.txp_max_pwr = 2 * rates[0];
+	if (channel->hw_value & CHANNEL_2GHZ) {
+		if (2*rates[13] < ah->ah_txpower.txp_min_pwr) {
+			ah->ah_txpower.txp_min_pwr = 2*rates[13];
+		}
+		if (2*rates[8] > ah->ah_txpower.txp_max_pwr) {
+			ah->ah_txpower.txp_max_pwr = 2*rates[8];
+		}
+	}
+
 	ah->ah_txpower.txp_ofdm = rates[7];
 }
 
@@ -2984,7 +3021,8 @@ int
 ath5k_hw_txpower(struct ath5k_hw *ah, struct ieee80211_channel *channel,
 		u8 ee_mode, u8 txpower)
 {
-	struct ath5k_rate_pcal_info rate_info;
+	struct ath5k_rate_pcal_info rate_info_ofdm;
+	struct ath5k_rate_pcal_info rate_info_cck;
 	u8 type;
 	int ret;
 
@@ -3038,10 +3076,10 @@ ath5k_hw_txpower(struct ath5k_hw *ah, struct ieee80211_channel *channel,
 
 	/* Get surounding channels for per-rate power table
 	 * calibration */
-	ath5k_get_rate_pcal_data(ah, channel, &rate_info);
+	ath5k_get_rate_pcal_data(ah, channel, &rate_info_ofdm, &rate_info_cck);
 
 	/* Setup rate power table */
-	ath5k_setup_rate_powertable(ah, txpower, &rate_info, ee_mode);
+	ath5k_setup_rate_powertable(ah, txpower, &rate_info_ofdm, &rate_info_cck, ee_mode, channel);
 
 	/* Write rate power table on hw */
 	ath5k_hw_reg_write(ah, AR5K_TXPOWER_OFDM(3, 24) |

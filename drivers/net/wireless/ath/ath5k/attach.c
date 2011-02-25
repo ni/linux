@@ -127,6 +127,7 @@ int ath5k_hw_attach(struct ath5k_softc *sc)
 	ah->ah_noise_floor = -95;	/* until first NF calibration is run */
 	sc->ani_state.ani_mode = ATH5K_ANI_MODE_AUTO;
 	ah->ah_current_channel = &sc->channels[0];
+	ah->ah_txpower.txp_max_pwr = 4*20;
 
 	/*
 	 * Find the mac version
