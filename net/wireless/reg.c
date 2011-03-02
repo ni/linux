@@ -1327,6 +1327,8 @@ static bool ignore_reg_update(struct wiphy *wiphy,
 	 * desired regulatory domain set
 	 */
 	if (wiphy->flags & WIPHY_FLAG_STRICT_REGULATORY && !wiphy->regd &&
+            initiator != NL80211_REGDOM_SET_BY_COUNTRY_IE &&
+            initiator != NL80211_REGDOM_SET_BY_USER &&
 	    !is_world_regdom(last_request->alpha2))
 		return true;
 	return false;
@@ -1721,7 +1723,7 @@ static int ignore_request(struct wiphy *wiphy,
 		    last_request->initiator == NL80211_REGDOM_SET_BY_DRIVER ||
 		    last_request->initiator == NL80211_REGDOM_SET_BY_USER) {
 			if (regdom_changes(last_request->alpha2))
-				return -EAGAIN;
+				return REG_INTERSECT;
 		}
 
 		if (!regdom_changes(pending_request->alpha2))
