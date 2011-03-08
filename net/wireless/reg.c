@@ -1297,6 +1297,9 @@ static int ignore_request(struct wiphy *wiphy,
 	case NL80211_REGDOM_SET_BY_USER:
 		if (last_request->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE)
 			return REG_INTERSECT;
+
+                /* Allow for consecutive user regdomain request intersections */
+                #if 0
 		/*
 		 * If the user knows better the user should set the regdom
 		 * to their country before the IE is picked up
@@ -1304,6 +1307,7 @@ static int ignore_request(struct wiphy *wiphy,
 		if (last_request->initiator == NL80211_REGDOM_SET_BY_USER &&
 			  last_request->intersect)
 			return -EOPNOTSUPP;
+                #endif
 		/*
 		 * Process user requests only after previous user/driver/core
 		 * requests have been processed
