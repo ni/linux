@@ -176,7 +176,7 @@ void do_page_fault(struct pt_regs *regs, unsigned long code,
 	unsigned long acc_type;
 	int fault;
 
-	if (in_atomic() || !mm)
+	if (in_atomic() || !mm || current->pagefault_disabled)
 		goto no_context;
 
 	down_read(&mm->mmap_sem);
