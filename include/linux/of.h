@@ -71,7 +71,7 @@ struct device_node {
 extern struct device_node *allnodes;
 extern struct device_node *of_chosen;
 extern struct device_node *of_aliases;
-extern rwlock_t devtree_lock;
+extern raw_spinlock_t devtree_lock;
 
 static inline bool of_have_populated_dt(void)
 {
