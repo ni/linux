@@ -94,11 +94,11 @@ void cpu_idle(void)
 		HMT_medium();
 		ppc64_runlatch_on();
 		tick_nohz_restart_sched_tick();
-		preempt_enable_no_resched();
-		if (cpu_should_die())
+		if (cpu_should_die()) {
+			preempt_enable_no_resched();
 			cpu_die();
-		schedule();
-		preempt_disable();
+		}
+		schedule_preempt_disabled();
 	}
 }
 

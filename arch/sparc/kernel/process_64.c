@@ -102,15 +102,13 @@ void cpu_idle(void)
 
 		tick_nohz_restart_sched_tick();
 
-		preempt_enable_no_resched();
-
 #ifdef CONFIG_HOTPLUG_CPU
-		if (cpu_is_offline(cpu))
+		if (cpu_is_offline(cpu)) {
+			preempt_enable_no_resched();
 			cpu_play_dead();
+		}
 #endif
-
-		schedule();
-		preempt_disable();
+		schedule_preempt_disabled();
 	}
 }
 
