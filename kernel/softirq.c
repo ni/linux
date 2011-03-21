@@ -353,7 +353,7 @@ void irq_exit(void)
 	if (idle_cpu(smp_processor_id()) && !in_interrupt() && !need_resched())
 		tick_nohz_stop_sched_tick(0);
 #endif
-	preempt_enable_no_resched();
+	__preempt_enable_no_resched();
 }
 
 /*
@@ -759,7 +759,7 @@ static int run_ksoftirqd(void * __bind_cpu)
 			if (local_softirq_pending())
 				__do_softirq();
 			local_irq_enable();
-			preempt_enable_no_resched();
+			__preempt_enable_no_resched();
 			cond_resched();
 			preempt_disable();
 			rcu_note_context_switch((long)__bind_cpu);

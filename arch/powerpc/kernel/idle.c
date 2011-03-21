@@ -95,7 +95,7 @@ void cpu_idle(void)
 		ppc64_runlatch_on();
 		tick_nohz_restart_sched_tick();
 		if (cpu_should_die()) {
-			preempt_enable_no_resched();
+			__preempt_enable_no_resched();
 			cpu_die();
 		}
 		schedule_preempt_disabled();

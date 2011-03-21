@@ -48,11 +48,13 @@ do { \
 	barrier(); \
 } while (0)
 
-#define preempt_enable_no_resched() \
+#define __preempt_enable_no_resched() \
 do { \
 	barrier(); \
 	dec_preempt_count(); \
 } while (0)
+
+#define preempt_enable_no_resched()	__preempt_enable_no_resched()
 
 #define preempt_enable() \
 do { \
@@ -92,6 +94,7 @@ do { \
 #else /* !CONFIG_PREEMPT_COUNT */
 
 #define preempt_disable()		do { } while (0)
+#define __preempt_enable_no_resched()	do { } while (0)
 #define preempt_enable_no_resched()	do { } while (0)
 #define preempt_enable()		do { } while (0)
 

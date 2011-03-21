@@ -104,7 +104,7 @@ void cpu_idle(void)
 
 #ifdef CONFIG_HOTPLUG_CPU
 		if (cpu_is_offline(cpu)) {
-			preempt_enable_no_resched();
+			__preempt_enable_no_resched();
 			cpu_play_dead();
 		}
 #endif
