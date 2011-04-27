@@ -454,6 +454,35 @@ WIRELESS_SHOW(misc, discard.misc, fmt_dec);
 WIRELESS_SHOW(retries, discard.retries, fmt_dec);
 WIRELESS_SHOW(beacon, miss.beacon, fmt_dec);
 
+NETDEVICE_SHOW(qos_enabled, fmt_dec);
+
+static int change_qos_enabled(struct net_device *net, unsigned long new_qos)
+{
+        return dev_set_qos_enabled(net, (int) new_qos);
+}
+
+static ssize_t store_qos_enabled(struct device *dev, struct device_attribute *attr,
+                                 const char *buf, size_t len)
+{
+        return netdev_store(dev, attr, buf, len, change_qos_enabled);
+}
+
+NETDEVICE_SHOW(qos_priority, fmt_dec);
+
+static int change_qos_priority(struct net_device *net, unsigned long new_qos_priority)
+{
+        return dev_set_qos_priority(net, (int) new_qos_priority);
+}
+
+static ssize_t store_qos_priority(struct device *dev, struct device_attribute *attr,
+                                  const char *buf, size_t len)
+{
+        return netdev_store(dev, attr, buf, len, change_qos_priority);
+}
+
+static DEVICE_ATTR(qos_enabled, S_IRUGO | S_IWUSR, show_qos_enabled, store_qos_enabled);
+static DEVICE_ATTR(qos_priority, S_IRUGO | S_IWUSR, show_qos_priority, store_qos_priority);
+
 static struct attribute *wireless_attrs[] = {
 	&dev_attr_status.attr,
 	&dev_attr_link.attr,
@@ -465,6 +494,8 @@ static struct attribute *wireless_attrs[] = {
 	&dev_attr_retries.attr,
 	&dev_attr_misc.attr,
 	&dev_attr_beacon.attr,
+	&dev_attr_qos_enabled.attr,
+	&dev_attr_qos_priority.attr,
 	NULL
 };
 

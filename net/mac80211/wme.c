@@ -52,10 +52,17 @@ static int wme_downgrade_ac(struct sk_buff *skb)
 	}
 }
 
-
 /* Indicate which queue to use. */
 u16 ieee80211_select_queue(struct ieee80211_sub_if_data *sdata,
-			   struct sk_buff *skb)
+                           struct sk_buff *skb)
+{
+	return ieee80211_select_queue_with_qos_flag(sdata, skb, true /* enable_qos */);
+}
+
+/* Indicate which queue to use and whether to enable qos flag in 802.11 frame. */
+u16 ieee80211_select_queue_with_qos_flag(struct ieee80211_sub_if_data *sdata,
+                                         struct sk_buff *skb,
+                                         bool enable_qos)
 {
 	struct ieee80211_local *local = sdata->local;
 	struct sta_info *sta = NULL;
@@ -103,7 +110,7 @@ u16 ieee80211_select_queue(struct ieee80211_sub_if_data *sdata,
 	if (!sta && ra && !is_multicast_ether_addr(ra)) {
 		sta = sta_info_get(sdata, ra);
 		if (sta)
-			qos = get_sta_flags(sta) & WLAN_STA_WME;
+			qos = (enable_qos ? (get_sta_flags(sta) & WLAN_STA_WME) : false);
 	}
 	rcu_read_unlock();
 
@@ -112,9 +119,8 @@ u16 ieee80211_select_queue(struct ieee80211_sub_if_data *sdata,
 		return IEEE80211_AC_BE;
 	}
 
-	/* use the data classifier to determine what 802.1d tag the
-	 * data frame has */
-	skb->priority = cfg80211_classify8021d(skb);
+	/* The setting of this variable (skb->priority) has been moved to ieee80211_netdev_select_queue in iface.c. */
+	//skb->priority = cfg80211_classify8021d(skb);
 
 	return ieee80211_downgrade_queue(local, skb);
 }

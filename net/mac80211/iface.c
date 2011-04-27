@@ -64,6 +64,24 @@ static int ieee80211_change_mtu(struct net_device *dev, int new_mtu)
 	return 0;
 }
 
+static int ieee80211_change_qos_enabled(struct net_device *dev, int new_qos)
+{
+#ifdef CONFIG_MAC80211_VERBOSE_DEBUG
+	printk(KERN_DEBUG "%s: setting QOS %d\n", dev->name, new_qos);
+#endif /* CONFIG_MAC80211_VERBOSE_DEBUG */
+	dev->qos_enabled = new_qos;
+	return 0;
+}
+
+static int ieee80211_change_qos_priority(struct net_device *dev, int new_qos_priority)
+{
+#ifdef CONFIG_MAC80211_VERBOSE_DEBUG
+	printk(KERN_DEBUG "%s: setting QoS Priority %d\n", dev->name, new_qos_priority);
+#endif /* CONFIG_MAC80211_VERBOSE_DEBUG */
+	dev->qos_priority = new_qos_priority;
+	return 0;
+}
+
 static int ieee80211_change_mac(struct net_device *dev, void *addr)
 {
 	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
@@ -630,18 +648,24 @@ static void ieee80211_teardown_sdata(struct net_device *dev)
 static u16 ieee80211_netdev_select_queue(struct net_device *dev,
 					 struct sk_buff *skb)
 {
-	return ieee80211_select_queue(IEEE80211_DEV_TO_SUB_IF(dev), skb);
+	if(!skb || !dev)
+		return -EINVAL;
+
+	skb->priority =  dev->qos_priority;
+	return ieee80211_select_queue_with_qos_flag(IEEE80211_DEV_TO_SUB_IF(dev), skb, dev->qos_enabled);
 }
 
 static const struct net_device_ops ieee80211_dataif_ops = {
-	.ndo_open		= ieee80211_open,
-	.ndo_stop		= ieee80211_stop,
-	.ndo_uninit		= ieee80211_teardown_sdata,
-	.ndo_start_xmit		= ieee80211_subif_start_xmit,
-	.ndo_set_multicast_list = ieee80211_set_multicast_list,
-	.ndo_change_mtu 	= ieee80211_change_mtu,
-	.ndo_set_mac_address 	= ieee80211_change_mac,
-	.ndo_select_queue	= ieee80211_netdev_select_queue,
+	.ndo_open                       = ieee80211_open,
+	.ndo_stop                       = ieee80211_stop,
+	.ndo_uninit                     = ieee80211_teardown_sdata,
+	.ndo_start_xmit                 = ieee80211_subif_start_xmit,
+	.ndo_set_multicast_list         = ieee80211_set_multicast_list,
+	.ndo_change_mtu                 = ieee80211_change_mtu,
+	.ndo_set_mac_address            = ieee80211_change_mac,
+	.ndo_select_queue               = ieee80211_netdev_select_queue,
+	.ndo_change_qos_enabled         = ieee80211_change_qos_enabled,
+	.ndo_change_qos_priority        = ieee80211_change_qos_priority,
 };
 
 static u16 ieee80211_monitor_select_queue(struct net_device *dev,

@@ -176,6 +176,23 @@ static DEFINE_SPINLOCK(ptype_lock);
 static struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;
 static struct list_head ptype_all __read_mostly;	/* Taps */
 
+
+/*
+ * Enums used in dev_set_qos_priority() and dev_set_qos_enabled()
+ *
+ */
+enum {
+        QOS_DISABLED = 0,
+        QOS_ENABLED = 1,
+};
+
+enum {
+        QOS_PRIORITY_BESTEFFORT = 0,
+        QOS_PRIORITY_BACKGROUND = 1,
+        QOS_PRIORITY_VIDEO = 5,
+        QOS_PRIORITY_VOICE = 7,
+};
+
 /*
  * The @dev_base_head list is protected by @dev_base_lock and the rtnl
  * semaphore.
@@ -4585,6 +4602,93 @@ int dev_set_mtu(struct net_device *dev, int new_mtu)
 	return err;
 }
 EXPORT_SYMBOL(dev_set_mtu);
+
+/**
+ *      dev_set_qos_enabled - Enable or Disabled QoS flag in 802.11 frame
+ *      @dev: device
+ *      @new_qos: new qos value
+ *
+ *      Change QoS for transmitted 802.11 frames of device
+ */
+
+int dev_set_qos_enabled(struct net_device *dev, int new_qos)
+{
+	const struct net_device_ops *ops = dev->netdev_ops;
+	int err;
+
+	if (new_qos == dev->qos_enabled)
+		return 0;
+
+	/*	QOS must be one of two possible values
+		new_qos = 0 : wireless QoS disabled
+		new_qos = 1 : wireless QoS enabled
+	*/
+	if ((new_qos != QOS_DISABLED) && (new_qos != QOS_ENABLED))
+		return -EINVAL;
+
+	if (!netif_device_present(dev))
+		return -ENODEV;
+
+	err = 0;
+	if (ops->ndo_change_qos_enabled)
+		err = ops->ndo_change_qos_enabled(dev, new_qos);
+	else
+		dev->qos_enabled = new_qos;
+	return err;
+}
+EXPORT_SYMBOL(dev_set_qos_enabled);
+
+/**
+ *      dev_set_qos_priority - Change 802.11e EDCA access category (priority class)
+ *      @dev: device
+ *      @new_qos_priority: new qos priority value
+ *
+ *      Change EDCA access category (priority class) for transmitted 802.11 frames of device
+ */
+int dev_set_qos_priority(struct net_device *dev, int new_qos_priority)
+{
+	const struct net_device_ops *ops = dev->netdev_ops;
+	int err;
+
+	if (new_qos_priority == dev->qos_priority)
+		return 0;
+
+	/*
+	The 802.11e EDCA access category (QoS priority) value is used in conjunction with QoS flag when
+	populating 802.11 header with wireless quality of service information.
+
+	There are four possible EDCA AC (priority class) values defined for 802.11e:
+	Background	(AC_BK)
+	Best Effort	(AC_BE)
+	Video		(AC_VI)
+	Voice		(AC_VO)
+
+	Table showing mapping between access categories, designation and priority values:
+         | Priority  |Priority Value | 802.11e Designation |Access Category |
+         Lowest        1                Background          AC_BK
+                       0                Best Effort         AC_BE
+                       5                Video               AC_VI
+         Highest       7                Voice               AC_VO
+
+	*/
+
+	if ((new_qos_priority != QOS_PRIORITY_BESTEFFORT) &&
+            (new_qos_priority != QOS_PRIORITY_BACKGROUND) &&
+            (new_qos_priority != QOS_PRIORITY_VIDEO) &&
+            (new_qos_priority != QOS_PRIORITY_VOICE))
+		return -EINVAL;
+
+	if (!netif_device_present(dev))
+		return -ENODEV;
+
+	err = 0;
+	if (ops->ndo_change_qos_priority)
+		err = ops->ndo_change_qos_priority(dev, new_qos_priority);
+	else
+		dev->qos_priority = new_qos_priority;
+	return err;
+}
+EXPORT_SYMBOL(dev_set_qos_priority);
 
 /**
  *	dev_set_mac_address - Change Media Access Control Address

@@ -753,6 +753,15 @@ struct xps_dev_maps {
  * int (*ndo_set_vf_port)(struct net_device *dev, int vf,
  *			  struct nlattr *port[]);
  * int (*ndo_get_vf_port)(struct net_device *dev, int vf, struct sk_buff *skb);
+ *
+ * int (*ndo_change_qos_enabled)(struct net_device *dev,  int new_qos);
+ *     Called when a user wants to enable/disable the QoS flag in the 802.11 header
+ *     transmitted by device. If not defined, any request to change QoS will return an error.
+ *
+ * int (*ndo_change_qos_priority)(struct net_device *dev, int new_qos_priority);
+ *    Called when a user wants to change the 802.11e EDCA access category in the 802.11 header
+ *    tranmitted by device. If not defined, any request to change AC will return an error.
+ *
  */
 #define HAVE_NET_DEVICE_OPS
 struct net_device_ops {
@@ -825,6 +834,11 @@ struct net_device_ops {
 	int			(*ndo_fcoe_get_wwn)(struct net_device *dev,
 						    u64 *wwn, int type);
 #endif
+	int			(*ndo_change_qos_enabled)(struct net_device *dev,
+                                                  int new_qos);
+
+	int			(*ndo_change_qos_priority)(struct net_device *dev,
+                                                              int new_qos_priority);
 };
 
 /*
@@ -1153,6 +1167,10 @@ struct net_device {
 
 	/* phy device may attach itself for hardware timestamping */
 	struct phy_device *phydev;
+
+	unsigned int		qos_enabled;	/* wireless interface QoS value */
+	unsigned int		qos_priority;	/* wireless QoS 802.11e access category */
+
 };
 #define to_net_dev(d) container_of(d, struct net_device, dev)
 
@@ -1844,6 +1862,10 @@ extern int		dev_set_alias(struct net_device *, const char *, size_t);
 extern int		dev_change_net_namespace(struct net_device *,
 						 struct net *, const char *);
 extern int		dev_set_mtu(struct net_device *, int);
+
+extern int		dev_set_qos_enabled(struct net_device *, int);
+extern int		dev_set_qos_priority(struct net_device *, int);
+
 extern int		dev_set_mac_address(struct net_device *,
 					    struct sockaddr *);
 extern int		dev_hard_start_xmit(struct sk_buff *skb,
