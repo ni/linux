@@ -12,6 +12,7 @@
 #include <linux/completion.h>
 #include <linux/cpumask.h>
 #include <linux/page-debug-flags.h>
+#include <linux/rcupdate.h>
 #include <asm/page.h>
 #include <asm/mmu.h>
 
@@ -392,6 +393,9 @@ struct mm_struct {
 #endif
 #ifdef CONFIG_CPUMASK_OFFSTACK
 	struct cpumask cpumask_allocation;
+#endif
+#ifdef CONFIG_PREEMPT_RT_BASE
+	struct rcu_head delayed_drop;
 #endif
 };
 

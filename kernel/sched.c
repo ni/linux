@@ -3174,8 +3174,12 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	finish_lock_switch(rq, prev);
 
 	fire_sched_in_preempt_notifiers(current);
+	/*
+	 * We use mmdrop_delayed() here so we don't have to do the
+	 * full __mmdrop() when we are the last user.
+	 */
 	if (mm)
-		mmdrop(mm);
+		mmdrop_delayed(mm);
 	if (unlikely(prev_state == TASK_DEAD)) {
 		/*
 		 * Remove function-return probe instances associated with this
@@ -6303,6 +6307,8 @@ static int migration_cpu_stop(void *data)
 
 #ifdef CONFIG_HOTPLUG_CPU
 
+static DEFINE_PER_CPU(struct mm_struct *, idle_last_mm);
+
 /*
  * Ensures that the idle task is using init_mm right before its cpu goes
  * offline.
@@ -6315,7 +6321,12 @@ void idle_task_exit(void)
 
 	if (mm != &init_mm)
 		switch_mm(mm, &init_mm, current);
-	mmdrop(mm);
+
+	/*
+	 * Defer the cleanup to an alive cpu. On RT we can neither
+	 * call mmdrop() nor mmdrop_delayed() from here.
+	 */
+	per_cpu(idle_last_mm, smp_processor_id()) = mm;
 }
 
 /*
@@ -6659,6 +6670,12 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 
 		migrate_nr_uninterruptible(rq);
 		calc_global_load_remove(rq);
+		break;
+	case CPU_DEAD:
+		if (per_cpu(idle_last_mm, cpu)) {
+			mmdrop(per_cpu(idle_last_mm, cpu));
+			per_cpu(idle_last_mm, cpu) = NULL;
+		}
 		break;
 #endif
 	}
