@@ -5775,9 +5775,17 @@ static inline int should_resched(void)
 
 static void __cond_resched(void)
 {
-	add_preempt_count(PREEMPT_ACTIVE);
-	__schedule();
-	sub_preempt_count(PREEMPT_ACTIVE);
+	do {
+		add_preempt_count(PREEMPT_ACTIVE);
+		__schedule();
+		sub_preempt_count(PREEMPT_ACTIVE);
+		/*
+		 * Check again in case we missed a preemption
+		 * opportunity between schedule and now.
+		 */
+		barrier();
+
+	} while (need_resched());
 }
 
 int __sched _cond_resched(void)
