@@ -105,14 +105,14 @@ void free_fdtable_rcu(struct rcu_head *rcu)
 		kfree(fdt->open_fds);
 		kfree(fdt);
 	} else {
-		fddef = &get_cpu_var(fdtable_defer_list);
+		fddef = &per_cpu(fdtable_defer_list, get_cpu_light());
 		spin_lock(&fddef->lock);
 		fdt->next = fddef->next;
 		fddef->next = fdt;
 		/* vmallocs are handled from the workqueue context */
 		schedule_work(&fddef->wq);
 		spin_unlock(&fddef->lock);
-		put_cpu_var(fdtable_defer_list);
+		put_cpu_light();
 	}
 }
 
