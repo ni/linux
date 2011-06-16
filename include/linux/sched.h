@@ -1198,6 +1198,7 @@ struct task_struct {
 #endif
 
 	unsigned int policy;
+	int migrate_disable;
 	int nr_cpus_allowed;
 	cpumask_t cpus_allowed;
 
@@ -1605,9 +1606,6 @@ struct task_struct {
 	struct rcu_head put_rcu;
 #endif
 };
-
-/* Future-safe accessor for struct task_struct's cpus_allowed. */
-#define tsk_cpus_allowed(tsk) (&(tsk)->cpus_allowed)
 
 #define TNF_MIGRATED	0x01
 #define TNF_NO_GROUP	0x02
@@ -2970,6 +2968,15 @@ static inline void set_task_cpu(struct task_struct *p, unsigned int cpu)
 }
 
 #endif /* CONFIG_SMP */
+
+/* Future-safe accessor for struct task_struct's cpus_allowed. */
+static inline const struct cpumask *tsk_cpus_allowed(struct task_struct *p)
+{
+	if (p->migrate_disable)
+		return cpumask_of(task_cpu(p));
+
+	return &p->cpus_allowed;
+}
 
 extern long sched_setaffinity(pid_t pid, const struct cpumask *new_mask);
 extern long sched_getaffinity(pid_t pid, struct cpumask *mask);
