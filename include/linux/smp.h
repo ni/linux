@@ -80,7 +80,6 @@ void __smp_call_function_single(int cpuid, struct call_single_data *data,
 
 int smp_call_function_any(const struct cpumask *mask,
 			  smp_call_func_t func, void *info, int wait);
-
 /*
  * Generic and arch helpers
  */
