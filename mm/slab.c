@@ -3771,10 +3771,10 @@ void kmem_cache_free(struct kmem_cache *cachep, void *objp)
 	if (!cachep)
 		return;
 
-	local_irq_save(flags);
 	debug_check_no_locks_freed(objp, cachep->object_size);
 	if (!(cachep->flags & SLAB_DEBUG_OBJECTS))
 		debug_check_no_obj_freed(objp, cachep->object_size);
+	local_irq_save(flags);
 	__cache_free(cachep, objp, _RET_IP_);
 	local_irq_restore(flags);
 
@@ -3800,12 +3800,12 @@ void kfree(const void *objp)
 
 	if (unlikely(ZERO_OR_NULL_PTR(objp)))
 		return;
-	local_irq_save(flags);
 	kfree_debugcheck(objp);
 	c = virt_to_cache(objp);
 	debug_check_no_locks_freed(objp, c->object_size);
 
 	debug_check_no_obj_freed(objp, c->object_size);
+	local_irq_save(flags);
 	__cache_free(c, (void *)objp, _RET_IP_);
 	local_irq_restore(flags);
 }
