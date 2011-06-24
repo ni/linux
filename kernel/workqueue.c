@@ -3509,6 +3509,25 @@ static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 				kthread_stop(new_trustee);
 			return NOTIFY_BAD;
 		}
+		break;
+	case CPU_POST_DEAD:
+	case CPU_UP_CANCELED:
+	case CPU_DOWN_FAILED:
+	case CPU_ONLINE:
+		break;
+	case CPU_DYING:
+		/*
+		 * We access this lockless. We are on the dying CPU
+		 * and called from stomp machine.
+		 *
+		 * Before this, the trustee and all workers except for
+		 * the ones which are still executing works from
+		 * before the last CPU down must be on the cpu.  After
+		 * this, they'll all be diasporas.
+		 */
+		gcwq->flags |= GCWQ_DISASSOCIATED;
+	default:
+		goto out;
 	}
 
 	/* some are called w/ irq disabled, don't disturb irq status */
@@ -3526,16 +3545,6 @@ static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 	case CPU_UP_PREPARE:
 		BUG_ON(gcwq->first_idle);
 		gcwq->first_idle = new_worker;
-		break;
-
-	case CPU_DYING:
-		/*
-		 * Before this, the trustee and all workers except for
-		 * the ones which are still executing works from
-		 * before the last CPU down must be on the cpu.  After
-		 * this, they'll all be diasporas.
-		 */
-		gcwq->flags |= GCWQ_DISASSOCIATED;
 		break;
 
 	case CPU_POST_DEAD:
@@ -3571,6 +3580,7 @@ static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 
 	spin_unlock_irqrestore(&gcwq->lock, flags);
 
+out:
 	return notifier_from_errno(0);
 }
 
