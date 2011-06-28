@@ -24,6 +24,7 @@
 #include <linux/ftrace.h>
 #include <linux/smp.h>
 #include <linux/tick.h>
+#include <linux/locallock.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/irq.h>
@@ -165,6 +166,7 @@ static void handle_pending_softirqs(u32 pending, int cpu)
 	local_irq_disable();
 }
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 /*
  * preempt_count and SOFTIRQ_OFFSET usage:
  * - preempt_count is changed by SOFTIRQ_OFFSET on entering or leaving
@@ -368,6 +370,162 @@ asmlinkage void do_softirq(void)
 
 #endif
 
+static inline void local_bh_disable_nort(void) { local_bh_disable(); }
+static inline void _local_bh_enable_nort(void) { _local_bh_enable(); }
+
+#else /* !PREEMPT_RT_FULL */
+
+/*
+ * On RT we serialize softirq execution with a cpu local lock
+ */
+static DEFINE_LOCAL_IRQ_LOCK(local_softirq_lock);
+static DEFINE_PER_CPU(struct task_struct *, local_softirq_runner);
+
+static void __do_softirq(void);
+
+void __init softirq_early_init(void)
+{
+	local_irq_lock_init(local_softirq_lock);
+}
+
+void local_bh_disable(void)
+{
+	migrate_disable();
+	current->softirq_nestcnt++;
+}
+EXPORT_SYMBOL(local_bh_disable);
+
+void local_bh_enable(void)
+{
+	if (WARN_ON(current->softirq_nestcnt == 0))
+		return;
+
+	if ((current->softirq_nestcnt == 1) &&
+	    local_softirq_pending() &&
+	    local_trylock(local_softirq_lock)) {
+
+		local_irq_disable();
+		if (local_softirq_pending())
+			__do_softirq();
+		local_irq_enable();
+		local_unlock(local_softirq_lock);
+		WARN_ON(current->softirq_nestcnt != 1);
+	}
+	current->softirq_nestcnt--;
+	migrate_enable();
+}
+EXPORT_SYMBOL(local_bh_enable);
+
+void local_bh_enable_ip(unsigned long ip)
+{
+	local_bh_enable();
+}
+EXPORT_SYMBOL(local_bh_enable_ip);
+
+/* For tracing */
+int notrace __in_softirq(void)
+{
+	if (__get_cpu_var(local_softirq_lock).owner == current)
+		return __get_cpu_var(local_softirq_lock).nestcnt;
+	return 0;
+}
+
+int in_serving_softirq(void)
+{
+	int res;
+
+	preempt_disable();
+	res = __get_cpu_var(local_softirq_runner) == current;
+	preempt_enable();
+	return res;
+}
+
+/*
+ * Called with bh and local interrupts disabled. For full RT cpu must
+ * be pinned.
+ */
+static void __do_softirq(void)
+{
+	u32 pending = local_softirq_pending();
+	int cpu = smp_processor_id();
+
+	current->softirq_nestcnt++;
+
+	/* Reset the pending bitmask before enabling irqs */
+	set_softirq_pending(0);
+
+	__get_cpu_var(local_softirq_runner) = current;
+
+	lockdep_softirq_enter();
+
+	handle_pending_softirqs(pending, cpu);
+
+	pending = local_softirq_pending();
+	if (pending)
+		wakeup_softirqd();
+
+	lockdep_softirq_exit();
+	__get_cpu_var(local_softirq_runner) = NULL;
+
+	current->softirq_nestcnt--;
+}
+
+static int __thread_do_softirq(int cpu)
+{
+	/*
+	 * Prevent the current cpu from going offline.
+	 * pin_current_cpu() can reenable preemption and block on the
+	 * hotplug mutex. When it returns, the current cpu is
+	 * pinned. It might be the wrong one, but the offline check
+	 * below catches that.
+	 */
+	pin_current_cpu();
+	/*
+	 * If called from ksoftirqd (cpu >= 0) we need to check
+	 * whether we are on the wrong cpu due to cpu offlining. If
+	 * called via thread_do_softirq() no action required.
+	 */
+	if (cpu >= 0 && cpu_is_offline(cpu)) {
+		unpin_current_cpu();
+		return -1;
+	}
+	preempt_enable();
+	local_lock(local_softirq_lock);
+	local_irq_disable();
+	/*
+	 * We cannot switch stacks on RT as we want to be able to
+	 * schedule!
+	 */
+	if (local_softirq_pending())
+		__do_softirq();
+	local_unlock(local_softirq_lock);
+	unpin_current_cpu();
+	preempt_disable();
+	local_irq_enable();
+	return 0;
+}
+
+/*
+ * Called from netif_rx_ni(). Preemption enabled.
+ */
+void thread_do_softirq(void)
+{
+	if (!in_serving_softirq()) {
+		preempt_disable();
+		__thread_do_softirq(-1);
+		preempt_enable();
+	}
+}
+
+static int ksoftirqd_do_softirq(int cpu)
+{
+	return __thread_do_softirq(cpu);
+}
+
+static inline void local_bh_disable_nort(void) { }
+static inline void _local_bh_enable_nort(void) { }
+
+#endif /* PREEMPT_RT_FULL */
 /*
  * Enter an interrupt context.
  */
@@ -381,9 +539,9 @@ void irq_enter(void)
 		 * Prevent raise_softirq from needlessly waking up ksoftirqd
 		 * here, as softirq will be serviced on return from interrupt.
 		 */
-		local_bh_disable();
+		local_bh_disable_nort();
 		tick_check_idle(cpu);
-		_local_bh_enable();
+		_local_bh_enable_nort();
 	}
 
 	__irq_enter();
@@ -392,6 +550,7 @@ void irq_enter(void)
 #ifdef __ARCH_IRQ_EXIT_IRQS_DISABLED
 static inline void invoke_softirq(void)
 {
+#ifndef CONFIG_PREEMPT_RT_FULL
 	if (!force_irqthreads)
 		__do_softirq();
 	else {
@@ -400,10 +559,14 @@ static inline void invoke_softirq(void)
 		wakeup_softirqd();
 		__local_bh_enable(SOFTIRQ_OFFSET);
 	}
+#else
+	wakeup_softirqd();
+#endif
 }
 #else
 static inline void invoke_softirq(void)
 {
+#ifndef CONFIG_PREEMPT_RT_FULL
 	if (!force_irqthreads)
 		do_softirq();
 	else {
@@ -412,6 +575,9 @@ static inline void invoke_softirq(void)
 		wakeup_softirqd();
 		__local_bh_enable(SOFTIRQ_OFFSET);
 	}
+#else
+	wakeup_softirqd();
+#endif
 }
 #endif
 

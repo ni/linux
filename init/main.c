@@ -490,6 +490,7 @@ asmlinkage void __init start_kernel(void)
  * Interrupts are still disabled. Do necessary setups, then
  * enable them
  */
+	softirq_early_init();
 	tick_init();
 	boot_cpu_init();
 	page_address_init();
