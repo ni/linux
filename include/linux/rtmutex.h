@@ -14,7 +14,7 @@
 
 #include <linux/linkage.h>
 #include <linux/plist.h>
-#include <linux/spinlock_types.h>
+#include <linux/spinlock_types_raw.h>
 
 extern int max_lock_depth; /* for sysctl */
 
