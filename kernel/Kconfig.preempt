@@ -66,6 +66,13 @@ config PREEMPT_RTB
 	  enables changes which are preliminary for the full preemptiple
 	  RT kernel.
 
+config PREEMPT_RT_FULL
+	bool "Fully Preemptible Kernel (RT)"
+	depends on IRQ_FORCED_THREADING
+	select PREEMPT_RT_BASE
+	help
+	  All and everything
+
 endchoice
 
 config PREEMPT_COUNT
