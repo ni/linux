@@ -1362,7 +1362,7 @@ void update_process_times(int user_tick)
 	scheduler_tick();
 	run_local_timers();
 	rcu_check_callbacks(cpu, user_tick);
-#ifdef CONFIG_IRQ_WORK
+#if defined(CONFIG_IRQ_WORK) && !defined(CONFIG_PREEMPT_RT_FULL)
 	if (in_irq())
 		irq_work_run();
 #endif
@@ -1375,6 +1375,10 @@ void update_process_times(int user_tick)
 static void run_timer_softirq(struct softirq_action *h)
 {
 	struct tvec_base *base = __this_cpu_read(tvec_bases);
+
+#if defined(CONFIG_IRQ_WORK) && defined(CONFIG_PREEMPT_RT_FULL)
+	irq_work_run();
+#endif
 
 	printk_tick();
 	hrtimer_run_pending();
