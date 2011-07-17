@@ -1063,8 +1063,8 @@ int queue_work(struct workqueue_struct *wq, struct work_struct *work)
 {
 	int ret;
 
-	ret = queue_work_on(get_cpu(), wq, work);
-	put_cpu();
+	ret = queue_work_on(get_cpu_light(), wq, work);
+	put_cpu_light();
 
 	return ret;
 }
