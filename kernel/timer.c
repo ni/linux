@@ -1323,13 +1323,14 @@ unsigned long get_next_timer_interrupt(unsigned long now)
 	/*
 	 * On PREEMPT_RT we cannot sleep here. If the trylock does not
 	 * succeed then we return the worst-case 'expires in 1 tick'
-	 * value:
+	 * value. We use the rt functions here directly to avoid a
+	 * migrate_disable() call.
 	 */
-	if (spin_trylock(&base->lock)) {
+	if (spin_do_trylock(&base->lock)) {
 		if (time_before_eq(base->next_timer, base->timer_jiffies))
 			base->next_timer = __next_timer_interrupt(base);
 		expires = base->next_timer;
-		spin_unlock(&base->lock);
+		rt_spin_unlock(&base->lock);
 	} else {
 		expires = now + 1;
 	}
