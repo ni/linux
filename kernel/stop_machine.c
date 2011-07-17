@@ -327,6 +327,7 @@ static int __cpuinit cpu_stop_cpu_callback(struct notifier_block *nfb,
 		if (IS_ERR(p))
 			return notifier_from_errno(PTR_ERR(p));
 		get_task_struct(p);
+		p->flags |= PF_STOMPER;
 		kthread_bind(p, cpu);
 		sched_set_stop_task(cpu, p);
 		stopper->thread = p;
