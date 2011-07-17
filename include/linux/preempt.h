@@ -121,11 +121,15 @@ extern void migrate_enable(void);
 # define preempt_enable_rt()		preempt_enable()
 # define preempt_disable_nort()		do { } while (0)
 # define preempt_enable_nort()		do { } while (0)
+# define migrate_disable_rt()		migrate_disable()
+# define migrate_enable_rt()		migrate_enable()
 #else
 # define preempt_disable_rt()		do { } while (0)
 # define preempt_enable_rt()		do { } while (0)
 # define preempt_disable_nort()		preempt_disable()
 # define preempt_enable_nort()		preempt_enable()
+# define migrate_disable_rt()		do { } while (0)
+# define migrate_enable_rt()		do { } while (0)
 #endif
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
