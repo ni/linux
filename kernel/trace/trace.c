@@ -462,7 +462,7 @@ int __trace_puts(unsigned long ip, const char *str, int size)
 
 	local_save_flags(irq_flags);
 	buffer = global_trace.trace_buffer.buffer;
-	event = trace_buffer_lock_reserve(buffer, TRACE_PRINT, alloc, 
+	event = trace_buffer_lock_reserve(buffer, TRACE_PRINT, alloc,
 					  irq_flags, preempt_count());
 	if (!event)
 		return 0;
@@ -1551,6 +1551,8 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned long flags,
 		((pc & SOFTIRQ_MASK) ? TRACE_FLAG_SOFTIRQ : 0) |
 		(tif_need_resched() ? TRACE_FLAG_NEED_RESCHED : 0) |
 		(test_preempt_need_resched() ? TRACE_FLAG_PREEMPT_RESCHED : 0);
+
+	entry->migrate_disable = (tsk) ? tsk->migrate_disable & 0xFF : 0;
 }
 EXPORT_SYMBOL_GPL(tracing_generic_entry_update);
 
@@ -2461,9 +2463,10 @@ static void print_lat_help_header(struct seq_file *m)
 	seq_puts(m, "#                | / _----=> need-resched    \n");
 	seq_puts(m, "#                || / _---=> hardirq/softirq \n");
 	seq_puts(m, "#                ||| / _--=> preempt-depth   \n");
-	seq_puts(m, "#                |||| /     delay             \n");
-	seq_puts(m, "#  cmd     pid   ||||| time  |   caller      \n");
-	seq_puts(m, "#     \\   /      |||||  \\    |   /           \n");
+	seq_puts(m, "#                |||| / _--=> migrate-disable\n");
+	seq_puts(m, "#                ||||| /     delay           \n");
+	seq_puts(m, "#  cmd     pid   |||||| time  |   caller     \n");
+	seq_puts(m, "#     \\   /      |||||  \\   |   /          \n");
 }
 
 static void print_event_info(struct trace_buffer *buf, struct seq_file *m)
