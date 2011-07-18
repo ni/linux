@@ -440,6 +440,7 @@ void irq_ctx_init(void)
 	}
 }
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 static inline void do_softirq_onstack(void)
 {
 	struct thread_info *curtp, *irqtp;
@@ -476,7 +477,7 @@ void do_softirq(void)
 
 	local_irq_restore(flags);
 }
-
+#endif
 
 /*
  * IRQ controller and virtual interrupts

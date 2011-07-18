@@ -65,7 +65,7 @@ bool handle_irq(unsigned irq, struct pt_regs *regs)
 	return true;
 }
 
-
+#ifndef CONFIG_PREEMPT_RT_FULL
 extern void call_softirq(void);
 
 asmlinkage void do_softirq(void)
@@ -85,3 +85,4 @@ asmlinkage void do_softirq(void)
 	}
 	local_irq_restore(flags);
 }
+#endif

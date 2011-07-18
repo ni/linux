@@ -456,10 +456,9 @@ struct softirq_action
 	void	(*action)(struct softirq_action *);
 };
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 asmlinkage void do_softirq(void);
 asmlinkage void __do_softirq(void);
-
-#ifndef CONFIG_PREEMPT_RT_FULL
 static inline void thread_do_softirq(void) { do_softirq(); }
 #else
 extern void thread_do_softirq(void);
