@@ -3008,6 +3008,15 @@ L:	linuxppc-dev@lists.ozlabs.org
 S:	Odd Fixes
 F:	drivers/tty/hvc/
 
+HARDWARE LATENCY DETECTOR
+P:	Jon Masters
+M:	jcm@jonmasters.org
+W:	http://www.kernel.org/pub/linux/kernel/people/jcm/hwlat_detector/
+S:	Supported
+L:	linux-kernel@vger.kernel.org
+F:	Documentation/hwlat_detector.txt
+F:	drivers/misc/hwlat_detector.c
+
 HARDWARE MONITORING
 M:	Jean Delvare <khali@linux-fr.org>
 M:	Guenter Roeck <guenter.roeck@ericsson.com>
