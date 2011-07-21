@@ -372,6 +372,8 @@ asmlinkage void do_softirq(void)
 
 static inline void local_bh_disable_nort(void) { local_bh_disable(); }
 static inline void _local_bh_enable_nort(void) { _local_bh_enable(); }
+static inline void ksoftirqd_set_sched_params(void) { }
+static inline void ksoftirqd_clr_sched_params(void) { }
 
 #else /* !PREEMPT_RT_FULL */
 
@@ -525,6 +527,20 @@ static int ksoftirqd_do_softirq(int cpu)
 
 static inline void local_bh_disable_nort(void) { }
 static inline void _local_bh_enable_nort(void) { }
+
+static inline void ksoftirqd_set_sched_params(void)
+{
+	struct sched_param param = { .sched_priority = 1 };
+
+	sched_setscheduler(current, SCHED_FIFO, &param);
+}
+
+static inline void ksoftirqd_clr_sched_params(void)
+{
+	struct sched_param param = { .sched_priority = 0 };
+
+	sched_setscheduler(current, SCHED_NORMAL, &param);
+}
 
 #endif /* PREEMPT_RT_FULL */
 /*
@@ -985,6 +1001,8 @@ void __init softirq_init(void)
 
 static int run_ksoftirqd(void * __bind_cpu)
 {
+	ksoftirqd_set_sched_params();
+
 	set_current_state(TASK_INTERRUPTIBLE);
 
 	while (!kthread_should_stop()) {
@@ -1010,6 +1028,7 @@ static int run_ksoftirqd(void * __bind_cpu)
 
 wait_to_die:
 	preempt_enable();
+	ksoftirqd_clr_sched_params();
 	/* Wait for kthread_stop */
 	set_current_state(TASK_INTERRUPTIBLE);
 	while (!kthread_should_stop()) {
