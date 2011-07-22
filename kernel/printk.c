@@ -532,6 +532,32 @@ asmlinkage void early_printk(const char *fmt, ...)
 	early_vprintk(fmt, ap);
 	va_end(ap);
 }
+
+/*
+ * This is independent of any log levels - a global
+ * kill switch that turns off all of printk.
+ *
+ * Used by the NMI watchdog if early-printk is enabled.
+ */
+static int __read_mostly printk_killswitch;
+
+void printk_kill(void)
+{
+	printk_killswitch = 1;
+}
+
+static int forced_early_printk(const char *fmt, va_list ap)
+{
+	if (!printk_killswitch)
+		return 0;
+	early_vprintk(fmt, ap);
+	return 1;
+}
+#else
+static inline int forced_early_printk(const char *fmt, va_list ap)
+{
+	return 0;
+}
 #endif
 
 static int __read_mostly ignore_loglevel;
@@ -849,6 +875,13 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	char *p;
 	size_t plen;
 	char special;
+
+	/*
+	 * Fall back to early_printk if a debugging subsystem has
+	 * killed printk output
+	 */
+	if (unlikely(forced_early_printk(fmt, args)))
+		return 1;
 
 	boot_delay_msec();
 	printk_delay();
