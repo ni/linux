@@ -44,13 +44,6 @@
 
 #include <asm/uaccess.h>
 
-/*
- * Architectures can override it:
- */
-void asmlinkage __attribute__((weak)) early_printk(const char *fmt, ...)
-{
-}
-
 #define __LOG_BUF_LEN	(1 << CONFIG_LOG_BUF_SHIFT)
 
 /* printk's without a loglevel use this.. */
@@ -520,6 +513,26 @@ static void __call_console_drivers(unsigned start, unsigned end)
 			con->write(con, &LOG_BUF(start), end - start);
 	}
 }
+
+#ifdef CONFIG_EARLY_PRINTK
+struct console *early_console;
+
+static void early_vprintk(const char *fmt, va_list ap)
+{
+	char buf[512];
+	int n = vscnprintf(buf, sizeof(buf), fmt, ap);
+	if (early_console)
+		early_console->write(early_console, buf, n);
+}
+
+asmlinkage void early_printk(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	early_vprintk(fmt, ap);
+	va_end(ap);
+}
+#endif
 
 static int __read_mostly ignore_loglevel;
 
