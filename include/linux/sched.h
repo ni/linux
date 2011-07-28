@@ -23,6 +23,7 @@ struct sched_param {
 #include <linux/nodemask.h>
 #include <linux/mm_types.h>
 
+#include <asm/kmap_types.h>
 #include <asm/page.h>
 #include <asm/ptrace.h>
 #include <asm/cputime.h>
@@ -1448,6 +1449,12 @@ struct task_struct {
 #ifdef CONFIG_PREEMPT_RT_BASE
 	struct rcu_head put_rcu;
 	int softirq_nestcnt;
+#endif
+#ifdef CONFIG_PREEMPT_RT_FULL
+# if defined CONFIG_HIGHMEM || defined CONFIG_X86_32
+	int kmap_idx;
+	pte_t kmap_pte[KM_TYPE_NR];
+# endif
 #endif
 };
 
