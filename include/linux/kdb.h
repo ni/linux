@@ -150,12 +150,14 @@ extern int kdb_register(char *, kdb_func_t, char *, char *, short);
 extern int kdb_register_repeat(char *, kdb_func_t, char *, char *,
 			       short, kdb_repeat_t);
 extern int kdb_unregister(char *);
+#define in_kdb_printk() (kdb_trap_printk)
 #else /* ! CONFIG_KGDB_KDB */
 #define kdb_printf(...)
 #define kdb_init(x)
 #define kdb_register(...)
 #define kdb_register_repeat(...)
 #define kdb_uregister(x)
+#define in_kdb_printk() (0)
 #endif	/* CONFIG_KGDB_KDB */
 enum {
 	KDB_NOT_INITIALIZED,

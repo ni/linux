@@ -38,6 +38,7 @@
 #include <linux/nmi.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/kdb.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -2855,10 +2856,14 @@ serial8250_console_write(struct console *co, const char *s, unsigned int count)
 
 	touch_nmi_watchdog();
 
-	if (up->port.sysrq || oops_in_progress)
-		locked = spin_trylock_irqsave(&up->port.lock, flags);
-	else
-		spin_lock_irqsave(&up->port.lock, flags);
+	if (unlikely(in_kdb_printk())) {
+		locked = 0;
+	} else {
+		if (up->port.sysrq || oops_in_progress)
+			locked = spin_trylock_irqsave(&up->port.lock, flags);
+		else
+			spin_lock_irqsave(&up->port.lock, flags);
+	}
 
 	/*
 	 *	First save the IER then disable the interrupts
