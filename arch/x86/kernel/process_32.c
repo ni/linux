@@ -39,6 +39,7 @@
 #include <linux/io.h>
 #include <linux/kdebug.h>
 #include <linux/cpuidle.h>
+#include <linux/highmem.h>
 
 #include <asm/pgtable.h>
 #include <asm/system.h>
@@ -338,6 +339,41 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	if (unlikely(task_thread_info(prev_p)->flags & _TIF_WORK_CTXSW_PREV ||
 		     task_thread_info(next_p)->flags & _TIF_WORK_CTXSW_NEXT))
 		__switch_to_xtra(prev_p, next_p, tss);
+
+#if defined CONFIG_PREEMPT_RT_FULL && defined CONFIG_HIGHMEM
+	/*
+	 * Save @prev's kmap_atomic stack
+	 */
+	prev_p->kmap_idx = __this_cpu_read(__kmap_atomic_idx);
+	if (unlikely(prev_p->kmap_idx)) {
+		int i;
+
+		for (i = 0; i < prev_p->kmap_idx; i++) {
+			int idx = i + KM_TYPE_NR * smp_processor_id();
+
+			pte_t *ptep = kmap_pte - idx;
+			prev_p->kmap_pte[i] = *ptep;
+			kpte_clear_flush(ptep, __fix_to_virt(FIX_KMAP_BEGIN + idx));
+		}
+
+		__this_cpu_write(__kmap_atomic_idx, 0);
+	}
+
+	/*
+	 * Restore @next_p's kmap_atomic stack
+	 */
+	if (unlikely(next_p->kmap_idx)) {
+		int i;
+
+		__this_cpu_write(__kmap_atomic_idx, next_p->kmap_idx);
+
+		for (i = 0; i < next_p->kmap_idx; i++) {
+			int idx = i + KM_TYPE_NR * smp_processor_id();
+
+			set_pte(kmap_pte - idx, next_p->kmap_pte[i]);
+		}
+	}
+#endif
 
 	/*
 	 * Leave lazy mode, flushing any hypercalls made here.
