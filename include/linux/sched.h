@@ -54,6 +54,7 @@ struct sched_param {
 #include <linux/llist.h>
 #include <linux/uidgid.h>
 #include <linux/gfp.h>
+#include <linux/hardirq.h>
 
 #include <asm/processor.h>
 
@@ -1388,7 +1389,9 @@ struct task_struct {
 	/* mutex deadlock detection */
 	struct mutex_waiter *blocked_on;
 #endif
+#ifdef CONFIG_PREEMPT_RT_FULL
 	int pagefault_disabled;
+#endif
 #ifdef CONFIG_TRACE_IRQFLAGS
 	unsigned int irq_events;
 	unsigned long hardirq_enable_ip;
@@ -1621,6 +1624,17 @@ static inline void task_numa_free(struct task_struct *p)
 {
 }
 #endif
+
+#ifdef CONFIG_PREEMPT_RT_FULL
+static inline bool cur_pf_disabled(void) { return current->pagefault_disabled; }
+#else
+static inline bool cur_pf_disabled(void) { return false; }
+#endif
+
+static inline bool pagefault_disabled(void)
+{
+	return in_atomic() || cur_pf_disabled();
+}
 
 static inline struct pid *task_pid(struct task_struct *task)
 {
