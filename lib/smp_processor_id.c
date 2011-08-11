@@ -40,7 +40,7 @@ notrace unsigned int debug_smp_processor_id(void)
 
 	printk(KERN_ERR "BUG: using smp_processor_id() in preemptible [%08x %08x] "
 	       "code: %s/%d\n", preempt_count() - 1,
-	       current->migrate_disable, current->comm, current->pid);
+	       __migrate_disabled(current), current->comm, current->pid);
 	print_symbol("caller is %s\n", (long)__builtin_return_address(0));
 	dump_stack();
 
