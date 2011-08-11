@@ -162,7 +162,7 @@ int __kprobes do_page_fault(struct pt_regs *regs, unsigned long address,
 	}
 #endif
 
-	if (in_atomic() || mm == NULL || current->pagefault_disabled) {
+	if (!mm || pagefault_disabled()) {
 		if (!user_mode(regs))
 			return SIGSEGV;
 		/* in_atomic() in user mode is really bad,
