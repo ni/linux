@@ -1076,6 +1076,9 @@ struct task_struct {
 	unsigned int policy;
 #ifdef CONFIG_PREEMPT_RT_FULL
 	int migrate_disable;
+# ifdef CONFIG_SCHED_DEBUG
+	int migrate_disable_atomic;
+# endif
 #endif
 	int nr_cpus_allowed;
 	cpumask_t cpus_allowed;
