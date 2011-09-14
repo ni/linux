@@ -1317,7 +1317,11 @@ static void hrtimer_rt_reprogram(int restart, struct hrtimer *timer,
 		if (!enqueue_hrtimer(timer, base))
 			return;
 
-		if (hrtimer_reprogram(timer, base))
+#ifndef CONFIG_HIGH_RES_TIMERS
+	}
+#else
+		if (base->cpu_base->hres_active &&
+		    hrtimer_reprogram(timer, base))
 			goto requeue;
 
 	} else if (hrtimer_active(timer)) {
@@ -1326,6 +1330,7 @@ static void hrtimer_rt_reprogram(int restart, struct hrtimer *timer,
 		 * the event device.
 		 */
 		if (&timer->node == base->active.next &&
+		    base->cpu_base->hres_active &&
 		    hrtimer_reprogram(timer, base))
 			goto requeue;
 	}
@@ -1338,6 +1343,7 @@ requeue:
 	 */
 	__remove_hrtimer(timer, base, timer->state, 0);
 	list_add_tail(&timer->cb_entry, &base->expired);
+#endif
 }
 
 /*
