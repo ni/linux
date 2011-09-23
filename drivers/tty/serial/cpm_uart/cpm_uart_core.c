@@ -1226,7 +1226,7 @@ static void cpm_uart_console_write(struct console *co, const char *s,
 {
 	struct uart_cpm_port *pinfo = &cpm_uart_ports[co->index];
 	unsigned long flags;
-	int nolock = oops_in_progress;
+	int nolock = oops_in_progress || sysrq_in_progress;
 
 	if (unlikely(nolock)) {
 		local_irq_save(flags);

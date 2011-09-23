@@ -21,6 +21,7 @@
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/console.h>
+#include <linux/sysrq.h>
 #include <linux/init.h>
 #include <linux/jiffies.h>
 #include <linux/nmi.h>
@@ -834,8 +835,8 @@ static int console_trylock_for_printk(unsigned int cpu, unsigned long flags)
 {
 	int retval = 0, wake = 0;
 #ifdef CONFIG_PREEMPT_RT_FULL
-	int lock = !early_boot_irqs_disabled && !irqs_disabled_flags(flags) &&
-		!preempt_count();
+	int lock = (!early_boot_irqs_disabled && !irqs_disabled_flags(flags) &&
+		!preempt_count()) || sysrq_in_progress;
 #else
 	int lock = 1;
 #endif
