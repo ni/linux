@@ -9,6 +9,7 @@
 #include <linux/slab.h>
 #include <linux/hpet.h>
 #include <linux/init.h>
+#include <linux/dmi.h>
 #include <linux/cpu.h>
 #include <linux/pm.h>
 #include <linux/io.h>
@@ -568,12 +569,38 @@ static void init_one_hpet_msi_clockevent(struct hpet_dev *hdev, int cpu)
 #define RESERVE_TIMERS 0
 #endif
 
+static int __init dmi_disable_hpet_msi(const struct dmi_system_id *d)
+{
+	hpet_msi_disable = 1;
+	return 0;
+}
+
+static struct dmi_system_id __initdata dmi_hpet_table[] = {
+	/*
+	 * MSI based per cpu timers lose interrupts when intel_idle()
+	 * is enabled - independent of the c-state. With idle=poll the
+	 * problem cannot be observed. We have no idea yet, whether
+	 * this is a W510 specific issue or a general chipset oddity.
+	 */
+	{
+	 .callback = dmi_disable_hpet_msi,
+	 .ident = "Lenovo W510",
+	 .matches = {
+		     DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+		     DMI_MATCH(DMI_PRODUCT_VERSION, "ThinkPad W510"),
+		     },
+	 },
+	{}
+};
+
 static void hpet_msi_capability_lookup(unsigned int start_timer)
 {
 	unsigned int id;
 	unsigned int num_timers;
 	unsigned int num_timers_used = 0;
 	int i;
+
+	dmi_check_system(dmi_hpet_table);
 
 	if (hpet_msi_disable)
 		return;
