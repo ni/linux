@@ -128,6 +128,9 @@ void call_rcu(struct rcu_head *head,
 
 #endif /* #else #ifdef CONFIG_PREEMPT_RCU */
 
+#ifdef CONFIG_PREEMPT_RT_FULL
+#define call_rcu_bh	call_rcu
+#else
 /**
  * call_rcu_bh() - Queue an RCU for invocation after a quicker grace period.
  * @head: structure to be used for queueing the RCU updates.
@@ -151,6 +154,7 @@ void call_rcu(struct rcu_head *head,
  */
 void call_rcu_bh(struct rcu_head *head,
 		 void (*func)(struct rcu_head *head));
+#endif
 
 /**
  * call_rcu_sched() - Queue an RCU for invocation after sched grace period.
@@ -225,7 +229,13 @@ static inline int rcu_preempt_depth(void)
 /* Internal to kernel */
 void rcu_init(void);
 void rcu_sched_qs(int cpu);
+
+#ifdef CONFIG_PREEMPT_RT_FULL
+static inline void rcu_bh_qs(int cpu) { }
+#else
 void rcu_bh_qs(int cpu);
+#endif
+
 void rcu_check_callbacks(int cpu, int user);
 struct notifier_block;
 void rcu_idle_enter(void);
@@ -370,7 +380,14 @@ static inline int rcu_read_lock_held(void)
  * rcu_read_lock_bh_held() is defined out of line to avoid #include-file
  * hell.
  */
+#ifdef CONFIG_PREEMPT_RT_FULL
+static inline int rcu_read_lock_bh_held(void)
+{
+	return rcu_read_lock_held();
+}
+#else
 int rcu_read_lock_bh_held(void);
+#endif
 
 /**
  * rcu_read_lock_sched_held() - might we be in RCU-sched read-side critical section?
@@ -863,10 +880,14 @@ static inline void rcu_read_unlock(void)
 static inline void rcu_read_lock_bh(void)
 {
 	local_bh_disable();
+#ifdef CONFIG_PREEMPT_RT_FULL
+	rcu_read_lock();
+#else
 	__acquire(RCU_BH);
 	rcu_lock_acquire(&rcu_bh_lock_map);
 	rcu_lockdep_assert(rcu_is_watching(),
 			   "rcu_read_lock_bh() used illegally while idle");
+#endif
 }
 
 /*
@@ -876,10 +897,14 @@ static inline void rcu_read_lock_bh(void)
  */
 static inline void rcu_read_unlock_bh(void)
 {
+#ifdef CONFIG_PREEMPT_RT_FULL
+	rcu_read_unlock();
+#else
 	rcu_lockdep_assert(rcu_is_watching(),
 			   "rcu_read_unlock_bh() used illegally while idle");
 	rcu_lock_release(&rcu_bh_lock_map);
 	__release(RCU_BH);
+#endif
 	local_bh_enable();
 }
 
