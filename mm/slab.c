@@ -2573,7 +2573,7 @@ static void __do_drain(void *arg, unsigned int cpu)
 	struct array_cache *ac;
 	int node = cpu_to_mem(cpu);
 
-	ac = cpu_cache_get(cachep);
+	ac = cpu_cache_get_on_cpu(cachep, cpu);
 	spin_lock(&cachep->nodelists[node]->list_lock);
 	free_block(cachep, ac->entry, ac->avail, node);
 	spin_unlock(&cachep->nodelists[node]->list_lock);
