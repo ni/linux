@@ -1042,6 +1042,7 @@ int __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 			 * remove it again and report a failure. This avoids
 			 * stale base->first entries.
 			 */
+			debug_deactivate(timer);
 			__remove_hrtimer(timer, new_base,
 					timer->state & HRTIMER_STATE_CALLBACK, 0);
 		}
