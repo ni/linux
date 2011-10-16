@@ -1274,8 +1274,8 @@ void printk_tick(void)
 
 int printk_needs_cpu(int cpu)
 {
-	if (cpu_is_offline(cpu))
-		printk_tick();
+	if (unlikely(cpu_is_offline(cpu)))
+		__this_cpu_write(printk_pending, 0);
 	return __this_cpu_read(printk_pending);
 }
 
