@@ -3301,14 +3301,14 @@ static void flush_gcwq(struct global_cwq *gcwq)
 
 	spin_unlock_irq(&gcwq->lock);
 
-	gcwq = get_gcwq(get_cpu());
+	gcwq = get_gcwq(get_cpu_light());
 	spin_lock_irq(&gcwq->lock);
 	list_for_each_entry_safe(work, nw, &non_affine_works, entry) {
 		list_del_init(&work->entry);
 		___queue_work(get_work_cwq(work)->wq, gcwq, work);
 	}
 	spin_unlock_irq(&gcwq->lock);
-	put_cpu();
+	put_cpu_light();
 }
 
 static int __devinit workqueue_cpu_down_callback(struct notifier_block *nfb,
