@@ -411,22 +411,20 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 		return -EBUSY;
 	}
 
+	cpu_hotplug_begin();
+	err = cpu_unplug_begin(cpu);
+	if (err) {
+		printk("cpu_unplug_begin(%d) failed\n", cpu);
+		goto out_cancel;
+	}
+
 	err = __cpu_notify(CPU_DOWN_PREPARE | mod, hcpu, -1, &nr_calls);
 	if (err) {
 		nr_calls--;
 		__cpu_notify(CPU_DOWN_FAILED | mod, hcpu, nr_calls, NULL);
 		printk("%s: attempt to take down CPU %u failed\n",
 				__func__, cpu);
-		goto out_cancel;
-	}
-
-	cpu_hotplug_begin();
-	err = cpu_unplug_begin(cpu);
-	if (err) {
-		nr_calls--;
-		__cpu_notify(CPU_DOWN_FAILED | mod, hcpu, nr_calls, NULL);
-		printk("cpu_unplug_begin(%d) failed\n", cpu);
-		goto out_cancel;
+		goto out_release;
 	}
 	smpboot_park_threads(cpu);
 
