@@ -3219,6 +3219,11 @@ static int __devinit workqueue_cpu_up_callback(struct notifier_block *nfb,
 		new_worker = create_worker(gcwq, false);
 		if (!new_worker)
 			return NOTIFY_BAD;
+	case CPU_UP_CANCELED:
+	case CPU_ONLINE:
+		break;
+	default:
+		return notifier_from_errno(0);
 	}
 
 	/* some are called w/ irq disabled, don't disturb irq status */
