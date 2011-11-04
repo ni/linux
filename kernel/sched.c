@@ -2570,7 +2570,12 @@ static int select_fallback_rq(int cpu, struct task_struct *p)
 		printk(KERN_INFO "process %d (%s) no longer affine to cpu%d\n",
 				task_pid_nr(p), p->comm, cpu);
 	}
-
+	/*
+	 * Clear PF_THREAD_BOUND, otherwise we wreckage
+	 * migrate_disable/enable. See optimization for
+	 * PF_THREAD_BOUND tasks there.
+	 */
+	p->flags &= ~PF_THREAD_BOUND;
 	return dest_cpu;
 }
 
