@@ -56,8 +56,10 @@ do { \
 
 #ifndef CONFIG_PREEMPT_RT_BASE
 # define preempt_enable_no_resched()	__preempt_enable_no_resched()
+# define preempt_check_resched_rt()	do { } while (0)
 #else
 # define preempt_enable_no_resched()	preempt_enable()
+# define preempt_check_resched_rt()	preempt_check_resched()
 #endif
 
 #define preempt_enable() \
@@ -105,6 +107,7 @@ do { \
 #define preempt_disable_notrace()		do { } while (0)
 #define preempt_enable_no_resched_notrace()	do { } while (0)
 #define preempt_enable_notrace()		do { } while (0)
+#define preempt_check_resched_rt()	do { } while (0)
 
 #endif /* CONFIG_PREEMPT_COUNT */
 
