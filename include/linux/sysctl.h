@@ -932,6 +932,7 @@ enum
 #include <linux/list.h>
 #include <linux/rcupdate.h>
 #include <linux/wait.h>
+#include <linux/atomic.h>
 
 /* For the /proc/sys support */
 struct ctl_table;
