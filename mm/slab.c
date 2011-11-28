@@ -607,6 +607,12 @@ int slab_is_available(void)
 	return g_cpucache_up >= EARLY;
 }
 
+/*
+ * Guard access to the cache-chain.
+ */
+static DEFINE_MUTEX(cache_chain_mutex);
+static struct list_head cache_chain;
+
 #ifdef CONFIG_LOCKDEP
 
 /*
@@ -668,38 +674,41 @@ static void slab_set_debugobj_lock_classes(struct kmem_cache *cachep)
 		slab_set_debugobj_lock_classes_node(cachep, node);
 }
 
-static void init_node_lock_keys(int q)
+static void init_lock_keys(struct kmem_cache *cachep, int node)
 {
-	struct cache_sizes *s = malloc_sizes;
+	struct kmem_list3 *l3;
 
 	if (g_cpucache_up < LATE)
 		return;
 
-	for (s = malloc_sizes; s->cs_size != ULONG_MAX; s++) {
-		struct kmem_list3 *l3;
+	l3 = cachep->nodelists[node];
+	if (!l3 || OFF_SLAB(cachep))
+		return;
 
-		l3 = s->cs_cachep->nodelists[q];
-		if (!l3 || OFF_SLAB(s->cs_cachep))
-			continue;
-
-		slab_set_lock_classes(s->cs_cachep, &on_slab_l3_key,
-				&on_slab_alc_key, q);
-	}
+	slab_set_lock_classes(cachep, &on_slab_l3_key, &on_slab_alc_key, node);
 }
 
-static inline void init_lock_keys(void)
+static void init_node_lock_keys(int node)
+{
+	struct kmem_cache *cachep;
+
+	list_for_each_entry(cachep, &cache_chain, next)
+		init_lock_keys(cachep, node);
+}
+
+static inline void init_cachep_lock_keys(struct kmem_cache *cachep)
 {
 	int node;
 
 	for_each_node(node)
-		init_node_lock_keys(node);
+		init_lock_keys(cachep, node);
 }
 #else
-static void init_node_lock_keys(int q)
+static void init_node_lock_keys(int node)
 {
 }
 
-static inline void init_lock_keys(void)
+static void init_cachep_lock_keys(struct kmem_cache *cachep)
 {
 }
 
@@ -711,12 +720,6 @@ static void slab_set_debugobj_lock_classes(struct kmem_cache *cachep)
 {
 }
 #endif
-
-/*
- * Guard access to the cache-chain.
- */
-static DEFINE_MUTEX(cache_chain_mutex);
-static struct list_head cache_chain;
 
 static DEFINE_PER_CPU(struct delayed_work, slab_reap_work);
 
@@ -1669,14 +1672,13 @@ void __init kmem_cache_init_late(void)
 
 	g_cpucache_up = LATE;
 
-	/* Annotate slab for lockdep -- annotate the malloc caches */
-	init_lock_keys();
-
 	/* 6) resize the head arrays to their final sizes */
 	mutex_lock(&cache_chain_mutex);
-	list_for_each_entry(cachep, &cache_chain, next)
+	list_for_each_entry(cachep, &cache_chain, next) {
+		init_cachep_lock_keys(cachep);
 		if (enable_cpucache(cachep, GFP_NOWAIT))
 			BUG();
+	}
 	mutex_unlock(&cache_chain_mutex);
 
 	/* Done! */
@@ -2478,6 +2480,8 @@ kmem_cache_create (const char *name, size_t size, size_t align,
 
 		slab_set_debugobj_lock_classes(cachep);
 	}
+
+	init_cachep_lock_keys(cachep);
 
 	/* cache setup completed, link it into the list */
 	list_add(&cachep->next, &cache_chain);
