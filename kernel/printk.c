@@ -901,7 +901,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	boot_delay_msec();
 	printk_delay();
 
-	preempt_disable();
+	migrate_disable();
 	/* This stops the holder of console_sem just where we want him */
 	raw_local_irq_save(flags);
 	this_cpu = smp_processor_id();
@@ -1032,7 +1032,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 out_restore_irqs:
 	raw_local_irq_restore(flags);
 
-	preempt_enable();
+	migrate_enable();
 	return printed_len;
 }
 EXPORT_SYMBOL(printk);
