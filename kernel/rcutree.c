@@ -171,6 +171,8 @@ void rcu_sched_qs(int cpu)
 }
 
 #ifdef CONFIG_PREEMPT_RT_FULL
+static void rcu_preempt_qs(int cpu);
+
 void rcu_bh_qs(int cpu)
 {
 	rcu_preempt_qs(cpu);
