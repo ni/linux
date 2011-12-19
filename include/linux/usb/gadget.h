@@ -479,6 +479,7 @@ struct usb_gadget_ops {
  * @speed: Speed of current connection to USB host.
  * @is_dualspeed: True if the controller supports both high and full speed
  *	operation.  If it does, the gadget driver must also support both.
+ * @state: the state we are now (attached, suspended, configured, etc)
  * @is_otg: True if the USB device port uses a Mini-AB jack, so that the
  *	gadget driver must provide a USB OTG descriptor.
  * @is_a_peripheral: False unless is_otg, the "A" end of a USB cable
@@ -519,6 +520,7 @@ struct usb_gadget {
 	struct list_head		ep_list;	/* of usb_ep */
 	enum usb_device_speed		speed;
 	unsigned			is_dualspeed:1;
+	enum usb_device_state		state;
 	unsigned			is_otg:1;
 	unsigned			is_a_peripheral:1;
 	unsigned			b_hnp_enable:1;
@@ -937,6 +939,13 @@ static inline void usb_free_descriptors(struct usb_descriptor_header **v)
 {
 	kfree(v);
 }
+
+/*-------------------------------------------------------------------------*/
+
+/* utility to set gadget state properly */
+
+extern void usb_gadget_set_state(struct usb_gadget *gadget,
+		enum usb_device_state state);
 
 /*-------------------------------------------------------------------------*/
 

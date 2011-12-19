@@ -71,6 +71,16 @@ static inline int usb_gadget_start(struct usb_gadget *gadget,
 	return gadget->ops->start(driver, bind);
 }
 
+void usb_gadget_set_state(struct usb_gadget *gadget,
+		enum usb_device_state state)
+{
+	gadget->state = state;
+	sysfs_notify(&gadget->dev.kobj, NULL, "status");
+}
+EXPORT_SYMBOL_GPL(usb_gadget_set_state);
+
+/* ------------------------------------------------------------------------- */
+
 /**
  * usb_gadget_udc_start - tells usb device controller to start up
  * @gadget: The gadget we want to get started
@@ -178,6 +188,8 @@ int usb_add_gadget_udc(struct device *parent, struct usb_gadget *gadget)
 	ret = device_add(&udc->dev);
 	if (ret)
 		goto err3;
+
+	usb_gadget_set_state(gadget, USB_STATE_NOTATTACHED);
 
 	mutex_unlock(&udc_lock);
 
@@ -384,6 +396,16 @@ static ssize_t usb_udc_speed_show(struct device *dev,
 }
 static DEVICE_ATTR(speed, S_IRUGO, usb_udc_speed_show, NULL);
 
+static ssize_t usb_gadget_state_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct usb_udc		*udc = container_of(dev, struct usb_udc, dev);
+	struct usb_gadget	*gadget = udc->gadget;
+
+	return sprintf(buf, "%s\n", usb_state_string(gadget->state));
+}
+static DEVICE_ATTR(state, S_IRUGO, usb_gadget_state_show, NULL);
+
 #define USB_UDC_ATTR(name)					\
 ssize_t usb_udc_##name##_show(struct device *dev,		\
 		struct device_attribute *attr, char *buf)	\
@@ -406,7 +428,7 @@ static struct attribute *usb_udc_attrs[] = {
 	&dev_attr_srp.attr,
 	&dev_attr_soft_connect.attr,
 	&dev_attr_speed.attr,
-
+	&dev_attr_state.attr,
 	&dev_attr_is_dualspeed.attr,
 	&dev_attr_is_otg.attr,
 	&dev_attr_is_a_peripheral.attr,
