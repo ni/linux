@@ -684,10 +684,10 @@ void __init gic_set_cpu(unsigned int cpu, unsigned int irq)
 	mask = 0xff << shift;
 	bit = 1 << (cpu + shift);	/* cpu = 0 based, 0 or 1 for Xilinx */
 
-	spin_lock(&irq_controller_lock);
+	raw_spin_lock(&irq_controller_lock);
 	val = readl(reg) & ~mask;
 	writel(val | bit, reg);
-	spin_unlock(&irq_controller_lock);
+	raw_spin_unlock(&irq_controller_lock);
 }
 EXPORT_SYMBOL(gic_set_cpu);
 
