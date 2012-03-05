@@ -15,18 +15,20 @@
 #include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/platform_data/ni-zynq.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
-
 
 #define NIZYNQCPLD_VERSION		0x00
 #define NIZYNQCPLD_PRODUCT		0x1D
 
+#define PROTO_PROCESSORSTATE		0x01
 #define PROTO_SWITCHANDLED		0x04
 #define PROTO_ETHERNETLED		0x05
 #define PROTO_SCRATCHPADSR		0xFE
 #define PROTO_SCRATCHPADHR		0xFF
 
+#define DOSX_PROCESSORRESET		0x02
 #define DOSX_STATUSLEDSHIFTBYTE1	0x05
 #define DOSX_STATUSLEDSHIFTBYTE0	0x06
 #define DOSX_LED			0x07
@@ -64,6 +66,7 @@ struct nizynqcpld_desc {
 	u8 supported_product;
 	struct nizynqcpld_led_desc *led_descs;
 	unsigned num_led_descs;
+	u8 reboot_addr;
 	u8 scratch_hr_addr;
 	u8 scratch_sr_addr;
 };
@@ -74,6 +77,7 @@ struct nizynqcpld {
 	struct nizynqcpld_led *leds;
 	struct i2c_client *client;
 	struct mutex lock;
+	struct ni_zynq_board_reset reset;
 };
 
 static int nizynqcpld_write(struct nizynqcpld *cpld, u8 reg, u8 data);
@@ -234,6 +238,14 @@ static int nizynqcpld_read(struct nizynqcpld *cpld, u8 reg, u8 *data)
 	err = i2c_transfer(cpld->client->adapter, msgs, ARRAY_SIZE(msgs));
 
 	return err == ARRAY_SIZE(msgs) ? 0 : err;
+}
+
+static void nizynqcpld_reset(struct ni_zynq_board_reset *reset)
+{
+	struct nizynqcpld *cpld = container_of(reset, struct nizynqcpld, reset);
+	struct nizynqcpld_desc *desc = cpld->desc;
+
+	nizynqcpld_write(cpld, desc->reboot_addr, 0x80);
 }
 
 static inline ssize_t nizynqcpld_scratch_show(struct nizynqcpld *cpld,
@@ -503,6 +515,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.supported_product	= 0,
 		.led_descs		= proto_leds,
 		.num_led_descs		= ARRAY_SIZE(proto_leds),
+		.reboot_addr		= PROTO_PROCESSORSTATE,
 		.scratch_hr_addr	= PROTO_SCRATCHPADHR,
 		.scratch_sr_addr	= PROTO_SCRATCHPADSR,
 	},
@@ -513,6 +526,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.supported_product	= 0,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -523,6 +537,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.supported_product	= 0,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -533,6 +548,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.supported_product	= 0,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -543,6 +559,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.supported_product	= 1,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -621,6 +638,9 @@ static int nizynqcpld_probe(struct i2c_client *client,
 		goto err_sysfs_create_files;
 	}
 
+	cpld->reset.reset = nizynqcpld_reset;
+	ni_zynq_board_reset = &cpld->reset;
+
 	i2c_set_clientdata(client, cpld);
 
 	dev_info(&client->dev,
@@ -648,6 +668,8 @@ static int nizynqcpld_remove(struct i2c_client *client)
 	struct nizynqcpld *cpld = i2c_get_clientdata(client);
 	struct nizynqcpld_desc *desc = cpld->desc;
 	int i;
+
+	ni_zynq_board_reset = NULL;
 
 	sysfs_remove_files(&cpld->dev->kobj, desc->attrs);
 	for (i = desc->num_led_descs - 1; i; --i)
