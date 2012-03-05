@@ -51,7 +51,7 @@ config XILINX_TEST
 
 choice
         prompt "Xilinx CPU AMP Kernels"
-	default ZXILINX_DEFAULT_KERNEL
+	default ZYNQ_DEFAULT_KERNEL
 
 config ZYNQ_DEFAULT_KERNEL
 	bool "Run the kernel as normal"
