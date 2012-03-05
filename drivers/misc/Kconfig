@@ -134,7 +134,7 @@ config FPGA_PERIPHERAL
 
 config NIZYNQ_CPLD
 	tristate "National Instruments Zynq CPLD driver"
-	depends on I2C && SYSFS
+	depends on I2C && SYSFS && LEDS_CLASS
 	help
 	  If you say yes here, you get support for the CPLD features
 	  on National Instruments Zynq-based targets.
