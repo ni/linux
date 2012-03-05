@@ -21,9 +21,18 @@
 #define NIZYNQCPLD_VERSION		0x00
 #define NIZYNQCPLD_PRODUCT		0x1D
 
+#define PROTO_SCRATCHPADSR		0xFE
+#define PROTO_SCRATCHPADHR		0xFF
+
+#define DOSX_SCRATCHPADSR		0x1E
+#define DOSX_SCRATCHPADHR		0x1F
+
 struct nizynqcpld_desc {
+	const struct attribute **attrs;
 	u8 supported_version;
 	u8 supported_product;
+	u8 scratch_hr_addr;
+	u8 scratch_sr_addr;
 };
 
 struct nizynqcpld {
@@ -86,31 +95,147 @@ static int nizynqcpld_read(struct nizynqcpld *cpld, u8 reg, u8 *data)
 	return err == ARRAY_SIZE(msgs) ? 0 : err;
 }
 
+static inline ssize_t nizynqcpld_scratch_show(struct nizynqcpld *cpld,
+					      struct device_attribute *attr,
+					      char *buf, u8 reg_addr)
+{
+	u8 data;
+	int err;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, reg_addr, &data);
+	nizynqcpld_unlock(cpld);
+
+	if (err) {
+		dev_err(cpld->dev, "Error reading scratch register state.\n");
+		return err;
+	}
+
+	return sprintf(buf, "%02x\n", data);
+}
+
+static ssize_t nizynqcpld_scratchsr_show(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	return nizynqcpld_scratch_show(cpld, attr, buf, desc->scratch_sr_addr);
+}
+
+static ssize_t nizynqcpld_scratchhr_show(
+	struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	return nizynqcpld_scratch_show(cpld, attr, buf, desc->scratch_hr_addr);
+}
+
+static inline ssize_t nizynqcpld_scratch_store(struct nizynqcpld *cpld,
+					       struct device_attribute *attr,
+					       const char *buf, size_t count,
+					       u8 reg_addr)
+{
+	unsigned long tmp;
+	u8 data;
+	int err;
+
+	err = kstrtoul(buf, 0, &tmp);
+	if (err)
+		return err;
+
+	data = (u8) tmp;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_write(cpld, reg_addr, data);
+	nizynqcpld_unlock(cpld);
+
+	if (err) {
+		dev_err(cpld->dev,
+			"Error writing to  scratch register.\n");
+		return err;
+	}
+
+	return count;
+}
+
+static ssize_t nizynqcpld_scratchsr_store(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	return nizynqcpld_scratch_store(cpld, attr, buf, count,
+					desc->scratch_sr_addr);
+}
+
+static ssize_t nizynqcpld_scratchhr_store(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	return nizynqcpld_scratch_store(cpld, attr, buf, count,
+					desc->scratch_hr_addr);
+}
+
+static DEVICE_ATTR(scratch_softreset, S_IRUSR|S_IWUSR,
+		nizynqcpld_scratchsr_show, nizynqcpld_scratchsr_store);
+static DEVICE_ATTR(scratch_hardreset, S_IRUSR|S_IWUSR,
+		nizynqcpld_scratchhr_show, nizynqcpld_scratchhr_store);
+
+static const struct attribute *nizynqcpld_attrs[] = {
+	&dev_attr_scratch_softreset.attr,
+	&dev_attr_scratch_hardreset.attr,
+	NULL
+};
+
+static const struct attribute *dosequis6_attrs[] = {
+	&dev_attr_scratch_softreset.attr,
+	&dev_attr_scratch_hardreset.attr,
+	NULL
+};
+
 static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	/* DosEquis and myRIO development CPLD */
 	{
+		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 3,
 		.supported_product	= 0,
+		.scratch_hr_addr	= PROTO_SCRATCHPADHR,
+		.scratch_sr_addr	= PROTO_SCRATCHPADSR,
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
+		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 4,
 		.supported_product	= 0,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
+		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 5,
 		.supported_product	= 0,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
 	/* DosEquis CPLD */
 	{
+		.attrs			= dosequis6_attrs,
 		.supported_version	= 6,
 		.supported_product	= 0,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
 	/* myRIO CPLD */
 	{
+		.attrs			= dosequis6_attrs,
 		.supported_version	= 6,
 		.supported_product	= 1,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
 };
 
@@ -166,6 +291,12 @@ static int nizynqcpld_probe(struct i2c_client *client,
 
 	cpld->desc = desc;
 
+	err = sysfs_create_files(&cpld->dev->kobj, desc->attrs);
+	if (err) {
+		dev_err(cpld->dev, "could not register attrs for device.\n");
+		goto err_sysfs_create_files;
+	}
+
 	i2c_set_clientdata(client, cpld);
 
 	dev_info(&client->dev,
@@ -174,6 +305,8 @@ static int nizynqcpld_probe(struct i2c_client *client,
 
 	return 0;
 
+	sysfs_remove_files(&client->dev.kobj, desc->attrs);
+err_sysfs_create_files:
 err_no_version:
 err_read_info:
 	kfree(cpld);
@@ -184,7 +317,9 @@ err_cpld_alloc:
 static int nizynqcpld_remove(struct i2c_client *client)
 {
 	struct nizynqcpld *cpld = i2c_get_clientdata(client);
+	struct nizynqcpld_desc *desc = cpld->desc;
 
+	sysfs_remove_files(&cpld->dev->kobj, desc->attrs);
 	kfree(cpld);
 	return 0;
 }
