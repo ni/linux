@@ -12,6 +12,7 @@
  * GNU General Public License for more details.
  */
 #include <linux/i2c.h>
+#include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/slab.h>
@@ -21,16 +22,48 @@
 #define NIZYNQCPLD_VERSION		0x00
 #define NIZYNQCPLD_PRODUCT		0x1D
 
+#define PROTO_SWITCHANDLED		0x04
+#define PROTO_ETHERNETLED		0x05
 #define PROTO_SCRATCHPADSR		0xFE
 #define PROTO_SCRATCHPADHR		0xFF
 
+#define DOSX_STATUSLEDSHIFTBYTE1	0x05
+#define DOSX_STATUSLEDSHIFTBYTE0	0x06
+#define DOSX_LED			0x07
+#define DOSX_ETHERNETLED		0x08
 #define DOSX_SCRATCHPADSR		0x1E
 #define DOSX_SCRATCHPADHR		0x1F
+
+struct nizynqcpld_led_desc {
+	const char *name;
+	const char *default_trigger;
+	u8 addr;
+	u8 bit;
+	u8 pattern_lo_addr;
+	u8 pattern_hi_addr;
+	int max_brightness;
+};
+
+struct nizynqcpld;
+
+struct nizynqcpld_led {
+	struct nizynqcpld *cpld;
+	struct nizynqcpld_led_desc *desc;
+	unsigned on:1;
+	struct led_classdev cdev;
+	struct work_struct deferred_work;
+	u16 blink_pattern;
+};
+
+#define to_nizynqcpld_led(x) \
+		container_of(x, struct nizynqcpld_led, cdev)
 
 struct nizynqcpld_desc {
 	const struct attribute **attrs;
 	u8 supported_version;
 	u8 supported_product;
+	struct nizynqcpld_led_desc *led_descs;
+	unsigned num_led_descs;
 	u8 scratch_hr_addr;
 	u8 scratch_sr_addr;
 };
@@ -38,6 +71,7 @@ struct nizynqcpld_desc {
 struct nizynqcpld {
 	struct device *dev;
 	struct nizynqcpld_desc *desc;
+	struct nizynqcpld_led *leds;
 	struct i2c_client *client;
 	struct mutex lock;
 };
@@ -52,6 +86,70 @@ static inline void nizynqcpld_lock(struct nizynqcpld *cpld)
 static inline void nizynqcpld_unlock(struct nizynqcpld *cpld)
 {
 	mutex_unlock(&cpld->lock);
+}
+
+/* Can't issue i2c transfers in set_brightness, because
+ * they can sleep */
+static void nizynqcpld_set_brightness_work(struct work_struct *work)
+{
+	struct nizynqcpld_led *led = container_of(work, struct nizynqcpld_led,
+						  deferred_work);
+	struct nizynqcpld_led_desc *desc = led->desc;
+	struct nizynqcpld *cpld = led->cpld;
+	int err;
+	u8 tmp;
+
+	nizynqcpld_lock(cpld);
+
+	err = nizynqcpld_read(cpld, desc->addr, &tmp);
+	if (err)
+		goto unlock_out;
+
+	tmp &= ~desc->bit;
+	if (led->on)
+		tmp |= desc->bit;
+
+	nizynqcpld_write(cpld, desc->addr, tmp);
+
+	if (desc->pattern_lo_addr && desc->pattern_hi_addr) {
+		/* spec says to write byte 1 first */
+		nizynqcpld_write(cpld, desc->pattern_hi_addr,
+				 led->blink_pattern >> 8);
+		nizynqcpld_write(cpld, desc->pattern_lo_addr,
+				 led->blink_pattern & 0xff);
+	}
+
+unlock_out:
+	nizynqcpld_unlock(cpld);
+}
+
+static void nizynqcpld_led_set_brightness(struct led_classdev *led_cdev,
+					  enum led_brightness brightness)
+{
+	struct nizynqcpld_led *led = to_nizynqcpld_led(led_cdev);
+	led->on = !!brightness;
+	/* some LED's support a blink pattern instead of a variable brightness,
+	   and blink_set isn't flexible enough for the supported patterns */
+	led->blink_pattern = brightness;
+	schedule_work(&led->deferred_work);
+}
+
+static enum led_brightness
+nizynqcpld_led_get_brightness(struct led_classdev *led_cdev)
+{
+	struct nizynqcpld_led *led = to_nizynqcpld_led(led_cdev);
+	struct nizynqcpld_led_desc *desc = led->desc;
+	struct nizynqcpld *cpld = led->cpld;
+	u8 tmp;
+
+	nizynqcpld_lock(cpld);
+	/* can't handle an error here, so, roll with it. */
+	nizynqcpld_read(cpld, desc->addr, &tmp);
+	nizynqcpld_unlock(cpld);
+
+	/* for the status LED, the blink pattern used for brightness on write
+	   is write-only, so we just return on/off for all LED's */
+	return tmp & desc->bit ? LED_FULL : 0;
 }
 
 static int nizynqcpld_write(struct nizynqcpld *cpld, u8 reg, u8 data)
@@ -70,6 +168,49 @@ static int nizynqcpld_write(struct nizynqcpld *cpld, u8 reg, u8 data)
 
 	return err == 1 ? 0 : err;
 }
+
+static int nizynqcpld_led_register(struct nizynqcpld *cpld,
+				   struct nizynqcpld_led_desc *desc,
+				   struct nizynqcpld_led *led)
+{
+	int err;
+	u8 tmp;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, desc->addr, &tmp);
+	nizynqcpld_unlock(cpld);
+
+	if (err)
+		goto err_out;
+
+	led->cpld = cpld;
+	led->desc = desc;
+	led->on = !!(tmp & desc->bit);
+	INIT_WORK(&led->deferred_work, nizynqcpld_set_brightness_work);
+
+	led->cdev.name = desc->name;
+	led->cdev.default_trigger = desc->default_trigger;
+	led->cdev.max_brightness = desc->max_brightness ? desc->max_brightness
+							: 1;
+	led->cdev.brightness_set = nizynqcpld_led_set_brightness;
+	led->cdev.brightness_get = nizynqcpld_led_get_brightness;
+
+	err = led_classdev_register(cpld->dev, &led->cdev);
+	if (err) {
+		dev_err(cpld->dev, "error registering led.\n");
+		goto err_led;
+	}
+
+err_led:
+err_out:
+	return err;
+}
+
+static void nizynqcpld_led_unregister(struct nizynqcpld_led *led)
+{
+	led_classdev_unregister(&led->cdev);
+}
+
 
 static int nizynqcpld_read(struct nizynqcpld *cpld, u8 reg, u8 *data)
 {
@@ -264,12 +405,104 @@ static const struct attribute *dosequis6_attrs[] = {
 	NULL
 };
 
+static struct nizynqcpld_led_desc proto_leds[] = {
+	{
+		.name			= "nizynqcpld:user1:green",
+		.addr			= PROTO_SWITCHANDLED,
+		.bit			= 1 << 4,
+	},
+	{
+		.name			= "nizynqcpld:user1:yellow",
+		.addr			= PROTO_SWITCHANDLED,
+		.bit			= 1 << 3,
+	},
+	{
+		.name			= "nizynqcpld:status:yellow",
+		.addr			= PROTO_SWITCHANDLED,
+		.bit			= 1 << 2,
+	},
+	{
+		.name			= "nizynqcpld:eth1:green",
+		.addr			= PROTO_ETHERNETLED,
+		.bit			= 1 << 1,
+		.default_trigger	= "e000b000:00:100Mb",
+	},
+	{
+		.name			= "nizynqcpld:eth1:yellow",
+		.addr			= PROTO_ETHERNETLED,
+		.bit			= 1 << 0,
+		.default_trigger	= "e000b000:00:Gb",
+	},
+};
+
+static struct nizynqcpld_led_desc dosx_leds[] = {
+	{
+		.name			= "nizynqcpld:user1:green",
+		.addr			= DOSX_LED,
+		.bit			= 1 << 5,
+	},
+	{
+		.name			= "nizynqcpld:user1:yellow",
+		.addr			= DOSX_LED,
+		.bit			= 1 << 4,
+	},
+	{
+		.name			= "nizynqcpld:status:red",
+		.addr			= DOSX_LED,
+		.bit			= 1 << 3,
+	},
+	{
+		.name			= "nizynqcpld:status:yellow",
+		.addr			= DOSX_LED,
+		.bit			= 1 << 2,
+		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
+		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1,
+		.max_brightness		= 0xffff,
+	},
+	{
+		.name			= "nizynqcpld:wifi:green",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 5,
+	},
+	{
+		.name			= "nizynqcpld:wifi:yellow",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 4,
+	},
+	{
+		.name			= "nizynqcpld:eth1:green",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 3,
+		.default_trigger	= "e000b000:01:100Mb",
+	},
+	{
+		.name			= "nizynqcpld:eth1:yellow",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 2,
+		.default_trigger	= "e000b000:01:Gb",
+	},
+	{
+		.name			= "nizynqcpld:eth0:green",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 1,
+		.default_trigger	= "e000b000:00:100Mb",
+	},
+	{
+		.name			= "nizynqcpld:eth0:yellow",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 0,
+		.default_trigger	= "e000b000:00:Gb",
+	},
+};
+
 static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	/* DosEquis and myRIO development CPLD */
 	{
 		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 3,
 		.supported_product	= 0,
+		.led_descs		= proto_leds,
+		.num_led_descs		= ARRAY_SIZE(proto_leds),
 		.scratch_hr_addr	= PROTO_SCRATCHPADHR,
 		.scratch_sr_addr	= PROTO_SCRATCHPADSR,
 	},
@@ -278,6 +511,8 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 4,
 		.supported_product	= 0,
+		.led_descs		= dosx_leds,
+		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -286,6 +521,8 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 5,
 		.supported_product	= 0,
+		.led_descs		= dosx_leds,
+		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -294,6 +531,8 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.attrs			= dosequis6_attrs,
 		.supported_version	= 6,
 		.supported_product	= 0,
+		.led_descs		= dosx_leds,
+		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -302,6 +541,8 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.attrs			= dosequis6_attrs,
 		.supported_version	= 6,
 		.supported_product	= 1,
+		.led_descs		= dosx_leds,
+		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 	},
@@ -359,6 +600,21 @@ static int nizynqcpld_probe(struct i2c_client *client,
 
 	cpld->desc = desc;
 
+	cpld->leds = kzalloc(sizeof(*cpld->leds) * desc->num_led_descs,
+			     GFP_KERNEL);
+	if (!cpld->leds) {
+		err = -ENOMEM;
+		dev_err(cpld->dev, "could not allocate led state data\n");
+		goto err_led_alloc;
+	}
+
+	for (i = 0; i < desc->num_led_descs; i++) {
+		err = nizynqcpld_led_register(cpld, &desc->led_descs[i],
+					      &cpld->leds[i]);
+		if (err)
+			goto err_led;
+	}
+
 	err = sysfs_create_files(&cpld->dev->kobj, desc->attrs);
 	if (err) {
 		dev_err(cpld->dev, "could not register attrs for device.\n");
@@ -375,6 +631,11 @@ static int nizynqcpld_probe(struct i2c_client *client,
 
 	sysfs_remove_files(&client->dev.kobj, desc->attrs);
 err_sysfs_create_files:
+err_led:
+	while (i--)
+		nizynqcpld_led_unregister(&cpld->leds[i]);
+	kfree(cpld->leds);
+err_led_alloc:
 err_no_version:
 err_read_info:
 	kfree(cpld);
@@ -386,8 +647,12 @@ static int nizynqcpld_remove(struct i2c_client *client)
 {
 	struct nizynqcpld *cpld = i2c_get_clientdata(client);
 	struct nizynqcpld_desc *desc = cpld->desc;
+	int i;
 
 	sysfs_remove_files(&cpld->dev->kobj, desc->attrs);
+	for (i = desc->num_led_descs - 1; i; --i)
+		nizynqcpld_led_unregister(&cpld->leds[i]);
+	kfree(cpld->leds);
 	kfree(cpld);
 	return 0;
 }
