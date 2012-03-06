@@ -3306,14 +3306,14 @@ static struct platform_driver xemacps_driver = {
  **/
 static int __init xemacps_init(void)
 {
-    /*
-     * No kernel boot options used,
-     * so we just need to register the driver.
-     * If we are sure the device is non-hotpluggable, call
-     * platform_driver_probe(&xemacps_driver, xemacps_probe);
-     * to remove run-once probe from memory.
-     * Typical use for system-on-chip processor.
-     */
+	/*
+	* No kernel boot options used,
+	* so we just need to register the driver.
+	* If we are sure the device is non-hotpluggable, call
+	* platform_driver_probe(&xemacps_driver, xemacps_probe);
+	* to remove run-once probe from memory.
+	* Typical use for system-on-chip processor.
+	*/
 	xemacps_led_trigger_register();
 	return platform_driver_probe(&xemacps_driver, xemacps_probe);
 }
