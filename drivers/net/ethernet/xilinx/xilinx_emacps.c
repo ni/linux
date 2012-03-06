@@ -55,6 +55,44 @@
 #include <linux/of_mdio.h>
 #endif
 
+#ifdef CONFIG_XILINX_PS_EMAC_LEDTRIGGER
+#include <linux/leds.h>
+
+static struct led_trigger xemacps_speed_trigger = {
+	.name	= "xemacps_speed",
+};
+
+static int xemacps_led_trigger_register(void)
+{
+	return led_trigger_register(&xemacps_speed_trigger);
+}
+
+static void xemacps_led_trigger_speed(unsigned int speed)
+{
+	int brightness;
+	switch (speed) {
+	case 100:
+		brightness = 1;
+		break;
+	case 1000:
+		brightness = 2;
+		break;
+	case 10:
+	default:
+		brightness = 0;
+		break;
+	}
+	led_trigger_event(&xemacps_speed_trigger, brightness);
+}
+#else
+static inline int xemacps_led_trigger_register(void)
+{
+	return 0;
+}
+
+static inline void xemacps_led_trigger_speed(unsigned int speed) { }
+#endif
+
 /************************** Constant Definitions *****************************/
 
 /* Must be shorter than length of ethtool_drvinfo.driver field to fit */
@@ -814,6 +852,7 @@ static void xemacps_adjust_link(struct net_device *ndev)
 				ndev->name, phydev->speed,
 				DUPLEX_FULL == phydev->duplex ?
 				"FULL" : "HALF");
+			xemacps_led_trigger_speed(phydev->speed);
 		} else {
 			printk(KERN_INFO "%s: link down\n", ndev->name);
 		}
@@ -3275,6 +3314,7 @@ static int __init xemacps_init(void)
      * to remove run-once probe from memory.
      * Typical use for system-on-chip processor.
      */
+	xemacps_led_trigger_register();
 	return platform_driver_probe(&xemacps_driver, xemacps_probe);
 }
 
