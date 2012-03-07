@@ -23,6 +23,7 @@
 #include <linux/uaccess.h>
 #include <linux/proc_ns.h>
 #include <linux/magic.h>
+#include <linux/delay.h>
 #include "pnode.h"
 #include "internal.h"
 
@@ -317,7 +318,7 @@ int __mnt_want_write(struct vfsmount *m)
 	smp_mb();
 	while (ACCESS_ONCE(mnt->mnt.mnt_flags) & MNT_WRITE_HOLD) {
 		preempt_enable();
-		cpu_relax();
+		cpu_chill();
 		preempt_disable();
 	}
 	/*
@@ -1289,7 +1290,7 @@ static int do_umount(struct mount *mnt, int flags)
 	return retval;
 }
 
-/* 
+/*
  * Is the caller allowed to modify his namespace?
  */
 static inline bool may_mount(void)
@@ -1717,7 +1718,7 @@ static int do_loopback(struct path *path, const char *old_name,
 
 	err = -EINVAL;
 	if (mnt_ns_loop(&old_path))
-		goto out; 
+		goto out;
 
 	mp = lock_mount(path);
 	err = PTR_ERR(mp);
