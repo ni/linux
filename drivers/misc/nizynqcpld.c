@@ -27,10 +27,9 @@
 
 struct nizynqcpld_led {
 	u8 addr;
-	u8 shift;
-	u8 mask;
+	u8 bit;
+	unsigned on :1;
 	struct led_classdev cdev;
-	u8 brightness;
 	struct work_struct deferred_work;
 };
 
@@ -38,9 +37,12 @@ struct nizynqcpld_led {
 		container_of(x, struct nizynqcpld_led, cdev)
 
 enum nizynqcpld_leds {
+	USER1_LED_YELLOW,
+	USER1_LED_GREEN,
 	STATUS_LED,
-	USER1_LED,
-	ETH1_SPEED_LED,
+	/* POWER_LED is read-only */
+	ETH1_SPEED_LED_YELLOW,
+	ETH1_SPEED_LED_GREEN,
 	MAX_NUM_LEDS
 };
 
@@ -65,8 +67,9 @@ static void nizynqcpld_set_brightness_work(struct work_struct *work)
 	if (err)
 		return;
 
-	tmp &= ~led->mask;
-	tmp |= led->brightness << led->shift;
+	tmp &= ~led->bit;
+	if (led->on)
+		tmp |= led->bit;
 
 	nizynqcpld_write(led->addr, tmp);
 }
@@ -75,10 +78,15 @@ static int nizynqcpld_led_init(struct nizynqcpld_led *led)
 {
 	int err;
 	u8 tmp;
+
 	err = nizynqcpld_read(led->addr, &tmp);
-	if (!err)
-		led->brightness = (tmp & led->mask) >> led->shift;
+	if (err)
+		goto out;
+
+	led->on = !!(tmp & led->bit);
 	INIT_WORK(&led->deferred_work, nizynqcpld_set_brightness_work);
+
+out:
 	return err;
 }
 
@@ -86,7 +94,7 @@ static void nizynqcpld_led_set_brightness(struct led_classdev *led_cdev,
 					  enum led_brightness brightness)
 {
 	struct nizynqcpld_led *led = to_nizynqcpld_led(led_cdev);
-	led->brightness = (u8) brightness;
+	led->on = !!brightness;
 	schedule_work(&led->deferred_work);
 }
 
@@ -94,43 +102,59 @@ static enum led_brightness
 nizynqcpld_led_get_brightness(struct led_classdev *led_cdev)
 {
 	struct nizynqcpld_led *led = to_nizynqcpld_led(led_cdev);
-	return led->brightness;
+	return led->on;
 }
 
 static struct nizynqcpld nizynqcpld = {
 	.leds	= {
-		[STATUS_LED]	= {
+		[USER1_LED_GREEN]	= {
 			.addr	= NICPLD_SWITCHANDLED,
-			.shift	= 2,
-			.mask	= 0x4,
+			.bit	= 1 << 4,
 			.cdev	= {
-				.name		= "nizynqcpld:status",
+				.name		= "nizynqcpld:user1:green",
 				.max_brightness	= 1,
 				.brightness_set	= nizynqcpld_led_set_brightness,
 				.brightness_get	= nizynqcpld_led_get_brightness,
 			},
 		},
-		[USER1_LED]	= {
+		[USER1_LED_YELLOW]	= {
 			.addr	= NICPLD_SWITCHANDLED,
-			.shift	= 3,
-			.mask	= 0x18,
+			.bit	= 1 << 3,
 			.cdev	= {
-				.name		= "nizynqcpld:user1",
-				.max_brightness	= 2,
+				.name		= "nizynqcpld:user1:yellow",
+				.max_brightness	= 1,
 				.brightness_set	= nizynqcpld_led_set_brightness,
 				.brightness_get	= nizynqcpld_led_get_brightness,
 			},
 		},
-		[ETH1_SPEED_LED]	= {
-			.addr	= NICPLD_ETHERNETLED,
-			.shift	= 0,
-			.mask	= 0x3,
+		[STATUS_LED]	= {
+			.addr	= NICPLD_SWITCHANDLED,
+			.bit	= 1 << 2,
 			.cdev	= {
-				.name			= "nizynqcpld:eth1",
-				.max_brightness		= 2,
-				.brightness_set		= nizynqcpld_led_set_brightness,
-				.brightness_get		= nizynqcpld_led_get_brightness,
-				.default_trigger	= "xemacps_speed",
+				.name		= "nizynqcpld:status:yellow",
+				.max_brightness	= 1,
+				.brightness_set	= nizynqcpld_led_set_brightness,
+				.brightness_get	= nizynqcpld_led_get_brightness,
+			},
+		},
+		[ETH1_SPEED_LED_GREEN]	= {
+			.addr	= NICPLD_ETHERNETLED,
+			.bit	= 1 << 1,
+			.cdev	= {
+				.name		= "nizynqcpld:eth1:green",
+				.max_brightness	= 1,
+				.brightness_set	= nizynqcpld_led_set_brightness,
+				.brightness_get	= nizynqcpld_led_get_brightness,
+			},
+		},
+		[ETH1_SPEED_LED_YELLOW]	= {
+			.addr	= NICPLD_ETHERNETLED,
+			.bit	= 1 << 0,
+			.cdev	= {
+				.name		= "nizynqcpld:eth1:yellow",
+				.max_brightness	= 1,
+				.brightness_set	= nizynqcpld_led_set_brightness,
+				.brightness_get	= nizynqcpld_led_get_brightness,
 			},
 		},
 	},
@@ -160,15 +184,15 @@ static int nizynqcpld_read(u8 reg, u8 *data)
 	/* First, write the CPLD register offset, then read the data. */
 	struct i2c_msg msgs[] = {
 		{
-			.addr = nizynqcpld.client->addr,
-			.len  = 1,
-			.buf  = &reg,
+			.addr	= nizynqcpld.client->addr,
+			.len	= 1,
+			.buf	= &reg,
 		},
 		{
-			.addr  = nizynqcpld.client->addr,
-			.flags = I2C_M_RD,
-			.len   = 1,
-			.buf   = data,
+			.addr	= nizynqcpld.client->addr,
+			.flags	= I2C_M_RD,
+			.len	= 1,
+			.buf	= data,
 		},
 	};
 
