@@ -2796,6 +2796,7 @@ static int xemacps_probe(struct platform_device *pdev)
 	struct net_local *lp;
 	u32 regval = 0;
 	int rc = -ENXIO;
+	int create_mdio_bus = 1;
 
 	r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
@@ -2875,6 +2876,9 @@ static int xemacps_probe(struct platform_device *pdev)
 		goto err_out_clk_dis_aper;
 	}
 
+	if (of_get_property(lp->pdev->dev.of_node, "xlnx,no_mdio_bus", NULL))
+		create_mdio_bus = 0;
+
 	lp->phy_node = of_parse_phandle(lp->pdev->dev.of_node,
 						"phy-handle", 0);
 	lp->gmii2rgmii_phy_node = of_parse_phandle(lp->pdev->dev.of_node,
@@ -2895,8 +2899,7 @@ static int xemacps_probe(struct platform_device *pdev)
 	regval = XEMACPS_NWCTRL_MDEN_MASK;
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, regval);
 
-	rc = xemacps_mii_init(lp);
-	if (rc) {
+	if (create_mdio_bus && xemacps_mii_init(lp) != 0) {
 		dev_err(&lp->pdev->dev, "error in xemacps_mii_init\n");
 		goto err_out_clk_dis_all;
 	}
