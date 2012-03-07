@@ -256,12 +256,14 @@ static struct nand_bbt_descr bbt_mirror_descr = {
  *
  * This function initializes the NAND flash interface on the NAND controller.
  **/
-static void xnandpss_init_nand_flash(void __iomem *smc_regs, int option)
+static void xnandpss_init_nand_flash(void __iomem *smc_regs, int option, u32 timing)
 {
 	/* disable interrupts */
 	xnandpss_write32(smc_regs + XSMCPSS_MC_CLR_CONFIG, XNANDPSS_CLR_CONFIG);
+
 	/* Initialize the NAND interface by setting cycles and operation mode */
-	xnandpss_write32(smc_regs + XSMCPSS_MC_SET_CYCLES, XNANDPSS_SET_CYCLES);
+	xnandpss_write32(smc_regs + XSMCPSS_MC_SET_CYCLES, timing);
+
 	if (option & NAND_BUSWIDTH_16)
 		xnandpss_write32(smc_regs + XSMCPSS_MC_SET_OPMODE,
 				(XNANDPSS_SET_OPMODE | 0x1));
@@ -977,9 +979,12 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 	unsigned long ecc_cfg;
 	struct xnand_platform_data	*pdata = NULL;
 	struct mtd_part_parser_data ppdata;
+	u32 chip_timing = 0;
 #ifdef CONFIG_OF
 	const struct of_device_id *match;
 	struct device_node *parts = pdev->dev.of_node;
+	const u32 *timing_prop;
+	int len = 0;
 #endif
 
 #ifdef CONFIG_OF
@@ -1076,8 +1081,26 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, xnand);
 
+	/* Get the chip timing params from the device tree, if available */	
+#ifdef CONFIG_OF
+	timing_prop = of_get_property(parts, "nand-chip-timing", &len);
+	if (timing_prop && (len / sizeof(u32)) == 7) {
+		chip_timing = ((timing_prop[0] << 20) |		/* t_rr */ 
+				(timing_prop[1] << 17)  |	/* t_ar */ 
+				(timing_prop[2] << 14)  |	/* t_clr */ 
+				(timing_prop[3] << 11)  |	/* t_wp */ 
+				(timing_prop[4] << 8)   |	/* t_rea */ 
+				(timing_prop[5] << 4)   |	/* t_wc */ 
+				(timing_prop[6] << 0));		/* t_rc */
+	} else {
+		/* No property, use default values. */
+		chip_timing = XNANDPSS_SET_CYCLES;
+	}
+#else
+	chip_timing = XNANDPSS_SET_CYCLES;
+#endif
 	/* Initialize the NAND flash interface on NAND controller */
-	xnandpss_init_nand_flash(xnand->smc_regs, nand_chip->options);
+	xnandpss_init_nand_flash(xnand->smc_regs, nand_chip->options, chip_timing);
 
 	/* first scan to find the device and get the page size */
 	if (nand_scan_ident(mtd, 1, NULL)) {

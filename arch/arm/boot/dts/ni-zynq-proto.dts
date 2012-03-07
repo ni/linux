@@ -79,6 +79,53 @@
 			no_mdio_bus;
 		};
 
+		nand@e1000000 {
+			compatible = "xlnx,ps7-nand-1.00.a";
+			reg = <0xE1000000 0x1000000 0xE000E000 0x1000>;
+			bank-width = <1>; /* 8-bit width */
+
+			/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles, 95MHz clock */
+			nand-chip-timing = <0x2 0x1 0x1 0x2 0x1 0x3 0x3>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "fsbl";
+				reg = <0x00000000 0x00020000>;	/* 128kB */
+				read-only;
+			};
+			partition@20000 {
+				label = "u-boot";
+				reg = <0x00020000 0x00040000>;	/* 256kB */
+				read-only;
+			};
+			partition@60000 {
+				label = "u-boot environment 1";
+				reg = <0x00060000 0x00040000>;	/* 256kB */
+			};
+			partition@a0000 {
+				label = "u-boot environment 2";
+				reg = <0x000a0000 0x00040000>;	/* 256kB */
+			};			
+			partition@e0000 {
+				label = "safemode";
+				reg = <0x000e0000 0x02800000>;	/* 40MB */
+			};
+			partition@28e0000 {
+				label = "runmode";
+				reg = <0x028e0000 0x00600000>;	/* 6MB */
+			};
+			partition@2ee0000 {
+				label = "configuration data";
+				reg = <0x02ee0000 0x00400000>;	/* 4MB */
+			};
+			partition@32e0000 {
+				label = "rootfs";
+				reg = <0x032e0000 0x3CD20000>;	/* 973.125MB */
+			};
+		};
+
 		sdhci@e0100000 {
 			compatible = "generic-sdhci";
 			reg = <0xe0100000 0x1000>;
