@@ -57,10 +57,26 @@
 			#size-cells = <0x0>;
 
 			phy0: phy@0 {
-				compatible = "marvell,88e1116r";
+				compatible = "marvell,88e1512";
 				device_type = "ethernet-phy";
 				reg = <0x0>;
 			};
+
+			phy1: phy@1 {
+				compatible = "lsi,et1011c";
+				device_type = "ethernet-phy";
+				reg = <0x1>;
+			};
+		};
+
+		eth@e000c000 {
+			compatible = "xlnx,ps7-ethernet-1.00.a";
+			reg = <0xe000c000 0x1000>;
+			interrupts = <0 45 0>;
+			phy-handle = <&phy1>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+			no_mdio_bus;
 		};
 
 		sdhci@e0100000 {
@@ -91,12 +107,17 @@
 			bus-id = <0>;
 			input-clk = <133000000>;
 			i2c-clk = <400000>;
-			
 			#address-cells = <1>;
 			#size-cells = <0>;
+
 			nizynqcpld@40 {
 				compatible = "nizynqcpld";
 				reg = <0x40>;
+			};
+
+			ds3231_rtc@68 {
+				compatible = "ds3232";
+				reg = <0x68>;
 			};
 		};
 

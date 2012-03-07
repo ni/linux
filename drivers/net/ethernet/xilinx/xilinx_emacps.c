@@ -2497,6 +2497,11 @@ static void xemacps_set_hashtable(struct net_device *ndev)
 		if (!curr)	/* end of list */
 			break;
 		mc_addr = curr->addr;
+#ifdef DEBUG_VERBOSE
+		printk(KERN_INFO "GEM: mc addr 0x%x:0x%x:0x%x:0x%x:0x%x:0x%x\n",
+		mc_addr[0], mc_addr[1], mc_addr[2],
+		mc_addr[3], mc_addr[4], mc_addr[5]);
+#endif
 		hash_index = calc_mac_hash(mc_addr);
 
 		if (hash_index >= XEMACPS_MAX_HASH_BITS) {
@@ -3027,6 +3032,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	u32 propval;
 	u32 regval = 0;
 	int rc = -ENXIO;
+	int create_mdio_bus = 1;
 
 	r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
@@ -3173,12 +3179,16 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		regval = (MDC_DIV_224 << XEMACPS_NWCFG_MDC_SHIFT_MASK);
 		xemacps_write(lp->baseaddr, XEMACPS_NWCFG_OFFSET, regval);
 	}
+
+	if (of_get_property (lp->pdev->dev.of_node, "no_mdio_bus", NULL)) {
+		create_mdio_bus = 0;
+	}
 #endif
 
 	regval = XEMACPS_NWCTRL_MDEN_MASK;
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, regval);
 
-	if (xemacps_mii_init(lp) != 0) {
+	if (create_mdio_bus && xemacps_mii_init(lp) != 0) {
 		printk(KERN_ERR "%s: error in xemacps_mii_init\n", ndev->name);
 		goto err_out_unregister_netdev;
 	}
