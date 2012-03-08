@@ -1015,6 +1015,45 @@ SYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,
 	return error;
 }
 
+static int common_clock_converttime(
+	const clockid_t which_clock_src,
+	const clockid_t which_clock_dst,
+	struct timespec *tp)
+{
+	int error = 0;
+	if (which_clock_src == CLOCK_MONOTONIC && which_clock_dst == CLOCK_REALTIME) {
+		ktime_convert_monotonic_to_timeofday(tp);
+	} else if (which_clock_src == CLOCK_REALTIME && which_clock_dst == CLOCK_MONOTONIC) {
+		ktime_convert_timeofday_to_monotonic(tp);
+	} else {
+		error = -EINVAL;
+	}
+
+	return error;
+}
+
+SYSCALL_DEFINE3(clock_converttime, const clockid_t, which_clock_src, const clockid_t, which_clock_dst,
+		struct timespec __user *,tp)
+{
+	struct k_clock *kcsrc = clockid_to_kclock(which_clock_src);
+	struct k_clock *kcdst = clockid_to_kclock(which_clock_dst);
+	struct timespec kernel_tp;
+	int error;
+
+	if (!kcsrc || !kcdst)
+		return -EINVAL;
+
+	if (copy_from_user(&kernel_tp, tp, sizeof(kernel_tp)))
+		return -EFAULT;
+
+	error = common_clock_converttime(which_clock_src, which_clock_dst, &kernel_tp);
+
+	if (!error && copy_to_user(tp, &kernel_tp, sizeof (kernel_tp)))
+		error = -EFAULT;
+
+	return error;
+}
+
 SYSCALL_DEFINE2(clock_adjtime, const clockid_t, which_clock,
 		struct timex __user *, utx)
 {

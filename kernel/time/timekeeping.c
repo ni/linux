@@ -1342,3 +1342,48 @@ void xtime_update(unsigned long ticks)
 	write_seqcount_end(&xtime_seq);
 	raw_spin_unlock(&xtime_lock);
 }
+
+/**
+ *
+ */
+void ktime_convert_timeofday_to_monotonic(struct timespec *ts)
+{
+	struct timespec tomono;
+	s64 arch_offset;
+	unsigned int seq;
+	
+	do {
+		seq = read_seqbegin(&xtime_lock);
+		tomono = wall_to_monotonic;
+		arch_offset = arch_gettimeoffset();
+	} while (read_seqretry(&xtime_lock, seq));
+	
+	set_normalized_timespec(
+		ts,
+		ts->tv_sec + tomono.tv_sec,
+		ts->tv_nsec - arch_offset + tomono.tv_nsec);
+}
+
+
+/**
+ *
+ */
+void ktime_convert_monotonic_to_timeofday(struct timespec *ts)
+{
+	struct timespec tomono;
+	s64 arch_offset;
+	unsigned int seq;
+
+	WARN_ON(timekeeping_suspended);
+
+	do {
+		seq = read_seqbegin(&xtime_lock);
+		tomono = wall_to_monotonic;
+		arch_offset = arch_gettimeoffset();
+	} while (read_seqretry(&xtime_lock, seq));
+
+	set_normalized_timespec(
+		ts,
+		ts->tv_sec - tomono.tv_sec,
+		ts->tv_nsec - tomono.tv_nsec + arch_offset);
+}

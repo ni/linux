@@ -332,4 +332,7 @@ static inline ktime_t ns_to_ktime(u64 ns)
 	return ktime_add_ns(ktime_zero, ns);
 }
 
+extern void ktime_convert_timeofday_to_monotonic(struct timespec *ts);
+extern void ktime_convert_monotonic_to_timeofday(struct timespec *ts);
+
 #endif
