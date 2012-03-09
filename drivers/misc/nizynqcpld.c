@@ -48,8 +48,20 @@ enum nizynqcpld_leds {
 
 struct nizynqcpld {
 	struct i2c_client *client;
+	struct mutex lock;
 	struct nizynqcpld_led leds[MAX_NUM_LEDS];
 };
+
+static struct nizynqcpld nizynqcpld;
+
+static inline void nizynqcpld_lock(void)
+{
+	mutex_lock(&nizynqcpld.lock);
+}
+static inline void nizynqcpld_unlock(void)
+{
+	mutex_unlock(&nizynqcpld.lock);
+}
 
 static int nizynqcpld_write(u8 reg, u8 data);
 static int nizynqcpld_read(u8 reg, u8 *data);
@@ -63,6 +75,8 @@ static void nizynqcpld_set_brightness_work(struct work_struct *work)
 	int err;
 	u8 tmp;
 
+	nizynqcpld_lock();
+
 	err = nizynqcpld_read(led->addr, &tmp);
 	if (err)
 		return;
@@ -72,6 +86,8 @@ static void nizynqcpld_set_brightness_work(struct work_struct *work)
 		tmp |= led->bit;
 
 	nizynqcpld_write(led->addr, tmp);
+
+	nizynqcpld_unlock();
 }
 
 static int nizynqcpld_led_init(struct nizynqcpld_led *led)
@@ -106,6 +122,7 @@ nizynqcpld_led_get_brightness(struct led_classdev *led_cdev)
 }
 
 static struct nizynqcpld nizynqcpld = {
+	.lock	= __MUTEX_INITIALIZER(nizynqcpld.lock),
 	.leds	= {
 		[USER1_LED_GREEN]	= {
 			.addr	= NICPLD_SWITCHANDLED,
