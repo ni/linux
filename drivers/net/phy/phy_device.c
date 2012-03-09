@@ -30,6 +30,7 @@
 #include <linux/mii.h>
 #include <linux/ethtool.h>
 #include <linux/phy.h>
+#include <linux/phy_led_triggers.h>
 #include <linux/mdio.h>
 #include <linux/io.h>
 #include <linux/uaccess.h>
@@ -57,6 +58,7 @@ static void phy_mdio_device_free(struct mdio_device *mdiodev)
 
 static void phy_device_release(struct device *dev)
 {
+	phy_led_triggers_unregister(to_phy_device(dev));
 	kfree(to_phy_device(dev));
 }
 
@@ -344,6 +346,8 @@ struct phy_device *phy_device_create(struct mii_bus *bus, int addr, int phy_id,
 	dev_set_name(&mdiodev->dev, PHY_ID_FMT, bus->id, addr);
 
 	dev->state = PHY_DOWN;
+
+	phy_led_triggers_register(dev);
 
 	mutex_init(&dev->lock);
 	INIT_DELAYED_WORK(&dev->state_queue, phy_state_machine);
