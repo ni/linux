@@ -1737,6 +1737,10 @@ static int __sched do_nanosleep(struct hrtimer_sleeper *t, enum hrtimer_mode mod
 		hrtimer_cancel(&t->timer);
 		mode = HRTIMER_MODE_ABS;
 
+		if (unlikely(t->task && test_tsk_thread_flag(t->task, TIF_SCHED_WAKEUP))) {
+			clear_tsk_thread_flag(t->task, TIF_SCHED_WAKEUP);
+			break;
+		}
 	} while (t->task && !signal_pending(current));
 
 	__set_current_state(TASK_RUNNING);

@@ -5920,6 +5920,32 @@ out_unlock:
 	return retval;
 }
 
+/**
+ * sys_sched_wake_up - wakes up the process identified by pid
+ * Returns 1 if the process was woken up, 0 if it was already
+ * running.
+ * @pid: the pid in question.
+ */
+SYSCALL_DEFINE1(sched_wake_up, pid_t, pid)
+{
+	struct task_struct *p;
+	int retval;
+
+	if (pid < 0)
+		return -EINVAL;
+
+	retval = -ESRCH;
+	rcu_read_lock();
+	p = find_process_by_pid(pid);
+	if (p) {
+		set_tsk_thread_flag(p, TIF_SCHED_WAKEUP);
+		retval = wake_up_process(p);
+	}
+	rcu_read_unlock();
+
+	return retval;
+}
+
 long sched_setaffinity(pid_t pid, const struct cpumask *in_mask)
 {
 	cpumask_var_t cpus_allowed, new_mask;
