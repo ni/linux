@@ -30,6 +30,7 @@
 #include <linux/mii.h>
 #include <linux/ethtool.h>
 #include <linux/phy.h>
+#include <linux/phy_led_triggers.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -180,6 +181,8 @@ static struct phy_device* phy_device_create(struct mii_bus *bus,
 	dev_set_name(&dev->dev, PHY_ID_FMT, bus->id, addr);
 
 	dev->state = PHY_DOWN;
+
+	phy_led_triggers_register(dev);
 
 	mutex_init(&dev->lock);
 	INIT_DELAYED_WORK(&dev->state_queue, phy_state_machine);
