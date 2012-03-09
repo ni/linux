@@ -128,6 +128,18 @@ config FIXED_PHY
 
 	  Currently tested with mpc866ads and mpc8349e-mitx.
 
+config LED_TRIGGER_PHY
+	bool "Support LED triggers for tracking link state"
+	depends on LEDS_TRIGGERS
+	---help---
+	  Adds support for a set of LED trigger events per-PHY.  Link
+	  state change will trigger the events, for consumption by an
+	  LED class driver.  There are triggers for each link speed,
+	  and are of the form:
+	       <mii bus id>:<phy>:<speed>
+
+	  Where speed is one of: 10Mb, 100Mb, Gb, 2.5Gb, or 10GbE.
+
 config MDIO_BITBANG
 	tristate "Support for bitbanged MDIO buses"
 	help
