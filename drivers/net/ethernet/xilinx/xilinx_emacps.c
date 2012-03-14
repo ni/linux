@@ -3033,6 +3033,10 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	u32 regval = 0;
 	int rc = -ENXIO;
 	int create_mdio_bus = 1;
+#ifdef CONFIG_OF
+	const u32 *timing_prop;
+	int len = 0;
+#endif
 
 	r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
@@ -3180,8 +3184,17 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		xemacps_write(lp->baseaddr, XEMACPS_NWCFG_OFFSET, regval);
 	}
 
-	if (of_get_property (lp->pdev->dev.of_node, "no_mdio_bus", NULL)) {
+	if (of_get_property(lp->pdev->dev.of_node, "no_mdio_bus", NULL)) {
 		create_mdio_bus = 0;
+	}
+
+	/* Look for EMIO configuration registers. */
+	timing_prop = of_get_property(lp->pdev->dev.of_node, "eth_emio_slcr", &len);
+
+	if (timing_prop && (2 == (len / sizeof (u32)))) {
+		/* Set the Rx and Tx clock source to be the PL. */
+		xslcr_write(be32_to_cpu (timing_prop [0]), 0x00000011);
+		xslcr_write(be32_to_cpu (timing_prop [1]), 0x00000041);
 	}
 #endif
 

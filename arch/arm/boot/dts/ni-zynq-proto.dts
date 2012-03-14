@@ -55,6 +55,7 @@
 			phy-handle = <&phy0>;
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
+			tx_timing = <0x140 0x00100801 0x00500801 0x03200801>;
 
 			phy0: phy@0 {
 				compatible = "marvell,88e1512";
@@ -77,6 +78,8 @@
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
 			no_mdio_bus;
+			eth_emio_slcr = <0x13c 0x144>;
+			tx_timing = <0x180 0x00100801 0x00500801 0x03200801>;
 		};
 
 		nand@e1000000 {
