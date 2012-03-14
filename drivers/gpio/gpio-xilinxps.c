@@ -23,6 +23,8 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
+#include <asm/mach/irq.h>
+
 #define DRIVER_NAME "xgpiops"
 
 /* Register offsets for the GPIO device */
@@ -446,44 +448,48 @@ static struct irq_chip xgpiops_irqchip = {
  * gpio pin number which has triggered an interrupt. It then acks the triggered
  * interrupt and calls the pin specific handler set by the higher layer
  * application for that pin.
- * Note: A bug is reported if no handler is set for the gpio pin.
  */
-void xgpiops_irqhandler(unsigned int irq, struct irq_desc *desc)
-{
-	int gpio_irq = (int)irq_get_handler_data(irq);
-	struct xgpiops *gpio = (struct xgpiops *)irq_get_chip_data(gpio_irq);
-	unsigned int int_sts, int_enb, bank_num;
-	struct irq_desc *gpio_irq_desc;
-	struct irq_chip *chip = irq_desc_get_chip(desc);
-	struct irq_data *irq_data = irq_get_chip_data(irq);
+void xgpiops_irqhandler(unsigned int irq, struct irq_desc *desc) {
 
-	chip->irq_ack(irq_data);
-	for (bank_num = 0; bank_num < 4; bank_num++) {
-		int_sts = xgpiops_readreg(gpio->base_addr +
-					   XGPIOPS_INTSTS_OFFSET(bank_num));
-		int_enb = xgpiops_readreg(gpio->base_addr +
-					   XGPIOPS_INTMASK_OFFSET(bank_num));
+	struct irq_chip *host_chip = irq_get_chip(irq);
+	struct xgpiops *gpio = (struct xgpiops *)irq_get_handler_data(irq);
+
+	int bank_num;
+
+	chained_irq_enter (host_chip, desc);
+
+	for (bank_num = 0; bank_num < 4; ++bank_num) {
+		int bank_offset = 0;
+		unsigned int int_sts = xgpiops_readreg(gpio->base_addr +
+							XGPIOPS_INTSTS_OFFSET(bank_num));
+		unsigned int int_enb = xgpiops_readreg(gpio->base_addr +
+							XGPIOPS_INTMASK_OFFSET(bank_num));
+		if (0 < bank_num)
+			bank_offset = xgpiops_pin_table [bank_num - 1] + 1;
 		/*
 		 * handle only the interrupts which are enabled in interrupt
 		 * mask register
 		 */
 		int_sts &= ~int_enb;
-		for (; int_sts != 0; int_sts >>= 1, gpio_irq++) {
-			if ((int_sts & 1) == 0)
-				continue;
-			BUG_ON(!(irq_desc[gpio_irq].handle_irq));
-			gpio_irq_desc = irq_to_desc(gpio_irq);
-			chip->irq_ack(irq_data);
 
-			/* call the pin specific handler */
-			irq_desc[gpio_irq].handle_irq(gpio_irq,
-						      &irq_desc[gpio_irq]);
+		if (int_sts) {
+			/* Acknowledge the interrupt status for this bank. */
+			xgpiops_writereg(int_sts, gpio->base_addr + XGPIOPS_INTSTS_OFFSET(bank_num));
+
+			/* For each bit set in the interrupt status, figure out
+			   which pin it is and call the handler. */
+			do {
+				int bit = __ffs(int_sts);
+				int pin = bit + bank_offset;
+
+				generic_handle_irq (gpio_to_irq (pin));
+
+				int_sts &= ~BIT(bit);
+			} while (int_sts);
 		}
-		/* shift to first virtual irq of next bank */
-		gpio_irq = (int)irq_get_handler_data(irq) + 
-				(xgpiops_pin_table[bank_num] + 1);
 	}
-	chip->irq_unmask(irq_data);
+
+	chained_irq_exit (host_chip, desc);
 }
 
 /**
@@ -570,6 +576,12 @@ static int __init xgpiops_probe(struct platform_device *pdev)
 				  XGPIOPS_INTDIS_OFFSET(bank_num));
 	}
 
+	/* clear existing interrupts for all banks */
+	for (bank_num = 0; bank_num < 4; bank_num++) {
+		xgpiops_writereg(0xffffffff, gpio->base_addr +
+				  XGPIOPS_INTSTS_OFFSET(bank_num));
+	}
+
 	/*
 	 * set the irq chip, handler and irq chip data for callbacks for
 	 * each pin
@@ -579,10 +591,10 @@ static int __init xgpiops_probe(struct platform_device *pdev)
 		irq_set_chip(gpio_irq, &xgpiops_irqchip);
 		irq_set_chip_data(gpio_irq, (void *)gpio);
 		irq_set_handler(gpio_irq, handle_simple_irq);
-		irq_set_status_flags(gpio_irq, IRQF_VALID);
+		set_irq_flags(gpio_irq, IRQF_VALID);
 	}
 
-	irq_set_handler_data(irq_num, (void *)(XGPIOPS_IRQBASE));
+	irq_set_handler_data(irq_num, gpio);
 	irq_set_chained_handler(irq_num, xgpiops_irqhandler);
 
 	return 0;

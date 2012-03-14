@@ -61,12 +61,16 @@
 				compatible = "marvell,88e1512";
 				device_type = "ethernet-phy";
 				reg = <0x0>;
+				interrupts = <168 0>;
+				interrupt-parent = <&gpio>;
 			};
 
 			phy1: phy@1 {
 				compatible = "lsi,et1011c";
 				device_type = "ethernet-phy";
 				reg = <0x1>;
+				interrupts = <168 0>;
+				interrupt-parent = <&gpio>;
 			};
 		};
 
@@ -144,7 +148,7 @@
 			phy_type = "ulpi";
 		};
 
-		gpio@e000a000 {
+		gpio: gpio@e000a000 {
 			compatible = "xlnx,ps7-gpio-1.00.a";
 			reg = <0xe000a000 0x1000>;
 			interrupts = <0 20 0>;
@@ -169,11 +173,6 @@
 				compatible = "ds3232";
 				reg = <0x68>;
 			};
-		};
-
-		slcr0: slcr@f8000000 {
-			compatible = "xlnx,ps7-slcr-1.00.a";
-			reg = <0xf8000000 0x1000>;
 		};
 
 		devcfg@f8007000 {
