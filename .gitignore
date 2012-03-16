@@ -35,6 +35,7 @@
 *.gcno
 modules.builtin
 Module.symvers
+*.dtb
 *.dwo
 
 #
