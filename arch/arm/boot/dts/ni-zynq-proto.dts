@@ -133,13 +133,6 @@
 			};
 		};
 
-		sdhci@e0100000 {
-			compatible = "generic-sdhci";
-			reg = <0xe0100000 0x1000>;
-			interrupts = <0x38 0x0>;
-			clock-frequency = <33333000>;
-		};
-
 		usb@e0002000 {
 			compatible = "xlnx,ps7-usb-1.00.a";
 			reg = <0xe0002000 0x1000>;
