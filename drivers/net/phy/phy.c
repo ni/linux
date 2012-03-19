@@ -590,12 +590,17 @@ phy_err:
 int phy_start_interrupts(struct phy_device *phydev)
 {
 	int err = 0;
+	unsigned long irq_flags = IRQF_SHARED;
+
+#ifdef CONFIG_PHY_NO_THREADED_IRQS
+	irq_flags |= IRQF_NO_THREAD;
+#endif
 
 	INIT_WORK(&phydev->phy_queue, phy_change);
 
 	atomic_set(&phydev->irq_disable, 0);
 	if (request_irq(phydev->irq, phy_interrupt,
-				IRQF_SHARED,
+				irq_flags,
 				"phy_interrupt",
 				phydev) < 0) {
 		printk(KERN_WARNING "%s: Can't get IRQ %d (PHY)\n",
@@ -974,5 +979,8 @@ void phy_state_machine(struct work_struct *work)
 	if (err < 0)
 		phy_error(phydev);
 
-	schedule_delayed_work(&phydev->state_queue, PHY_STATE_TIME * HZ);
+#ifdef CONFIG_PHY_NO_UNNECESSARY_POLLING
+	if ((PHY_POLL == phydev->irq) || ((PHY_RUNNING != phydev->state) && (PHY_NOLINK != phydev->state)))
+#endif
+		schedule_delayed_work(&phydev->state_queue, PHY_STATE_TIME * HZ);
 }

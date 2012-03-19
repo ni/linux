@@ -92,6 +92,25 @@ config MICREL_PHY
 	---help---
 	  Supports the KSZ9021, VSC8201, KS8001 PHYs.
 
+config PHY_NO_THREADED_IRQS
+	tristate "Never use threaded interrupts for PHY devices"
+	---help---
+	  Interrupt handlers sometimes will use threads by default, for example
+	  when the RT patch is applied. Enabling this option will cause PHY
+	  interrupts to never use threaded IRQs. This may be necessary if your PHY
+	  interrupt line is shared by other devices on a GPIO input. Note that PHY
+	  interrupts are already deferred to a work queue, so enabling this option
+	  shouldn't have any noticeable side effects.
+
+config PHY_NO_UNNECESSARY_POLLING
+	tristate "Don't poll unnecessarily when PHY interrupts are in use"
+	---help---
+	  The PHY state machine is scheduled to run and process the current state
+	  once a second, even if the PHY is configured to use interrupts. Enabling
+	  this option will cause this PHY polling to be disabled when a PHY is in
+	  the PHY_RUNNING or PHY_NOLINK state. When the link state changes, a PHY
+	  interrupt should occur, causing the PHY state machine to run immediately.
+
 config FIXED_PHY
 	bool "Driver for MDIO Bus/PHY emulation with fixed speed/link PHYs"
 	depends on PHYLIB=y
