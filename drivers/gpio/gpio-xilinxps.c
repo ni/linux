@@ -22,6 +22,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/of.h>
 
 #include <asm/mach/irq.h>
 
@@ -492,6 +493,94 @@ void xgpiops_irqhandler(unsigned int irq, struct irq_desc *desc) {
 	chained_irq_exit (host_chip, desc);
 }
 
+#ifdef CONFIG_OF
+
+/**
+ * xgpiops_configure_gpio - Initialization method for a GPIO on the xgpiops device
+ * @chip:	GPIO chip for the xgpiops device
+ * @pin_num:	GPIO pin number
+ *
+ * This function looks in the device tree for configuration options for a GPIO
+ * pin. Allowed options are:
+ *
+ *	gpioN-label		String label to be passed to gpio_request.
+ *	gpioN-direction		Can be "input" or "output".
+ *	gpioN-settings		For "output", specifies the GPIO state as "high"
+ *				or "low". For "input", specifies GPIO interrupt
+ *				settings as "none", "level-low", "level-high",
+ *				"edge-falling", "edge-rising", or "edge-both".
+ */
+static void __init xgpiops_configure_gpio(struct gpio_chip * chip, int pin_num) {
+	char propname [18];
+	const char * label;
+	const char * direction;
+	const char * settings;
+
+	sprintf(propname, "gpio%d-label", pin_num);
+	label = of_get_property(chip->dev->of_node, propname, NULL);
+
+	sprintf(propname, "gpio%d-direction", pin_num);
+	direction = of_get_property(chip->dev->of_node, propname, NULL);
+
+	sprintf(propname, "gpio%d-settings", pin_num);
+	settings = of_get_property(chip->dev->of_node, propname, NULL);
+
+	if (label && direction && settings) {
+		int ret;
+
+		ret = gpio_request(pin_num, label);
+
+		if(0 == ret) {
+			if (0 == of_prop_cmp("input", direction)) {
+				if (0 == of_prop_cmp("none", settings)) {
+					gpio_direction_input(pin_num);
+				} else if(0 == of_prop_cmp("level-low", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_LEVEL_LOW);
+					irq_set_handler(gpio_to_irq(pin_num), handle_level_irq);
+				} else if (0 == of_prop_cmp("level-low", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_LEVEL_HIGH);
+					irq_set_handler(gpio_to_irq(pin_num), handle_level_irq);
+				} else if (0 == of_prop_cmp("edge-falling", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_EDGE_FALLING);
+					irq_set_handler(gpio_to_irq(pin_num), handle_edge_irq);
+				} else if (0 == of_prop_cmp("edge-rising", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_EDGE_RISING);
+					irq_set_handler(gpio_to_irq(pin_num), handle_edge_irq);
+				} else if (0 == of_prop_cmp("edge-both", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_EDGE_BOTH);
+					irq_set_handler(gpio_to_irq(pin_num), handle_edge_irq);
+				}
+				else {
+					dev_err(chip->dev, "gpio%d: unrecognized input settings \"%s\"\n", pin_num, settings);
+					gpio_free(pin_num);
+				}
+			} else if (0 == of_prop_cmp("output", direction)) {
+				if(0 == of_prop_cmp("high", settings)) {
+					gpio_direction_output(pin_num, 1);
+				} else if (0 == of_prop_cmp("low", settings)) {
+					gpio_direction_output(pin_num, 0);
+				}
+				else {
+					dev_err(chip->dev, "gpio%d: unrecognized output settings \"%s\"\n", pin_num, settings);
+					gpio_free(pin_num);
+				}
+			} else {
+				dev_err(chip->dev, "gpio%d: unrecognized direction \"%s\"\n", pin_num, direction);
+				gpio_free(pin_num);
+			}
+		} else {
+			dev_err(chip->dev, "gpio%d: failed request, %d\n", pin_num, ret);
+		}
+	}
+
+}
+#endif
+
 /**
  * xgpiops_probe - Initialization method for a xgpiops device
  * @pdev:	platform device instance
@@ -576,12 +665,6 @@ static int __init xgpiops_probe(struct platform_device *pdev)
 				  XGPIOPS_INTDIS_OFFSET(bank_num));
 	}
 
-	/* clear existing interrupts for all banks */
-	for (bank_num = 0; bank_num < 4; bank_num++) {
-		xgpiops_writereg(0xffffffff, gpio->base_addr +
-				  XGPIOPS_INTSTS_OFFSET(bank_num));
-	}
-
 	/*
 	 * set the irq chip, handler and irq chip data for callbacks for
 	 * each pin
@@ -592,6 +675,9 @@ static int __init xgpiops_probe(struct platform_device *pdev)
 		irq_set_chip_data(gpio_irq, (void *)gpio);
 		irq_set_handler(gpio_irq, handle_simple_irq);
 		set_irq_flags(gpio_irq, IRQF_VALID);
+#ifdef CONFIG_OF
+		xgpiops_configure_gpio(chip, pin_num);
+#endif
 	}
 
 	irq_set_handler_data(irq_num, gpio);
