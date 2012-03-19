@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/of.h>
 #include <linux/irq.h>
 #include <linux/irqchip/chained_irq.h>
 #include <linux/irqdomain.h>
@@ -226,7 +227,7 @@ static int zynq_gpio_dir_in(struct gpio_chip *chip, unsigned int pin)
  * Return: 0 always
  */
 static int zynq_gpio_dir_out(struct gpio_chip *chip, unsigned int pin,
-			     int state)
+				 int state)
 {
 	struct zynq_gpio *gpio = container_of(chip, struct zynq_gpio, chip);
 	unsigned int reg, bank_num, bank_pin_num;
@@ -342,11 +343,11 @@ static int zynq_gpio_set_irq_type(struct irq_data *irq_data, unsigned int type)
 	zynq_gpio_get_bank_pin(device_pin_num, &bank_num, &bank_pin_num);
 
 	int_type = zynq_gpio_readreg(gpio->base_addr +
-				     ZYNQ_GPIO_INTTYPE_OFFSET(bank_num));
+					 ZYNQ_GPIO_INTTYPE_OFFSET(bank_num));
 	int_pol = zynq_gpio_readreg(gpio->base_addr +
-				    ZYNQ_GPIO_INTPOL_OFFSET(bank_num));
+					ZYNQ_GPIO_INTPOL_OFFSET(bank_num));
 	int_any = zynq_gpio_readreg(gpio->base_addr +
-				    ZYNQ_GPIO_INTANY_OFFSET(bank_num));
+					ZYNQ_GPIO_INTANY_OFFSET(bank_num));
 
 	/*
 	 * based on the type requested, configure the INT_TYPE, INT_POLARITY
@@ -431,9 +432,9 @@ static void zynq_gpio_irqhandler(unsigned int irq, struct irq_desc *desc)
 
 	for (bank_num = 0; bank_num < ZYNQ_GPIO_MAX_BANK; bank_num++) {
 		int_sts = zynq_gpio_readreg(gpio->base_addr +
-					    ZYNQ_GPIO_INTSTS_OFFSET(bank_num));
+						ZYNQ_GPIO_INTSTS_OFFSET(bank_num));
 		int_enb = zynq_gpio_readreg(gpio->base_addr +
-					    ZYNQ_GPIO_INTMASK_OFFSET(bank_num));
+						ZYNQ_GPIO_INTMASK_OFFSET(bank_num));
 		int_sts &= ~int_enb;
 
 		for (; int_sts != 0; int_sts >>= 1, gpio_irq++) {
@@ -529,6 +530,92 @@ static const struct dev_pm_ops zynq_gpio_dev_pm_ops = {
 	SET_RUNTIME_PM_OPS(zynq_gpio_runtime_suspend, zynq_gpio_runtime_resume,
 			   zynq_gpio_idle)
 };
+
+#ifdef CONFIG_OF
+
+/**
+ * xgpiops_configure_gpio - Initialization method for a GPIO on the xgpiops dev
+ * @chip:      GPIO chip for the xgpiops device
+ * @pin_num:   GPIO pin number
+ *
+ * This function looks in the device tree for configuration options for a GPIO
+ * pin. Allowed options are:
+ *
+ *     gpioN-label             String label to be passed to gpio_request.
+ *     gpioN-direction         Can be "input" or "output".
+ *     gpioN-settings          For "output", specifies the GPIO state as "high"
+ *                             or "low". For "input", specifies GPIO interrupt
+ *                             settings as "none", "level-low", "level-high",
+ *                             "edge-falling", "edge-rising", or "edge-both".
+ */
+static void __init zynq_gpio_configure_gpio(struct gpio_chip *chip, int pin_num)
+{
+	char propname[18];
+	const char *label;
+	const char *direction;
+	const char *settings;
+
+	sprintf(propname, "gpio%d-label", pin_num);
+	label = of_get_property(chip->dev->of_node, propname, NULL);
+
+	sprintf(propname, "gpio%d-direction", pin_num);
+	direction = of_get_property(chip->dev->of_node, propname, NULL);
+
+	sprintf(propname, "gpio%d-settings", pin_num);
+	settings = of_get_property(chip->dev->of_node, propname, NULL);
+
+	if (label && direction && settings) {
+		int ret;
+
+		ret = gpio_request(pin_num, label);
+
+		if (0 == ret) {
+			if (0 == of_prop_cmp("input", direction)) {
+				if (0 == of_prop_cmp("none", settings)) {
+					gpio_direction_input(pin_num);
+				} else if (0 == of_prop_cmp("level-low", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_LEVEL_LOW);
+					irq_set_handler(gpio_to_irq(pin_num), handle_level_irq);
+				} else if (0 == of_prop_cmp("level-high", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_LEVEL_HIGH);
+					irq_set_handler(gpio_to_irq(pin_num), handle_level_irq);
+				} else if (0 == of_prop_cmp("edge-falling", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_EDGE_FALLING);
+					irq_set_handler(gpio_to_irq(pin_num), handle_edge_irq);
+				} else if (0 == of_prop_cmp("edge-rising", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num), IRQ_TYPE_EDGE_RISING);
+					irq_set_handler(gpio_to_irq(pin_num), handle_edge_irq);
+				} else if (0 == of_prop_cmp("edge-both", settings)) {
+					gpio_direction_input(pin_num);
+					irq_set_irq_type(gpio_to_irq(pin_num),IRQ_TYPE_EDGE_BOTH);
+					irq_set_handler(gpio_to_irq(pin_num), handle_edge_irq);
+				} else {
+					dev_err(chip->dev, "gpio%d: failed request, %s\n", pin_num, settings);
+					gpio_free(pin_num);
+				}
+			} else if(0 == of_prop_cmp("output", direction)) {
+				if (0 == of_prop_cmp("high", settings)) {
+					gpio_direction_output(pin_num, 1);
+				} else if (0 == of_prop_cmp("low", settings)) {
+					gpio_direction_output(pin_num, 0);
+				} else {
+					dev_err(chip->dev, "gpio%d: unrecognized output settings \"%s\"\n", pin_num, settings);
+					gpio_free(pin_num);
+				}
+			} else {
+				dev_err(chip->dev, "gpio%d: unrecognized direction \"%s\"\n", pin_num, direction);
+				gpio_free(pin_num);
+			}
+		} else {
+			dev_err(chip->dev, "gpio%d: failed request, %d\n", pin_num, ret);
+		}
+	}
+}
+#endif
 
 /**
  * zynq_gpio_probe - Initialization method for a zynq_gpio device
@@ -629,6 +716,9 @@ static int zynq_gpio_probe(struct platform_device *pdev)
 					 handle_simple_irq);
 		irq_set_chip_data(gpio_irq, (void *)gpio);
 		set_irq_flags(gpio_irq, IRQF_VALID);
+#ifdef CONFIG_OF
+		zynq_gpio_configure_gpio(chip, pin_num);
+#endif
 	}
 
 	irq_set_handler_data(irq_num, (void *)gpio);
