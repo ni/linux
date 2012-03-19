@@ -55,6 +55,9 @@
 			phy-handle = <&phy0>;
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
+			/* SLCR GEM0_CLK_CTRL values for 1Gb (125MHz), 100Mb
+			   (25MHz), and 10Mb (2.5MHz), assuming 1GHz IO PLL
+			   clock. */
 			tx_timing = <0x140 0x00100801 0x00500801 0x03200801>;
 
 			phy0: phy@0 {
@@ -81,8 +84,13 @@
 			phy-handle = <&phy1>;
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
+			/* GEM1 PHY is on the GEM0 MDIO bus. */
 			no_mdio_bus;
+			/* SLCR GEM1_RCLK_CTRL and GEM1_CLK_CTRL registers. */
 			eth_emio_slcr = <0x13c 0x144>;
+			/* SLCR FPGA1_CLK_CTRL values for 1Gb (125MHz), 100Mb
+			   (25MHz), and 10Mb (2.5MHz), assuming 1GHz IO PLL
+			   clock. */
 			tx_timing = <0x180 0x00100801 0x00500801 0x03200801>;
 		};
 
