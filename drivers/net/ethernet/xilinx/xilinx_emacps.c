@@ -127,11 +127,8 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 /* Default SEND and RECV buffer descriptors (BD) numbers.
  * BD Space needed is (XEMACPS_SEND_BD_CNT+XEMACPS_RECV_BD_CNT)*8
  */
-#undef  DEBUG
-#define DEBUG
-
-#define XEMACPS_SEND_BD_CNT	32
-#define XEMACPS_RECV_BD_CNT	32
+#define XEMACPS_SEND_BD_CNT	256
+#define XEMACPS_RECV_BD_CNT	128
 
 #define XEMACPS_NAPI_WEIGHT	64
 
@@ -848,13 +845,17 @@ static void xemacps_adjust_link(struct net_device *ndev)
 
 	if (status_change) {
 		if (phydev->link) {
+#ifdef DEBUG
 			printk(KERN_INFO "%s: link up (%d/%s)\n",
 				ndev->name, phydev->speed,
 				DUPLEX_FULL == phydev->duplex ?
 				"FULL" : "HALF");
+#endif
 			xemacps_led_trigger_speed(phydev->speed);
 		} else {
+#ifdef DEBUG
 			printk(KERN_INFO "%s: link down\n", ndev->name);
+#endif
 		}
 	}
 }
@@ -2170,6 +2171,14 @@ static int xemacps_open(struct net_device *ndev)
 	if (!is_valid_ether_addr(ndev->dev_addr))
 		return  -EADDRNOTAVAIL;
 
+	rc = request_irq(ndev->irq, xemacps_interrupt, IRQF_SAMPLE_RANDOM,
+		ndev->name, ndev);
+	if (rc) {
+		printk(KERN_ERR "%s: Unable to request IRQ, error %d\n",
+		ndev->name, rc);
+		return rc;
+	}
+
 	rc = xemacps_descriptor_init(lp);
 	if (rc) {
 		printk(KERN_ERR "%s Unable to allocate DMA memory, rc %d\n",
@@ -2224,6 +2233,7 @@ static int xemacps_close(struct net_device *ndev)
 	if (lp->phy_dev)
 		phy_disconnect(lp->phy_dev);
 	xemacps_descriptor_free(lp);
+	free_irq(ndev->irq, ndev);
 
 	return 0;
 }
@@ -2497,11 +2507,6 @@ static void xemacps_set_hashtable(struct net_device *ndev)
 		if (!curr)	/* end of list */
 			break;
 		mc_addr = curr->addr;
-#ifdef DEBUG_VERBOSE
-		printk(KERN_INFO "GEM: mc addr 0x%x:0x%x:0x%x:0x%x:0x%x:0x%x\n",
-		mc_addr[0], mc_addr[1], mc_addr[2],
-		mc_addr[3], mc_addr[4], mc_addr[5]);
-#endif
 		hash_index = calc_mac_hash(mc_addr);
 
 		if (hash_index >= XEMACPS_MAX_HASH_BITS) {
@@ -3074,14 +3079,6 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	ndev->irq = platform_get_irq(pdev, 0);
 
-	rc = request_irq(ndev->irq, xemacps_interrupt, IRQF_SAMPLE_RANDOM,
-		ndev->name, ndev);
-	if (rc) {
-		printk(KERN_ERR "%s: Unable to request IRQ %p, error %d\n",
-		ndev->name, r_irq, rc);
-		goto err_out_iounmap;
-	}
-
 	ndev->netdev_ops	 = &netdev_ops;
 	ndev->watchdog_timeo     = TX_TIMEOUT;
 	ndev->ethtool_ops        = &xemacps_ethtool_ops;
@@ -3097,7 +3094,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	rc = register_netdev(ndev);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot register net device, aborting.\n");
-		goto err_out_free_irq;
+		goto err_out_iounmap;
 	}
 
 #ifdef CONFIG_OF
@@ -3217,8 +3214,6 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 err_out_unregister_netdev:
 	unregister_netdev(ndev);
-err_out_free_irq:
-	free_irq(ndev->irq, ndev);
 err_out_iounmap:
 	iounmap(lp->baseaddr);
 err_out_free_netdev:
@@ -3248,7 +3243,6 @@ static int __exit xemacps_remove(struct platform_device *pdev)
 		kfree(lp->mii_bus->irq);
 		mdiobus_free(lp->mii_bus);
 		unregister_netdev(ndev);
-		free_irq(ndev->irq, ndev);
 		iounmap(lp->baseaddr);
 		free_netdev(ndev);
 		platform_set_drvdata(pdev, NULL);
