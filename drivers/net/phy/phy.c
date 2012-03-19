@@ -858,8 +858,11 @@ void phy_state_machine(struct work_struct *work)
 	if (err < 0)
 		phy_error(phydev);
 
-	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
-			   PHY_STATE_TIME * HZ);
+#ifdef CONFIG_PHY_NO_UNNECESSARY_POLLING
+	if ((PHY_POLL == phydev->irq) || ((PHY_RUNNING != phydev->state) && (PHY_NOLINK != phydev->state)))
+#endif
+		queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
+				   PHY_STATE_TIME * HZ);
 }
 
 void phy_mac_interrupt(struct phy_device *phydev, int new_link)

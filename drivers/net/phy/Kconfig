@@ -111,6 +111,15 @@ config MICREL_KSZ9031_PHY
 	---help---
 	  Supports the KSZ9031 PHY.
 
+config PHY_NO_UNNECESSARY_POLLING
+	bool "Don't poll unnecessarily when PHY interrupts are in use"
+	---help---
+	  The PHY state machine is scheduled to run and process the current state
+	  once a second, even if the PHY is configured to use interrupts. Enabling
+	  this option will cause this PHY polling to be disabled when a PHY is in
+	  the PHY_RUNNING or PHY_NOLINK state. When the link state changes, a PHY
+	  interrupt should occur, causing the PHY state machine to run immediately.
+
 config FIXED_PHY
 	bool "Driver for MDIO Bus/PHY emulation with fixed speed/link PHYs"
 	depends on PHYLIB=y
