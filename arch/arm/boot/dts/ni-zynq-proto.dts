@@ -152,7 +152,28 @@
 		gpio: gpio@e000a000 {
 			compatible = "xlnx,ps7-gpio-1.00.a";
 			reg = <0xe000a000 0x1000>;
+			#interrupt-cells = <0x2>;
+			interrupt-controller;
 			interrupts = <0 20 0>;
+			#gpio-cells = <2>;
+			gpio-controller;
+
+			/* You can specify GPIO settings here:
+			 *
+			 *  gpioN-label      String label.
+			 *  gpioN-direction  "input" or "output".
+			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
+			 */
+
+			/* GPIO1 (MIO1) */
+			gpio1-label     = "phy_interupt";
+			gpio1-direction = "input";
+			gpio1-settings  = "level-low";
 		};
 
 		i2c0: i2c@e0004000 {
