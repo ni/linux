@@ -24,3 +24,5 @@ obj-$(CONFIG_DP83640_PHY)	+= dp83640.o
 obj-$(CONFIG_STE10XP)		+= ste10Xp.o
 obj-$(CONFIG_MICREL_PHY)	+= micrel.o
 obj-$(CONFIG_MDIO_OCTEON)	+= mdio-octeon.o
+obj-$(CONFIG_MARVELL_88E1512_PHY)	+= marvell88E1512.o
+obj-$(CONFIG_LSI_ET1011C_NI_PHY)	+= lsiET1011C.o

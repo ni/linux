@@ -64,16 +64,26 @@
 				compatible = "marvell,88e1512";
 				device_type = "ethernet-phy";
 				reg = <0x0>;
-				interrupts = <168 0>;
+				/* Interrupt on GPIO1, shared with phy1. */
+				interrupts = <1 0>;
 				interrupt-parent = <&gpio>;
+				/* Page 3, Register 16, LED[2:0] Function
+				   Control Register */
+				leds = <0x1881>;
 			};
 
 			phy1: phy@1 {
 				compatible = "lsi,et1011c";
 				device_type = "ethernet-phy";
 				reg = <0x1>;
-				interrupts = <168 0>;
+				/* Interrupt on GPIO1, shared with phy0. */
+				interrupts = <1 0>;
 				interrupt-parent = <&gpio>;
+				/* LED Control 1 values for Off, 10Mb, 100Mb,
+				   and 1Gb, followed by LED Control 2 values
+				   for Off, 10Mb, 100Mb, and 1Gb, followed by
+				   LED Control 3 value. */
+				leds = <0x0001 0x0001 0x0001 0x8001 0xFAFE 0xFAFE 0xFAFF 0xFAEF 0x0A55>;
 			};
 		};
 

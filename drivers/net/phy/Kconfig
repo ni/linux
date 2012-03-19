@@ -92,6 +92,16 @@ config MICREL_PHY
 	---help---
 	  Supports the KSZ9021, VSC8201, KS8001 PHYs.
 
+config MARVELL_88E1512_PHY
+	tristate "Driver for the Marvell 88E1525 PHY"
+	---help---
+	  Supports the 88E1525 PHY.
+
+config LSI_ET1011C_NI_PHY
+	tristate "Another driver for LSI ET1011C PHY"
+	---help---
+	  Supports the LSI ET1011C PHY.
+
 config PHY_NO_THREADED_IRQS
 	tristate "Never use threaded interrupts for PHY devices"
 	---help---
