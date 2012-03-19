@@ -126,27 +126,27 @@
 				read-only;
 			};
 			partition@60000 {
-				label = "u-boot environment 1";
+				label = "u-boot_environment_1";
 				reg = <0x00060000 0x00040000>;	/* 256kB */
 			};
 			partition@a0000 {
-				label = "u-boot environment 2";
+				label = "u-boot_environment_2";
 				reg = <0x000a0000 0x00040000>;	/* 256kB */
 			};			
 			partition@e0000 {
-				label = "safemode";
+				label = "safemode_kernel";
 				reg = <0x000e0000 0x02800000>;	/* 40MB */
 			};
 			partition@28e0000 {
-				label = "runmode";
+				label = "runmode_kernel";
 				reg = <0x028e0000 0x00600000>;	/* 6MB */
 			};
 			partition@2ee0000 {
-				label = "configuration data";
+				label = "configuration_data";
 				reg = <0x02ee0000 0x00400000>;	/* 4MB */
 			};
 			partition@32e0000 {
-				label = "rootfs";
+				label = "runmode_rootfs";
 				reg = <0x032e0000 0x3CD20000>;	/* 973.125MB */
 			};
 		};
