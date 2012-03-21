@@ -15,6 +15,6 @@
 #ifndef __MACH_VMALLOC_H__
 #define __MACH_VMALLOC_H__
 
-#define VMALLOC_END       0xE0000000UL
+#define VMALLOC_END       0xF0000000UL
 
 #endif
