@@ -663,6 +663,8 @@ static void __init create_36bit_mapping(struct map_desc *md,
 	} while (addr != end);
 }
 
+static void * __initdata vmalloc_min = (void *)(VMALLOC_END - SZ_128M);
+
 /*
  * Create the page directory entries and any necessary
  * page tables for the mapping specified by `md'.  We
@@ -685,7 +687,7 @@ static void __init create_mapping(struct map_desc *md)
 	}
 
 	if ((md->type == MT_DEVICE || md->type == MT_ROM) &&
-	    md->virtual >= PAGE_OFFSET && md->virtual < VMALLOC_END) {
+	    md->virtual >= vmalloc_min && md->virtual < VMALLOC_END) {
 		printk(KERN_WARNING "BUG: mapping for 0x%08llx"
 		       " at 0x%08lx overlaps vmalloc space\n",
 		       (long long)__pfn_to_phys((u64)md->pfn), md->virtual);
@@ -734,8 +736,6 @@ void __init iotable_init(struct map_desc *io_desc, int nr)
 	for (i = 0; i < nr; i++)
 		create_mapping(io_desc + i);
 }
-
-static void * __initdata vmalloc_min = (void *)(VMALLOC_END - SZ_128M);
 
 /*
  * vmalloc=size forces the vmalloc area to be exactly 'size'
