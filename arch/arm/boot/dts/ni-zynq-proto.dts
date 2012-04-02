@@ -151,6 +151,12 @@
 			};
 		};
 
+		scugtimer@f8f00000 {
+			compatible = "xlnx,xscugtimer-1.00.a";
+			reg = <0xf8f00200 0x400>;
+			clock-frequency = <333333000>;
+		};
+
 		usb@e0002000 {
 			compatible = "xlnx,ps7-usb-1.00.a";
 			reg = <0xe0002000 0x1000>;
