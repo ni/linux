@@ -51,6 +51,30 @@ unsigned long long notrace sched_clock(void)
 	return cyc_to_ns(((u64) upper << 32) + lower, mult, shift);
 }
 
+static cycle_t scug_cs_read(struct clocksource *cs)
+{
+	u32 upper, upper2, lower;
+
+	if (!scug_timer)
+		return 0ULL;
+
+	do {
+		upper  = xscugtimer_readl(&scug_timer->counter1);
+		lower  = xscugtimer_readl(&scug_timer->counter0);
+		upper2 = xscugtimer_readl(&scug_timer->counter1);
+	} while (upper != upper2);
+
+	return ((u64) upper << 32) + lower;
+}
+
+struct clocksource scug_clocksource = {
+	.name		= "scu_gtimer",
+	.rating		= 300,
+	.read		= scug_cs_read,
+	.mask		= CLOCKSOURCE_MASK(64),
+	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
+};
+
 /**
  * xscugtimer_drv_probe -  Probe call for the device.
  *
@@ -110,6 +134,8 @@ static int __devinit xscugtimer_drv_probe(struct platform_device *pdev)
 	smp_wmb();
 	scug_timer = tmp_timer;
 
+	clocksource_register_hz(&scug_clocksource, freq);
+
 out:
 	return err;
 }
@@ -118,6 +144,8 @@ static int __devexit xscugtimer_drv_remove(struct platform_device *pdev)
 {
 	scug_timer = NULL;
 	smp_wmb();
+
+	clocksource_unregister(&scug_clocksource);
 
 	/* disable counter */
 	xscugtimer_writel(&scug_timer->control, 0x0);
