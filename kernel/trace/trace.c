@@ -7539,6 +7539,23 @@ static int tracing_mark_release(struct inode *inode, struct file *file)
 	return tracing_release_generic_tr(inode, file);
 }
 
+/*
+ * tracing_ni_ett_raw_write was added as part of LabVIEW RT's support of the
+ * Execution Trace Toolkit (RTETT). But RTETT is being deprecated in favor of
+ * using open source tooling, including ftrace and kernelshark. Keep the
+ * trace_ni_ett_marker file and just enough implementation to not break existing
+ * VIs.
+ *
+ * This can be completely removed when support is dropped for old LabVIEW
+ * versions shipping RTETT VIs.
+ */
+static ssize_t
+tracing_ni_ett_raw_write(struct file *filp, const char __user *ubuf,
+					  size_t cnt, loff_t *fpos)
+{
+	return cnt;
+}
+
 static int tracing_clock_show(struct seq_file *m, void *v)
 {
 	struct trace_array *tr = m->private;
@@ -7953,6 +7970,12 @@ static const struct file_operations tracing_mark_raw_fops = {
 	.open		= tracing_mark_open,
 	.write		= tracing_mark_raw_write,
 	.release	= tracing_mark_release,
+};
+
+static const struct file_operations tracing_ni_ett_raw_fops = {
+	.open		= tracing_open_generic,
+	.write		= tracing_ni_ett_raw_write,
+	.llseek		= generic_file_llseek,
 };
 
 static const struct file_operations trace_clock_fops = {
@@ -10613,6 +10636,9 @@ static __init void tracer_init_tracefs_work_func(struct work_struct *work)
 
 	trace_create_file("README", TRACE_MODE_READ, NULL,
 			NULL, &tracing_readme_fops);
+
+	trace_create_file("trace_ni_ett_marker", 0220, NULL,
+			NULL, &tracing_ni_ett_raw_fops);
 
 	trace_create_file("saved_cmdlines", TRACE_MODE_READ, NULL,
 			NULL, &tracing_saved_cmdlines_fops);
