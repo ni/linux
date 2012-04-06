@@ -837,12 +837,20 @@ static int exec_mmap(struct mm_struct *mm)
 		}
 	}
 	task_lock(tsk);
+#ifdef __ARCH_WANT_INTERRUPTS_ON_CTXSW
+	preempt_disable();
+#else
 	local_irq_disable_rt();
+#endif
 	active_mm = tsk->active_mm;
 	tsk->mm = mm;
 	tsk->active_mm = mm;
 	activate_mm(active_mm, mm);
+#ifdef __ARCH_WANT_INTERRUPTS_ON_CTXSW
+	preempt_enable();
+#else
 	local_irq_enable_rt();
+#endif
 	task_unlock(tsk);
 	arch_pick_mmap_layout(mm);
 	if (old_mm) {

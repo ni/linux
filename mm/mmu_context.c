@@ -26,7 +26,11 @@ void use_mm(struct mm_struct *mm)
 	struct task_struct *tsk = current;
 
 	task_lock(tsk);
+#ifdef __ARCH_WANT_INTERRUPTS_ON_CTXSW
+	preempt_disable();
+#else
 	local_irq_disable_rt();
+#endif
 	active_mm = tsk->active_mm;
 	if (active_mm != mm) {
 		atomic_inc(&mm->mm_count);
@@ -34,7 +38,11 @@ void use_mm(struct mm_struct *mm)
 	}
 	tsk->mm = mm;
 	switch_mm(active_mm, mm, tsk);
+#ifdef __ARCH_WANT_INTERRUPTS_ON_CTXSW
+	preempt_enable();
+#else
 	local_irq_enable_rt();
+#endif
 	task_unlock(tsk);
 
 	if (active_mm != mm)
