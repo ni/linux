@@ -1353,10 +1353,10 @@ void ktime_convert_timeofday_to_monotonic(struct timespec *ts)
 	unsigned int seq;
 	
 	do {
-		seq = read_seqbegin(&xtime_lock);
+		seq = read_seqcount_begin(&xtime_seq);
 		tomono = wall_to_monotonic;
 		arch_offset = arch_gettimeoffset();
-	} while (read_seqretry(&xtime_lock, seq));
+	} while (read_seqcount_retry(&xtime_seq, seq));
 	
 	set_normalized_timespec(
 		ts,
@@ -1377,10 +1377,10 @@ void ktime_convert_monotonic_to_timeofday(struct timespec *ts)
 	WARN_ON(timekeeping_suspended);
 
 	do {
-		seq = read_seqbegin(&xtime_lock);
+		seq = read_seqcount_begin(&xtime_seq);
 		tomono = wall_to_monotonic;
 		arch_offset = arch_gettimeoffset();
-	} while (read_seqretry(&xtime_lock, seq));
+	} while (read_seqcount_retry(&xtime_seq, seq));
 
 	set_normalized_timespec(
 		ts,
