@@ -417,7 +417,7 @@ out_unlock:
 EXPORT_SYMBOL(phy_start_aneg);
 
 
-static void phy_change(struct work_struct *work);
+static irqreturn_t phy_change_threadfn(int, void *);
 
 /**
  * phy_start_machine - start PHY state machine tracking
@@ -519,16 +519,7 @@ static irqreturn_t phy_interrupt(int irq, void *phy_dat)
 	if (PHY_HALTED == phydev->state)
 		return IRQ_NONE;		/* It can't be ours.  */
 
-	/* The MDIO bus is not allowed to be written in interrupt
-	 * context, so we need to disable the irq here.  A work
-	 * queue will write the PHY to disable and clear the
-	 * interrupt, and then reenable the irq line. */
-	disable_irq_nosync(irq);
-	atomic_inc(&phydev->irq_disable);
-
-	schedule_work(&phydev->phy_queue);
-
-	return IRQ_HANDLED;
+	return IRQ_WAKE_THREAD;
 }
 
 /**
@@ -596,10 +587,8 @@ int phy_start_interrupts(struct phy_device *phydev)
 	irq_flags |= IRQF_NO_THREAD;
 #endif
 
-	INIT_WORK(&phydev->phy_queue, phy_change);
-
-	atomic_set(&phydev->irq_disable, 0);
-	if (request_irq(phydev->irq, phy_interrupt,
+	if (request_threaded_irq(phydev->irq, phy_interrupt,
+				phy_change_threadfn,
 				irq_flags,
 				"phy_interrupt",
 				phydev) < 0) {
@@ -631,21 +620,6 @@ int phy_stop_interrupts(struct phy_device *phydev)
 
 	free_irq(phydev->irq, phydev);
 
-	/*
-	 * Cannot call flush_scheduled_work() here as desired because
-	 * of rtnl_lock(), but we do not really care about what would
-	 * be done, except from enable_irq(), so cancel any work
-	 * possibly pending and take care of the matter below.
-	 */
-	cancel_work_sync(&phydev->phy_queue);
-	/*
-	 * If work indeed has been cancelled, disable_irq() will have
-	 * been left unbalanced from phy_interrupt() and enable_irq()
-	 * has to be called so that other devices on the line work.
-	 */
-	while (atomic_dec_return(&phydev->irq_disable) >= 0)
-		enable_irq(phydev->irq);
-
 	return err;
 }
 EXPORT_SYMBOL(phy_stop_interrupts);
@@ -655,15 +629,14 @@ EXPORT_SYMBOL(phy_stop_interrupts);
  * phy_change - Scheduled by the phy_interrupt/timer to handle PHY changes
  * @work: work_struct that describes the work to be done
  */
-static void phy_change(struct work_struct *work)
+static irqreturn_t phy_change_threadfn(int irq, void *dev_id)
 {
 	int err;
-	struct phy_device *phydev =
-		container_of(work, struct phy_device, phy_queue);
+	struct phy_device *phydev = dev_id;
 
 	if (phydev->drv->did_interrupt &&
 	    !phydev->drv->did_interrupt(phydev))
-		goto ignore;
+		return IRQ_NONE;
 
 	err = phy_disable_interrupts(phydev);
 
@@ -675,32 +648,22 @@ static void phy_change(struct work_struct *work)
 		phydev->state = PHY_CHANGELINK;
 	mutex_unlock(&phydev->lock);
 
-	atomic_dec(&phydev->irq_disable);
-	enable_irq(phydev->irq);
-
 	/* Reenable interrupts */
 	if (PHY_HALTED != phydev->state)
 		err = phy_config_interrupt(phydev, PHY_INTERRUPT_ENABLED);
 
 	if (err)
-		goto irq_enable_err;
+		goto phy_err;
 
 	/* reschedule state queue work to run as soon as possible */
 	cancel_delayed_work_sync(&phydev->state_queue);
 	schedule_delayed_work(&phydev->state_queue, 0);
 
-	return;
+	return IRQ_HANDLED;
 
-ignore:
-	atomic_dec(&phydev->irq_disable);
-	enable_irq(phydev->irq);
-	return;
-
-irq_enable_err:
-	disable_irq(phydev->irq);
-	atomic_inc(&phydev->irq_disable);
 phy_err:
 	phy_error(phydev);
+	return IRQ_NONE;
 }
 
 /**
