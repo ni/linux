@@ -813,9 +813,11 @@ static void cdns_uart_shutdown(struct uart_port *port)
 	status = cdns_uart_readl(CDNS_UART_IMR_OFFSET);
 	cdns_uart_writel(status, CDNS_UART_IDR_OFFSET);
 
-	/* Disable the TX and RX */
-	cdns_uart_writel(CDNS_UART_CR_TX_DIS | CDNS_UART_CR_RX_DIS,
-				 CDNS_UART_CR_OFFSET);
+	/* Disable the RX, we intentionally leave TX enabled since it might be
+	 * used by the xuartps_console_write path, and it doesn't hurt anything
+	 * to leave it enabled */
+	cdns_uart_writel(CDNS_UART_CR_RX_DIS, CDNS_UART_CR_OFFSET);
+
 	free_irq(port->irq, port);
 }
 
