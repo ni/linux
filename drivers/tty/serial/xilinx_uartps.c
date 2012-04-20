@@ -635,9 +635,10 @@ static void xuartps_shutdown(struct uart_port *port)
 	status = xuartps_readl(XUARTPS_IMR_OFFSET);
 	xuartps_writel(status, XUARTPS_IDR_OFFSET);
 
-	/* Disable the TX and RX */
-	xuartps_writel(XUARTPS_CR_TX_DIS | XUARTPS_CR_RX_DIS,
-				 XUARTPS_CR_OFFSET);
+	/* Disable the RX, we intentionally leave TX enabled since it might be
+	 * used by the xuartps_console_write path, and it doesn't hurt anything
+	 * to leave it enabled */
+	xuartps_writel(XUARTPS_CR_RX_DIS, XUARTPS_CR_OFFSET);
 
 	spin_unlock_irqrestore(&port->lock, flags);
 	free_irq(port->irq, port);
