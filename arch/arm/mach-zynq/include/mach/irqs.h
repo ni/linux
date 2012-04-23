@@ -12,10 +12,12 @@
  * GNU General Public License for more details.
  */
 
+#include "gpio.h"
+
 #ifndef __MACH_IRQS_H
 #define __MACH_IRQS_H
 
-#define NR_IRQS		128
+#define NR_IRQS		(128 + ARCH_NR_GPIOS)
 
 #define IRQ_LOCALTIMER	29
 
