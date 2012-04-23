@@ -102,16 +102,6 @@ config LSI_ET1011C_NI_PHY
 	---help---
 	  Supports the LSI ET1011C PHY.
 
-config PHY_NO_THREADED_IRQS
-	tristate "Never use threaded interrupts for PHY devices"
-	---help---
-	  Interrupt handlers sometimes will use threads by default, for example
-	  when the RT patch is applied. Enabling this option will cause PHY
-	  interrupts to never use threaded IRQs. This may be necessary if your PHY
-	  interrupt line is shared by other devices on a GPIO input. Note that PHY
-	  interrupts are already deferred to a work queue, so enabling this option
-	  shouldn't have any noticeable side effects.
-
 config PHY_NO_UNNECESSARY_POLLING
 	tristate "Don't poll unnecessarily when PHY interrupts are in use"
 	---help---

@@ -581,15 +581,10 @@ phy_err:
 int phy_start_interrupts(struct phy_device *phydev)
 {
 	int err = 0;
-	unsigned long irq_flags = IRQF_SHARED;
-
-#ifdef CONFIG_PHY_NO_THREADED_IRQS
-	irq_flags |= IRQF_NO_THREAD;
-#endif
 
 	if (request_threaded_irq(phydev->irq, phy_interrupt,
 				phy_change_threadfn,
-				irq_flags,
+				IRQF_SHARED,
 				"phy_interrupt",
 				phydev) < 0) {
 		printk(KERN_WARNING "%s: Can't get IRQ %d (PHY)\n",
