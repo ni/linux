@@ -584,7 +584,7 @@ int phy_start_interrupts(struct phy_device *phydev)
 
 	if (request_threaded_irq(phydev->irq, phy_interrupt,
 				phy_change_threadfn,
-				IRQF_SHARED,
+				IRQF_SHARED | IRQF_ONESHOT,
 				"phy_interrupt",
 				phydev) < 0) {
 		printk(KERN_WARNING "%s: Can't get IRQ %d (PHY)\n",
