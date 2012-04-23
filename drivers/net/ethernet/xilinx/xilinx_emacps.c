@@ -3091,6 +3091,12 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	lp->board_type = BOARD_TYPE_ZYNQ;
 #endif
 
+	/* Clear statistic counters. The network stack will start polling for
+	   stats as soon as we register below, and there may be stale data in
+	   the stats registers. */
+	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
+		XEMACPS_NWCTRL_STATCLR_MASK);
+
 	rc = register_netdev(ndev);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot register net device, aborting.\n");
