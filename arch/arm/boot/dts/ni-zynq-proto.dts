@@ -40,12 +40,14 @@
 		};
 
 		timer@0xf8001000 {
+			clock-frequency-timer0 = <111111000>;
+			clock-frequency-timer1 = <111111000>;
+			clock-frequency-timer2 = <111111000>;
 			compatible = "xlnx,ps7-ttc-1.00.a";
 			interrupts = <0 10 0
 				      0 11 0
 				      0 12 0>;
 			reg = < 0xf8001000 0x1000 >;
-			clock-frequency = <111111000>;
 		};
 
 		eth@e000b000 {
@@ -53,12 +55,15 @@
 			reg = <0xe000b000 0x1000>;
 			interrupts = <0 22 0>;
 			phy-handle = <&phy0>;
+			xlnx,slcr-div0-1000Mbps = <8>;
+			xlnx,slcr-div0-100Mbps = <8>;
+			xlnx,slcr-div0-10Mbps = <8>;
+			xlnx,slcr-div1-1000Mbps = <1>;
+			xlnx,slcr-div1-100Mbps = <5>;
+			xlnx,slcr-div1-10Mbps = <50>;
+			xlnx,mdc-clk-div = <3>;
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
-			/* SLCR GEM0_CLK_CTRL values for 1Gb (125MHz), 100Mb
-			   (25MHz), and 10Mb (2.5MHz), assuming 1GHz IO PLL
-			   clock. */
-			tx_timing = <0x140 0x00100801 0x00500801 0x03200801>;
 
 			phy0: phy@0 {
 				compatible = "marvell,88e1512";
@@ -92,16 +97,16 @@
 			reg = <0xe000c000 0x1000>;
 			interrupts = <0 45 0>;
 			phy-handle = <&phy1>;
+			xlnx,slcr-div0-1000Mbps = <8>;
+			xlnx,slcr-div0-100Mbps = <8>;
+			xlnx,slcr-div0-10Mbps = <8>;
+			xlnx,slcr-div1-1000Mbps = <1>;
+			xlnx,slcr-div1-100Mbps = <5>;
+			xlnx,slcr-div1-10Mbps = <50>;
+			xlnx,no_mdio_bus;
+			xlnx,emio-fpga-clk = <1>;
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
-			/* GEM1 PHY is on the GEM0 MDIO bus. */
-			no_mdio_bus;
-			/* SLCR GEM1_RCLK_CTRL and GEM1_CLK_CTRL registers. */
-			eth_emio_slcr = <0x13c 0x144>;
-			/* SLCR FPGA1_CLK_CTRL values for 1Gb (125MHz), 100Mb
-			   (25MHz), and 10Mb (2.5MHz), assuming 1GHz IO PLL
-			   clock. */
-			tx_timing = <0x180 0x00100801 0x00500801 0x03200801>;
 		};
 
 		nand@e1000000 {

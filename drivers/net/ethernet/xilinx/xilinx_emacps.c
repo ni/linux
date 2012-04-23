@@ -499,8 +499,17 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 #define XEMACPS_RXBUF_ADD_MASK       0xFFFFFFFC /* Mask for address */
 
 
+#define XSLCR_EMAC0_RCLK_CTRL_OFFSET	0x138 /* EMAC0 Rx Clk Control */
+#define XSLCR_EMAC1_RCLK_CTRL_OFFSET	0x13C /* EMAC1 Rx Clk Control */
+
 #define XSLCR_EMAC0_CLK_CTRL_OFFSET	0x140 /* EMAC0 Reference Clk Control */
 #define XSLCR_EMAC1_CLK_CTRL_OFFSET	0x144 /* EMAC1 Reference Clk Control */
+
+#define XSLCR_FPGA0_CLK_CTRL_OFFSET	0x170 /* PL Clock 0 Output Control */
+#define XSLCR_FPGA1_CLK_CTRL_OFFSET	0x180 /* PL Clock 1 Output Control */
+#define XSLCR_FPGA2_CLK_CTRL_OFFSET	0x190 /* PL Clock 2 Output Control */
+#define XSLCR_FPGA3_CLK_CTRL_OFFSET	0x1A0 /* PL Clock 3 Output Control */
+
 #define BOARD_TYPE_ZYNQ			0x01
 #define BOARD_TYPE_PEEP			0x02
 
@@ -632,8 +641,9 @@ struct net_local {
 	/* RX ip/tcp/udp checksum */
 	unsigned               ip_summed;
 #ifdef CONFIG_OF
-	unsigned int	       enetnum;
 	unsigned int 	       board_type;
+	unsigned int 	       mdc_clk_div;
+	unsigned int 	       slcr_div_reg;
 	unsigned int 	       slcr_div0_1000Mbps;
 	unsigned int 	       slcr_div1_1000Mbps;
 	unsigned int 	       slcr_div0_100Mbps;
@@ -782,18 +792,10 @@ static void xemacps_adjust_link(struct net_device *ndev)
 	int status_change = 0;
 	u32 regval;
 	u32 regval1;
-	u32 slcroffset;
 
 	spin_lock_irqsave(&lp->lock, flags);
-	if (lp->enetnum == 0) {
-		regval1 = xslcr_read(XSLCR_EMAC0_CLK_CTRL_OFFSET);
-		regval1 &= XEMACPS_SLCR_DIV_MASK;
-		slcroffset = XSLCR_EMAC0_CLK_CTRL_OFFSET;
-	} else {
-		regval1 = xslcr_read(XSLCR_EMAC1_CLK_CTRL_OFFSET);
-		regval1 &= XEMACPS_SLCR_DIV_MASK;
-		slcroffset = XSLCR_EMAC1_CLK_CTRL_OFFSET;
-	}
+	regval1 = xslcr_read(lp->slcr_div_reg);
+	regval1 &= XEMACPS_SLCR_DIV_MASK;
 
 	if (phydev->link) {
 		if ((lp->speed != phydev->speed) ||
@@ -809,7 +811,7 @@ static void xemacps_adjust_link(struct net_device *ndev)
 				regval |= XEMACPS_NWCFG_1000_MASK;
 				regval1 |= ((lp->slcr_div1_1000Mbps) << 20);
 				regval1 |= ((lp->slcr_div0_1000Mbps) << 8);
-				xslcr_write(slcroffset, regval1);
+				xslcr_write(lp->slcr_div_reg, regval1);
 			} else
 				regval &= ~XEMACPS_NWCFG_1000_MASK;
 
@@ -817,14 +819,14 @@ static void xemacps_adjust_link(struct net_device *ndev)
 				regval |= XEMACPS_NWCFG_100_MASK;
 				regval1 |= ((lp->slcr_div1_100Mbps) << 20);
 				regval1 |= ((lp->slcr_div0_100Mbps) << 8);
-				xslcr_write(slcroffset, regval1);
+				xslcr_write(lp->slcr_div_reg, regval1);
 			} else
 				regval &= ~XEMACPS_NWCFG_100_MASK;
 
 			if (phydev->speed == SPEED_10) {
 				regval1 |= ((lp->slcr_div1_10Mbps) << 20);
 				regval1 |= ((lp->slcr_div0_10Mbps) << 8);
-				xslcr_write(slcroffset, regval1);
+				xslcr_write(lp->slcr_div_reg, regval1);
 			}
 
 			xemacps_write(lp->baseaddr, XEMACPS_NWCFG_OFFSET,
@@ -2101,7 +2103,7 @@ static void xemacps_init_hw(struct net_local *lp)
 	regval |= XEMACPS_NWCFG_1536RXEN_MASK;
 #ifdef CONFIG_OF
 	if (lp->board_type == BOARD_TYPE_ZYNQ)
-		regval |= (MDC_DIV_224 << XEMACPS_NWCFG_MDC_SHIFT_MASK);
+		regval |= (lp->mdc_clk_div << XEMACPS_NWCFG_MDC_SHIFT_MASK);
 #endif
 	if (lp->ndev->flags & IFF_PROMISC)	/* copy all */
 		regval |= XEMACPS_NWCFG_COPYALLEN_MASK;
@@ -3039,8 +3041,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	int rc = -ENXIO;
 	int create_mdio_bus = 1;
 #ifdef CONFIG_OF
-	const u32 *timing_prop;
-	int len = 0;
+	int enetnum;
 #endif
 
 	r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -3106,9 +3107,12 @@ static int __init xemacps_probe(struct platform_device *pdev)
 #ifdef CONFIG_OF
 	propval = be32_to_cpup(of_get_property(lp->pdev->dev.of_node, "interrupts", NULL));
 	if (propval == 54) { /* If it is ENET0 */
-		lp->enetnum = 0;
-	} else 		     /* If it is ENET1 */
-		lp->enetnum = 1;
+		enetnum = 0;
+		lp->slcr_div_reg = XSLCR_EMAC0_CLK_CTRL_OFFSET;
+	} else {	     /* If it is ENET1 */
+		enetnum = 1;
+		lp->slcr_div_reg = XSLCR_EMAC1_CLK_CTRL_OFFSET;
+	}
 
 	np = of_get_next_parent(lp->pdev->dev.of_node);
 	np = of_get_next_parent(np);
@@ -3181,23 +3185,63 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	lp->phy_node = of_parse_phandle(lp->pdev->dev.of_node,
 						"phy-handle", 0);
 
+	/* Look for MDCCLKDIV. */
+	prop = of_get_property(lp->pdev->dev.of_node,
+				"xlnx,mdc-clk-div", NULL);
+	if(prop) {
+		lp->mdc_clk_div = be32_to_cpup(prop);
+	} else {
+		lp->mdc_clk_div = MDC_DIV_224;
+	}
+
 	if (lp->board_type == BOARD_TYPE_ZYNQ) {
 		/* Set MDIO clock divider */
-		regval = (MDC_DIV_224 << XEMACPS_NWCFG_MDC_SHIFT_MASK);
+		regval = (lp->mdc_clk_div << XEMACPS_NWCFG_MDC_SHIFT_MASK);
 		xemacps_write(lp->baseaddr, XEMACPS_NWCFG_OFFSET, regval);
 	}
 
-	if (of_get_property(lp->pdev->dev.of_node, "no_mdio_bus", NULL)) {
+	if (of_get_property(lp->pdev->dev.of_node, "xlnx,no_mdio_bus", NULL)) {
 		create_mdio_bus = 0;
 	}
 
-	/* Look for EMIO configuration registers. */
-	timing_prop = of_get_property(lp->pdev->dev.of_node, "eth_emio_slcr", &len);
+	/* Look for EMIO FPGA clock configuration. */
+	prop = of_get_property(lp->pdev->dev.of_node, "xlnx,emio-fpga-clk", NULL);
 
-	if (timing_prop && (2 == (len / sizeof (u32)))) {
-		/* Set the Rx and Tx clock source to be the PL. */
-		xslcr_write(be32_to_cpu (timing_prop [0]), 0x00000011);
-		xslcr_write(be32_to_cpu (timing_prop [1]), 0x00000041);
+	if (prop) {
+		int fpga_clk = be32_to_cpup(prop);
+
+		if ((0 <= fpga_clk) && (3 >= fpga_clk)) {
+			int rx_clk_ctrl = XSLCR_EMAC1_RCLK_CTRL_OFFSET;
+			int tx_clk_ctrl = XSLCR_EMAC1_CLK_CTRL_OFFSET;
+
+			switch(fpga_clk)
+			{
+				case 0:
+					lp->slcr_div_reg = XSLCR_FPGA0_CLK_CTRL_OFFSET;
+					break;
+				case 1:
+					lp->slcr_div_reg = XSLCR_FPGA1_CLK_CTRL_OFFSET;
+					break;
+				case 2:
+					lp->slcr_div_reg = XSLCR_FPGA2_CLK_CTRL_OFFSET;
+					break;
+				default:
+				case 3:
+					lp->slcr_div_reg = XSLCR_FPGA3_CLK_CTRL_OFFSET;
+					break;
+			}
+
+			if (0 == enetnum) {
+				rx_clk_ctrl = XSLCR_EMAC0_RCLK_CTRL_OFFSET;
+				tx_clk_ctrl = XSLCR_EMAC0_CLK_CTRL_OFFSET;
+			}
+
+			/* Set the Rx and Tx clock source to be the PL. */
+			xslcr_write(rx_clk_ctrl, 0x00000011);
+			xslcr_write(tx_clk_ctrl, 0x00000041);
+		} else {
+			dev_err(&pdev->dev, "Invalid EMIO FPGA clock configuration %d\n", fpga_clk);
+		}
 	}
 #endif
 
