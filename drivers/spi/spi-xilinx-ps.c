@@ -728,6 +728,9 @@ static int __devinit xspips_probe(struct platform_device *dev)
 #endif
 	master->setup = xspips_setup;
 	master->transfer = xspips_transfer;
+#ifdef CONFIG_OF
+	master->dev.of_node = dev->dev.of_node;
+#endif
 
 #ifdef CONFIG_OF
 	prop = of_get_property(dev->dev.of_node, "speed-hz", NULL);
