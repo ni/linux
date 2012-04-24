@@ -38,6 +38,13 @@ config NI_BONITO
 	help
 	  This option enables support for the National Instruments cDAQ-9191 board.
 
+config NI_SHIBI
+	bool "NI cDAQ-9184"
+	select DEFAULT_UIMAGE
+	select PPC_MPC831x
+	help
+	  This option enables support for the National Instruments cDAQ-9184 board
+
 config MPC832x_MDS
 	bool "Freescale MPC832x MDS"
 	select DEFAULT_UIMAGE
