@@ -505,28 +505,79 @@ static int cdns_uart_clk_notifier_cb(struct notifier_block *nb,
 #endif
 
 /**
- * cdns_uart_start_tx -  Start transmitting bytes
+ * cdns_uart_enable_tx - Enable the uart transmitter
  * @port: Handle to the uart port structure
- */
-static void cdns_uart_start_tx(struct uart_port *port)
+ *
+ **/
+static inline void cdns_uart_enable_tx(struct uart_port *port)
 {
-	unsigned int status, numbytes = port->fifosize;
+	unsigned int status;
+	status = cdns_uart_readl(XUARTPS_CR_OFFSET);
 
-	if (uart_circ_empty(&port->state->xmit) || uart_tx_stopped(port))
-		return;
-
-	status = cdns_uart_readl(CDNS_UART_CR_OFFSET);
 	/* Set the TX enable bit and clear the TX disable bit to enable the
 	 * transmitter.
 	 */
-	cdns_uart_writel((status & ~CDNS_UART_CR_TX_DIS) | CDNS_UART_CR_TX_EN,
-		CDNS_UART_CR_OFFSET);
+	cdns_uart_writel((status & ~XUARTPS_CR_TX_DIS) | XUARTPS_CR_TX_EN,
+		XUARTPS_CR_OFFSET);
+}
 
-	while (numbytes-- && ((cdns_uart_readl(CDNS_UART_SR_OFFSET) &
-				CDNS_UART_SR_TXFULL)) != CDNS_UART_SR_TXFULL) {
-		/* Break if no more data available in the UART buffer */
-		if (uart_circ_empty(&port->state->xmit))
-			break;
+/**
+ * cdns_uart_disable_tx - Disable the uart transmitter
+ * @port: Handle to the uart port structure
+ *
+ **/
+static inline void cdns_uart_disable_tx(struct uart_port *port)
+{
+	unsigned int status;
+
+	status = cdns_uart_readl(XUARTPS_CR_OFFSET);
+
+	/* Disable the transmitter */
+	cdns_uart_writel(status | XUARTPS_CR_TX_DIS, XUARTPS_CR_OFFSET);
+}
+
+/**
+ * cdns_uart_enable_txempty - Enable the TX FIFO empty interrupt
+ * @port: Handle to the uart port structure
+ *
+ **/
+static inline void cdns_uart_enable_txempty(struct uart_port *port)
+{
+	cdns_uart_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_ISR_OFFSET);
+	/* Enable the TX Empty interrupt */
+	cdns_uart_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_IER_OFFSET);
+}
+
+/**
+ * cdns_uart_start_tx -  Start transmitting bytes
+ * @port: Handle to the uart port structure
+ *
+ **/
+static void cdns_uart_start_tx(struct uart_port *port)
+{
+	unsigned int numbytes = port->fifosize;
+
+	cdns_uart_enable_tx(port);
+
+	/* The x_char is set when the rx buffer is getting full and we need to
+	 * send a xoff character immediately.
+	 */
+	if (port->x_char) {
+		cdns_uart_writel(port->x_char, XUARTPS_FIFO_OFFSET);
+
+		port->icount.tx++;
+		port->x_char = 0;
+
+		cdns_uart_enable_txempty(port);
+		return;
+	}
+
+	if (uart_tx_stopped(port))
+		return;
+
+	while (!uart_circ_empty(&port->state->xmit)
+		&& numbytes-- && ((cdns_uart_readl(XUARTPS_SR_OFFSET)
+		& XUARTPS_SR_TXFULL)) != XUARTPS_SR_TXFULL) {
 
 		/* Get the data from the UART circular buffer and
 		 * write it to the cdns_uart's TX_FIFO register.
@@ -542,9 +593,8 @@ static void cdns_uart_start_tx(struct uart_port *port)
 		port->state->xmit.tail = (port->state->xmit.tail + 1) &
 					(UART_XMIT_SIZE - 1);
 	}
-	cdns_uart_writel(CDNS_UART_IXR_TXEMPTY, CDNS_UART_ISR_OFFSET);
-	/* Enable the TX Empty interrupt */
-	cdns_uart_writel(CDNS_UART_IXR_TXEMPTY, CDNS_UART_IER_OFFSET);
+
+	cdns_uart_enable_txempty(port);
 
 	if (uart_circ_chars_pending(&port->state->xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(port);
@@ -820,7 +870,7 @@ static void cdns_uart_shutdown(struct uart_port *port)
 	cdns_uart_writel(status, CDNS_UART_IDR_OFFSET);
 
 	/* Disable the RX, we intentionally leave TX enabled since it might be
-	 * used by the xuartps_console_write path, and it doesn't hurt anything
+	 * used by the cdns_uart_console_write path, and it doesn't hurt anything
 	 * to leave it enabled */
 	cdns_uart_writel(CDNS_UART_CR_RX_DIS, CDNS_UART_CR_OFFSET);
 
