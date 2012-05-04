@@ -179,6 +179,7 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 	unsigned long flags;
 	unsigned int isrstatus, numbytes;
 	unsigned int data;
+	unsigned int l_HandledStatus = 0;
 	char status = TTY_NORMAL;
 
 	spin_lock_irqsave(&port->lock, flags);
@@ -213,6 +214,8 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 
 	if ((isrstatus & CDNS_UART_IXR_TOUT) ||
 		(isrstatus & CDNS_UART_IXR_RXTRIG)) {
+		l_HandledStatus |= isrstatus & (CDNS_UART_IXR_TOUT |
+						CDNS_UART_IXR_RXTRIG);
 		/* Receive Timeout Interrupt */
 		while ((cdns_uart_readl(CDNS_UART_SR_OFFSET) &
 			CDNS_UART_SR_RXEMPTY) != CDNS_UART_SR_RXEMPTY) {
@@ -248,11 +251,22 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 			if (isrstatus & CDNS_UART_IXR_PARITY) {
 				port->icount.parity++;
 				status = TTY_PARITY;
+<<<<<<< HEAD
 			} else if (isrstatus & CDNS_UART_IXR_FRAMING) {
 				port->icount.frame++;
 				status = TTY_FRAME;
 			} else if (isrstatus & CDNS_UART_IXR_OVERRUN) {
 				port->icount.overrun++;
+=======
+				l_HandledStatus |= XUARTPS_IXR_PARITY;
+			} else if (isrstatus & XUARTPS_IXR_FRAMING) {
+				port->icount.frame++;
+				status = TTY_FRAME;
+				l_HandledStatus |= XUARTPS_IXR_FRAMING;
+			} else if (isrstatus & XUARTPS_IXR_OVERRUN) {
+				port->icount.overrun++;
+				l_HandledStatus |= XUARTPS_IXR_OVERRUN;
+>>>>>>> xilinx_uartps: Only clear the bits in the ISR that were handled.
 			}
 
 			uart_insert_char(port, isrstatus, CDNS_UART_IXR_OVERRUN,
@@ -264,7 +278,12 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 	}
 
 	/* Dispatch an appropriate handler */
+<<<<<<< HEAD
 	if ((isrstatus & CDNS_UART_IXR_TXEMPTY) == CDNS_UART_IXR_TXEMPTY) {
+=======
+	if ((isrstatus & XUARTPS_IXR_TXEMPTY) == XUARTPS_IXR_TXEMPTY) {
+		l_HandledStatus |= XUARTPS_IXR_TXEMPTY;
+>>>>>>> xilinx_uartps: Only clear the bits in the ISR that were handled.
 		if (uart_circ_empty(&port->state->xmit)) {
 			cdns_uart_writel(CDNS_UART_IXR_TXEMPTY,
 						CDNS_UART_IDR_OFFSET);
@@ -298,7 +317,11 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 		}
 	}
 
+<<<<<<< HEAD
 	cdns_uart_writel(isrstatus, CDNS_UART_ISR_OFFSET);
+=======
+	xuartps_writel(l_HandledStatus, XUARTPS_ISR_OFFSET);
+>>>>>>> xilinx_uartps: Only clear the bits in the ISR that were handled.
 
 	/* be sure to release the lock and tty before leaving */
 	spin_unlock_irqrestore(&port->lock, flags);
