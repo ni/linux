@@ -319,6 +319,52 @@ static unsigned int xuartps_set_baud_rate(struct uart_port *port,
 	return calc_baud;
 }
 
+/*--------------Helper functions for Uart Operations--------------*/
+
+/**
+ * xuartps_enable_tx - Enable the uart transmitter
+ * @port: Handle to the uart port structure
+ *
+ **/
+static inline void xuartps_enable_tx(struct uart_port *port)
+{
+	unsigned int status;
+	status = xuartps_readl(XUARTPS_CR_OFFSET);
+
+	/* Set the TX enable bit and clear the TX disable bit to enable the
+	 * transmitter.
+	 */
+	xuartps_writel((status & ~XUARTPS_CR_TX_DIS) | XUARTPS_CR_TX_EN,
+		XUARTPS_CR_OFFSET);
+}
+
+/**
+ * xuartps_disable_tx - Disable the uart transmitter
+ * @port: Handle to the uart port structure
+ *
+ **/
+static inline void xuartps_disable_tx(struct uart_port *port)
+{
+	unsigned int status;
+
+	status = xuartps_readl(XUARTPS_CR_OFFSET);
+
+	/* Disable the transmitter */
+	xuartps_writel(status | XUARTPS_CR_TX_DIS, XUARTPS_CR_OFFSET);
+}
+
+/**
+ * xuartps_enable_txempty - Enable the TX FIFO empty interrupt
+ * @port: Handle to the uart port structure
+ *
+ **/
+static inline void xuartps_enable_txempty(struct uart_port *port)
+{
+	xuartps_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_ISR_OFFSET);
+	/* Enable the TX Empty interrupt */
+	xuartps_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_IER_OFFSET);
+}
+
 /*----------------------Uart Operations---------------------------*/
 
 /**
@@ -328,24 +374,31 @@ static unsigned int xuartps_set_baud_rate(struct uart_port *port,
  **/
 static void xuartps_start_tx(struct uart_port *port)
 {
-	unsigned int status, numbytes = port->fifosize;
+	unsigned int numbytes = port->fifosize;
 
-	if (uart_circ_empty(&port->state->xmit) || uart_tx_stopped(port))
-		return;
+	xuartps_enable_tx(port);
 
-	status = xuartps_readl(XUARTPS_CR_OFFSET);
-	/* Set the TX enable bit and clear the TX disable bit to enable the
-	 * transmitter.
+	/* The x_char is set when the rx buffer is getting full and we need to
+	 * send a xoff character immediately.
 	 */
-	xuartps_writel((status & ~XUARTPS_CR_TX_DIS) | XUARTPS_CR_TX_EN,
-		XUARTPS_CR_OFFSET);
+	if (port->x_char) {
+		xuartps_writel(port->x_char, XUARTPS_FIFO_OFFSET);
 
-	while (numbytes-- && ((xuartps_readl(XUARTPS_SR_OFFSET)
+		port->icount.tx++;
+		port->x_char = 0;
+
+		xuartps_enable_txempty(port);
+		return;
+	}
+
+	if (uart_tx_stopped(port))
+	{
+		return;
+	}
+
+	while (!uart_circ_empty(&port->state->xmit)
+		&& numbytes-- && ((xuartps_readl(XUARTPS_SR_OFFSET)
 		& XUARTPS_SR_TXFULL)) != XUARTPS_SR_TXFULL) {
-
-		/* Break if no more data available in the UART buffer */
-		if (uart_circ_empty(&port->state->xmit))
-			break;
 
 		/* Get the data from the UART circular buffer and
 		 * write it to the xuartps's TX_FIFO register.
@@ -361,9 +414,8 @@ static void xuartps_start_tx(struct uart_port *port)
 		port->state->xmit.tail = (port->state->xmit.tail + 1) &
 					(UART_XMIT_SIZE - 1);
 	}
-	xuartps_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_ISR_OFFSET);
-	/* Enable the TX Empty interrupt */
-	xuartps_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_IER_OFFSET);
+
+	xuartps_enable_txempty(port);
 
 	if (uart_circ_chars_pending(&port->state->xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(port);
