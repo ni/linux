@@ -162,6 +162,7 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 	unsigned long flags;
 	unsigned int isrstatus, numbytes;
 	unsigned int data;
+	unsigned int l_HandledStatus = 0;
 	char status = TTY_NORMAL;
 
 	/* Get the tty which could be NULL so don't assume it's valid */
@@ -183,6 +184,7 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 
 	if ((isrstatus & XUARTPS_IXR_TOUT) ||
 		(isrstatus & XUARTPS_IXR_RXTRIG)) {
+		l_HandledStatus |= isrstatus & (XUARTPS_IXR_TOUT | XUARTPS_IXR_RXTRIG);
 		/* Receive Timeout Interrupt */
 		while ((xuartps_readl(XUARTPS_SR_OFFSET) &
 			XUARTPS_SR_RXEMPTY) != XUARTPS_SR_RXEMPTY) {
@@ -192,11 +194,16 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 			if (isrstatus & XUARTPS_IXR_PARITY) {
 				port->icount.parity++;
 				status = TTY_PARITY;
+				l_HandledStatus |= XUARTPS_IXR_PARITY;
 			} else if (isrstatus & XUARTPS_IXR_FRAMING) {
 				port->icount.frame++;
 				status = TTY_FRAME;
+				l_HandledStatus |= XUARTPS_IXR_FRAMING;
 			} else if (isrstatus & XUARTPS_IXR_OVERRUN)
+			{
 				port->icount.overrun++;
+				l_HandledStatus |= XUARTPS_IXR_OVERRUN;
+			}
 
 			if (tty)
 				uart_insert_char(port, isrstatus,
@@ -211,6 +218,7 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 
 	/* Dispatch an appropriate handler */
 	if ((isrstatus & XUARTPS_IXR_TXEMPTY) == XUARTPS_IXR_TXEMPTY) {
+		l_HandledStatus |= XUARTPS_IXR_TXEMPTY;
 		if (uart_circ_empty(&port->state->xmit)) {
 			xuartps_writel(XUARTPS_IXR_TXEMPTY,
 						XUARTPS_IDR_OFFSET);
@@ -244,7 +252,7 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 		}
 	}
 
-	xuartps_writel(isrstatus, XUARTPS_ISR_OFFSET);
+	xuartps_writel(l_HandledStatus, XUARTPS_ISR_OFFSET);
 
 	/* be sure to release the lock and tty before leaving */
 	spin_unlock_irqrestore(&port->lock, flags);
@@ -594,12 +602,12 @@ static int xuartps_startup(struct uart_port *port)
 		 XUARTPS_MR_OFFSET);
 
 	/* Set the RX FIFO Trigger level to use most of the FIFO, but it
-	 * can be tuned with a module parameter 
+	 * can be tuned with a module parameter
 	 */
 	xuartps_writel(rx_trigger_level, XUARTPS_RXWM_OFFSET);
 
  	/* Receive Timeout register is enabled but it
-	 * can be tuned with a module parameter 
+	 * can be tuned with a module parameter
 	 */
 	xuartps_writel(rx_timeout, XUARTPS_RXTOUT_OFFSET);
 
