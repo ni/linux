@@ -251,22 +251,14 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 			if (isrstatus & CDNS_UART_IXR_PARITY) {
 				port->icount.parity++;
 				status = TTY_PARITY;
-<<<<<<< HEAD
+				l_HandledStatus |= CDNS_UART_IXR_PARITY;
 			} else if (isrstatus & CDNS_UART_IXR_FRAMING) {
 				port->icount.frame++;
 				status = TTY_FRAME;
+				l_HandledStatus |= CDNS_UART_IXR_FRAMING;
 			} else if (isrstatus & CDNS_UART_IXR_OVERRUN) {
 				port->icount.overrun++;
-=======
-				l_HandledStatus |= XUARTPS_IXR_PARITY;
-			} else if (isrstatus & XUARTPS_IXR_FRAMING) {
-				port->icount.frame++;
-				status = TTY_FRAME;
-				l_HandledStatus |= XUARTPS_IXR_FRAMING;
-			} else if (isrstatus & XUARTPS_IXR_OVERRUN) {
-				port->icount.overrun++;
-				l_HandledStatus |= XUARTPS_IXR_OVERRUN;
->>>>>>> xilinx_uartps: Only clear the bits in the ISR that were handled.
+				l_HandledStatus |= CDNS_UART_IXR_OVERRUN;
 			}
 
 			uart_insert_char(port, isrstatus, CDNS_UART_IXR_OVERRUN,
@@ -278,12 +270,8 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 	}
 
 	/* Dispatch an appropriate handler */
-<<<<<<< HEAD
 	if ((isrstatus & CDNS_UART_IXR_TXEMPTY) == CDNS_UART_IXR_TXEMPTY) {
-=======
-	if ((isrstatus & XUARTPS_IXR_TXEMPTY) == XUARTPS_IXR_TXEMPTY) {
-		l_HandledStatus |= XUARTPS_IXR_TXEMPTY;
->>>>>>> xilinx_uartps: Only clear the bits in the ISR that were handled.
+		l_HandledStatus |= CDNS_UART_IXR_TXEMPTY;
 		if (uart_circ_empty(&port->state->xmit)) {
 			cdns_uart_writel(CDNS_UART_IXR_TXEMPTY,
 						CDNS_UART_IDR_OFFSET);
@@ -317,11 +305,7 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 		}
 	}
 
-<<<<<<< HEAD
-	cdns_uart_writel(isrstatus, CDNS_UART_ISR_OFFSET);
-=======
-	xuartps_writel(l_HandledStatus, XUARTPS_ISR_OFFSET);
->>>>>>> xilinx_uartps: Only clear the bits in the ISR that were handled.
+	cdns_uart_writel(l_HandledStatus, CDNS_UART_ISR_OFFSET);
 
 	/* be sure to release the lock and tty before leaving */
 	spin_unlock_irqrestore(&port->lock, flags);
@@ -695,16 +679,15 @@ static void cdns_uart_set_termios(struct uart_port *port,
 	cdns_uart_writel(rx_timeout, CDNS_UART_RXTOUT_OFFSET);
 
 	port->read_status_mask = CDNS_UART_IXR_TXEMPTY | CDNS_UART_IXR_RXTRIG |
-			CDNS_UART_IXR_OVERRUN | CDNS_UART_IXR_TOUT;
+			CDNS_UART_IXR_OVERRUN | CDNS_UART_IXR_TOUT | CDNS_UART_IXR_FRAMING;
 	port->ignore_status_mask = 0;
 
 	if (termios->c_iflag & INPCK)
-		port->read_status_mask |= CDNS_UART_IXR_PARITY |
-		CDNS_UART_IXR_FRAMING;
+		port->read_status_mask |= CDNS_UART_IXR_PARITY;
 
 	if (termios->c_iflag & IGNPAR)
 		port->ignore_status_mask |= CDNS_UART_IXR_PARITY |
-			CDNS_UART_IXR_FRAMING | CDNS_UART_IXR_OVERRUN;
+			CDNS_UART_IXR_FRAMING;
 
 	/* ignore all characters if CREAD is not set */
 	if ((termios->c_cflag & CREAD) == 0)
