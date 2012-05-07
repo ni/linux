@@ -498,16 +498,14 @@ static void xuartps_set_termios(struct uart_port *port,
 	xuartps_writel(rx_timeout, XUARTPS_RXTOUT_OFFSET);
 
 	port->read_status_mask = XUARTPS_IXR_TXEMPTY | XUARTPS_IXR_RXTRIG |
-			XUARTPS_IXR_OVERRUN | XUARTPS_IXR_TOUT;
+			XUARTPS_IXR_OVERRUN | XUARTPS_IXR_TOUT | XUARTPS_IXR_FRAMING;
 	port->ignore_status_mask = 0;
 
 	if (termios->c_iflag & INPCK)
-		port->read_status_mask |= XUARTPS_IXR_PARITY |
-		XUARTPS_IXR_FRAMING;
+		port->read_status_mask |= XUARTPS_IXR_PARITY;
 
 	if (termios->c_iflag & IGNPAR)
-		port->ignore_status_mask |= XUARTPS_IXR_PARITY |
-			XUARTPS_IXR_FRAMING | XUARTPS_IXR_OVERRUN;
+		port->ignore_status_mask |= XUARTPS_IXR_PARITY | XUARTPS_IXR_FRAMING;
 
 	/* ignore all characters if CREAD is not set */
 	if ((termios->c_cflag & CREAD) == 0)
