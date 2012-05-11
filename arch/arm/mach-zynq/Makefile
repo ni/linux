@@ -13,4 +13,3 @@ obj-$(CONFIG_SERIO_AMBAKMI)	+= ps2.o
 
 # Testing
 obj-$(CONFIG_XILINX_TEST)	+= test/pl330_test.o
-

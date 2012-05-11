@@ -10,7 +10,7 @@
  */
 #include <stdarg.h>
 
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/sched.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -30,6 +30,7 @@
 #include <linux/uaccess.h>
 #include <linux/random.h>
 #include <linux/hw_breakpoint.h>
+#include <linux/cpuidle.h>
 
 #include <asm/cacheflush.h>
 #include <asm/leds.h>
@@ -191,12 +192,16 @@ void cpu_idle(void)
 #endif
 
 			local_irq_disable();
+#ifdef CONFIG_PL310_ERRATA_769419
+			wmb();
+#endif
 			if (hlt_counter) {
 				local_irq_enable();
 				cpu_relax();
 			} else {
 				stop_critical_timings();
-				pm_idle();
+				if (cpuidle_idle_call())
+					pm_idle();
 				start_critical_timings();
 				/*
 				 * This will eventually be removed - pm_idle
@@ -317,7 +322,7 @@ void show_regs(struct pt_regs * regs)
 	printk("\n");
 	printk("Pid: %d, comm: %20s\n", task_pid_nr(current), current->comm);
 	__show_regs(regs);
-	__backtrace();
+	dump_stack();
 }
 
 ATOMIC_NOTIFIER_HEAD(thread_notify_head);

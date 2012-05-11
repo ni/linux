@@ -37,7 +37,7 @@
 #include <linux/mempolicy.h>
 #include <linux/mm.h>
 #include <linux/memory.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/mount.h>
 #include <linux/namei.h>
 #include <linux/pagemap.h>
@@ -55,7 +55,7 @@
 #include <linux/sort.h>
 
 #include <asm/uaccess.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/cgroup.h>
@@ -122,6 +122,19 @@ static inline struct cpuset *task_cs(struct task_struct *task)
 	return container_of(task_subsys_state(task, cpuset_subsys_id),
 			    struct cpuset, css);
 }
+
+#ifdef CONFIG_NUMA
+static inline bool task_has_mempolicy(struct task_struct *task)
+{
+	return task->mempolicy;
+}
+#else
+static inline bool task_has_mempolicy(struct task_struct *task)
+{
+	return false;
+}
+#endif
+
 
 /* bits in struct cpuset flags field */
 typedef enum {
@@ -949,6 +962,8 @@ static void cpuset_migrate_mm(struct mm_struct *mm, const nodemask_t *from,
 static void cpuset_change_task_nodemask(struct task_struct *tsk,
 					nodemask_t *newmems)
 {
+	bool need_loop;
+
 repeat:
 	/*
 	 * Allow tasks that have access to memory reserves because they have
@@ -960,9 +975,16 @@ repeat:
 		return;
 
 	task_lock(tsk);
+	/*
+	 * Determine if a loop is necessary if another thread is doing
+	 * get_mems_allowed().  If at least one node remains unchanged and
+	 * tsk does not have a mempolicy, then an empty nodemask will not be
+	 * possible when mems_allowed is larger than a word.
+	 */
+	need_loop = task_has_mempolicy(tsk) ||
+			!nodes_intersects(*newmems, tsk->mems_allowed);
 	nodes_or(tsk->mems_allowed, tsk->mems_allowed, *newmems);
 	mpol_rebind_task(tsk, newmems, MPOL_REBIND_STEP1);
-
 
 	/*
 	 * ensure checking ->mems_allowed_change_disable after setting all new
@@ -982,7 +1004,7 @@ repeat:
 	 * Allocation of memory is very fast, we needn't sleep when waiting
 	 * for the read-side.
 	 */
-	while (ACCESS_ONCE(tsk->mems_allowed_change_disable)) {
+	while (need_loop && ACCESS_ONCE(tsk->mems_allowed_change_disable)) {
 		task_unlock(tsk);
 		if (!task_curr(tsk))
 			yield();
@@ -2460,11 +2482,19 @@ static int cpuset_spread_node(int *rotor)
 
 int cpuset_mem_spread_node(void)
 {
+	if (current->cpuset_mem_spread_rotor == NUMA_NO_NODE)
+		current->cpuset_mem_spread_rotor =
+			node_random(&current->mems_allowed);
+
 	return cpuset_spread_node(&current->cpuset_mem_spread_rotor);
 }
 
 int cpuset_slab_spread_node(void)
 {
+	if (current->cpuset_slab_spread_rotor == NUMA_NO_NODE)
+		current->cpuset_slab_spread_rotor =
+			node_random(&current->mems_allowed);
+
 	return cpuset_spread_node(&current->cpuset_slab_spread_rotor);
 }
 

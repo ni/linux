@@ -25,6 +25,7 @@
  */
 
 #include <linux/platform_device.h>
+#include <linux/module.h>
 #include <linux/io.h>
 
 #include <mach/zynq_soc.h>

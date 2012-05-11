@@ -78,12 +78,23 @@ void __init xilinx_init_machine(void)
 	platform_device_init();
 }
 
+static int xgpiops_irq_domain_init(struct device_node *dev, struct device_node *ipar)
+{
+	irq_domain_add_simple(dev, XGPIOPS_IRQBASE);
+}
+
+static const struct of_device_id xilinx_dt_irq_match[] __initconst = {
+	{ .compatible = "arm,cortex-a9-gic", .data = gic_of_init },
+	{ .compatible = "xlnx,ps7-gpio-1.00.a", .data = xgpiops_irq_domain_init },
+	{ }
+};
+
 /**
  * xilinx_irq_init() - Interrupt controller initialization for the GIC.
  */
 void __init xilinx_irq_init(void)
 {
-	gic_init(0, 29, SCU_GIC_DIST_BASE, SCU_GIC_CPU_BASE);
+	of_irq_init(xilinx_dt_irq_match);
 
 	/* when running in AMP mode on CPU0, allocate unused interrupts to the 
 	 * other CPU so another OS can run on it, or if just running Linux on 

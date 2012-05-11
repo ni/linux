@@ -641,7 +641,7 @@ void nfs4_put_open_state(struct nfs4_state *state)
 /*
  * Close the current file.
  */
-static void __nfs4_close(struct path *path, struct nfs4_state *state,
+static void __nfs4_close(struct nfs4_state *state,
 		fmode_t fmode, gfp_t gfp_mask, int wait)
 {
 	struct nfs4_state_owner *owner = state->owner;
@@ -685,18 +685,18 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state,
 	} else {
 		bool roc = pnfs_roc(state->inode);
 
-		nfs4_do_close(path, state, gfp_mask, wait, roc);
+		nfs4_do_close(state, gfp_mask, wait, roc);
 	}
 }
 
-void nfs4_close_state(struct path *path, struct nfs4_state *state, fmode_t fmode)
+void nfs4_close_state(struct nfs4_state *state, fmode_t fmode)
 {
-	__nfs4_close(path, state, fmode, GFP_NOFS, 0);
+	__nfs4_close(state, fmode, GFP_NOFS, 0);
 }
 
-void nfs4_close_sync(struct path *path, struct nfs4_state *state, fmode_t fmode)
+void nfs4_close_sync(struct nfs4_state *state, fmode_t fmode)
 {
-	__nfs4_close(path, state, fmode, GFP_KERNEL, 1);
+	__nfs4_close(state, fmode, GFP_KERNEL, 1);
 }
 
 /*
@@ -1038,6 +1038,12 @@ void nfs4_schedule_lease_recovery(struct nfs_client *clp)
 	nfs4_schedule_state_manager(clp);
 }
 
+void nfs4_schedule_path_down_recovery(struct nfs_client *clp)
+{
+	nfs_handle_cb_pathdown(clp);
+	nfs4_schedule_state_manager(clp);
+}
+
 static int nfs4_state_mark_reclaim_reboot(struct nfs_client *clp, struct nfs4_state *state)
 {
 
@@ -1150,11 +1156,13 @@ restart:
 		if (status >= 0) {
 			status = nfs4_reclaim_locks(state, ops);
 			if (status >= 0) {
+				spin_lock(&state->state_lock);
 				list_for_each_entry(lock, &state->lock_states, ls_locks) {
 					if (!(lock->ls_flags & NFS_LOCK_INITIALIZED))
 						printk("%s: Lock reclaim failed!\n",
 							__func__);
 				}
+				spin_unlock(&state->state_lock);
 				nfs4_put_open_state(state);
 				goto restart;
 			}
@@ -1218,10 +1226,12 @@ static void nfs4_clear_open_state(struct nfs4_state *state)
 	clear_bit(NFS_O_RDONLY_STATE, &state->flags);
 	clear_bit(NFS_O_WRONLY_STATE, &state->flags);
 	clear_bit(NFS_O_RDWR_STATE, &state->flags);
+	spin_lock(&state->state_lock);
 	list_for_each_entry(lock, &state->lock_states, ls_locks) {
 		lock->ls_seqid.flags = 0;
 		lock->ls_flags &= ~NFS_LOCK_INITIALIZED;
 	}
+	spin_unlock(&state->state_lock);
 }
 
 static void nfs4_reset_seqids(struct nfs_server *server,
@@ -1344,12 +1354,14 @@ static void nfs4_warn_keyexpired(const char *s)
 static int nfs4_recovery_handle_error(struct nfs_client *clp, int error)
 {
 	switch (error) {
+		case 0:
+			break;
 		case -NFS4ERR_CB_PATH_DOWN:
 			nfs_handle_cb_pathdown(clp);
-			return 0;
+			break;
 		case -NFS4ERR_NO_GRACE:
 			nfs4_state_end_reclaim_reboot(clp);
-			return 0;
+			break;
 		case -NFS4ERR_STALE_CLIENTID:
 		case -NFS4ERR_LEASE_MOVED:
 			set_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
@@ -1369,13 +1381,15 @@ static int nfs4_recovery_handle_error(struct nfs_client *clp, int error)
 		case -NFS4ERR_SEQ_MISORDERED:
 			set_bit(NFS4CLNT_SESSION_RESET, &clp->cl_state);
 			/* Zero session reset errors */
-			return 0;
+			break;
 		case -EKEYEXPIRED:
 			/* Nothing we can do */
 			nfs4_warn_keyexpired(clp->cl_hostname);
-			return 0;
+			break;
+		default:
+			return error;
 	}
-	return error;
+	return 0;
 }
 
 static int nfs4_do_reclaim(struct nfs_client *clp, const struct nfs4_state_recovery_ops *ops)
@@ -1422,7 +1436,7 @@ static int nfs4_check_lease(struct nfs_client *clp)
 	struct rpc_cred *cred;
 	const struct nfs4_state_maintenance_ops *ops =
 		clp->cl_mvops->state_renewal_ops;
-	int status = -NFS4ERR_EXPIRED;
+	int status;
 
 	/* Is the client already known to have an expired lease? */
 	if (test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state))
@@ -1432,6 +1446,7 @@ static int nfs4_check_lease(struct nfs_client *clp)
 	spin_unlock(&clp->cl_lock);
 	if (cred == NULL) {
 		cred = nfs4_get_setclientid_cred(clp);
+		status = -ENOKEY;
 		if (cred == NULL)
 			goto out;
 	}
@@ -1519,16 +1534,16 @@ void nfs41_handle_sequence_flag_errors(struct nfs_client *clp, u32 flags)
 {
 	if (!flags)
 		return;
-	else if (flags & SEQ4_STATUS_RESTART_RECLAIM_NEEDED)
+	if (flags & SEQ4_STATUS_RESTART_RECLAIM_NEEDED)
 		nfs41_handle_server_reboot(clp);
-	else if (flags & (SEQ4_STATUS_EXPIRED_ALL_STATE_REVOKED |
+	if (flags & (SEQ4_STATUS_EXPIRED_ALL_STATE_REVOKED |
 			    SEQ4_STATUS_EXPIRED_SOME_STATE_REVOKED |
 			    SEQ4_STATUS_ADMIN_STATE_REVOKED |
 			    SEQ4_STATUS_LEASE_MOVED))
 		nfs41_handle_state_revoked(clp);
-	else if (flags & SEQ4_STATUS_RECALLABLE_STATE_REVOKED)
+	if (flags & SEQ4_STATUS_RECALLABLE_STATE_REVOKED)
 		nfs41_handle_recallable_state_revoked(clp);
-	else if (flags & (SEQ4_STATUS_CB_PATH_DOWN |
+	if (flags & (SEQ4_STATUS_CB_PATH_DOWN |
 			    SEQ4_STATUS_BACKCHANNEL_FAULT |
 			    SEQ4_STATUS_CB_PATH_DOWN_SESSION))
 		nfs41_handle_cb_path_down(clp);
@@ -1643,16 +1658,23 @@ static void nfs4_state_manager(struct nfs_client *clp)
 				goto out_error;
 			}
 			clear_bit(NFS4CLNT_CHECK_LEASE, &clp->cl_state);
-			set_bit(NFS4CLNT_RECLAIM_REBOOT, &clp->cl_state);
+
+			if (test_and_clear_bit(NFS4CLNT_SERVER_SCOPE_MISMATCH,
+					       &clp->cl_state))
+				nfs4_state_start_reclaim_nograce(clp);
+			else
+				set_bit(NFS4CLNT_RECLAIM_REBOOT,
+					&clp->cl_state);
+
 			pnfs_destroy_all_layouts(clp);
 		}
 
 		if (test_and_clear_bit(NFS4CLNT_CHECK_LEASE, &clp->cl_state)) {
 			status = nfs4_check_lease(clp);
+			if (status < 0)
+				goto out_error;
 			if (test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state))
 				continue;
-			if (status < 0 && status != -NFS4ERR_CB_PATH_DOWN)
-				goto out_error;
 		}
 
 		/* Initialize or reset the session */

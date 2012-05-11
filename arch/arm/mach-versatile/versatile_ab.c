@@ -40,7 +40,7 @@ static const char *versatile_ab_match[] __initdata = {
 
 MACHINE_START(VERSATILE_AB, "ARM-Versatile AB")
 	/* Maintainer: ARM Ltd/Deep Blue Solutions Ltd */
-	.boot_params	= 0x00000100,
+	.atag_offset	= 0x100,
 	.map_io		= versatile_map_io,
 	.init_early	= versatile_init_early,
 	.init_irq	= versatile_init_irq,

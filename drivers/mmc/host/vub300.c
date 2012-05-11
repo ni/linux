@@ -259,7 +259,7 @@ static int firmware_rom_wait_states = 0x04;
 static int firmware_rom_wait_states = 0x1C;
 #endif
 
-module_param(firmware_rom_wait_states, bool, 0644);
+module_param(firmware_rom_wait_states, int, 0644);
 MODULE_PARM_DESC(firmware_rom_wait_states,
 		 "ROM wait states byte=RRRIIEEE (Reserved Internal External)");
 
@@ -1625,8 +1625,8 @@ static void __vub300_command_response(struct vub300_mmc_host *vub300,
 		cmd->error = respretval;
 	} else if (cmd->error) {
 		/*
-		 * the error occured sending the command
-		 * or recieving the response
+		 * the error occurred sending the command
+		 * or receiving the response
 		 */
 	} else if (vub300->command_out_urb->status) {
 		vub300->usb_transport_fail = vub300->command_out_urb->status;

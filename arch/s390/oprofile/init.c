@@ -13,8 +13,6 @@
 #include <linux/oprofile.h>
 #include <linux/init.h>
 #include <linux/errno.h>
-#include <linux/oprofile.h>
-#include <linux/errno.h>
 #include <linux/fs.h>
 
 #include "../../../drivers/oprofile/oprof.h"
@@ -90,7 +88,7 @@ static ssize_t hwsampler_write(struct file *file, char const __user *buf,
 		return -EINVAL;
 
 	retval = oprofilefs_ulong_from_user(&val, buf, count);
-	if (retval)
+	if (retval <= 0)
 		return retval;
 
 	if (oprofile_started)

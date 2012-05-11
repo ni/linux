@@ -14,6 +14,7 @@
 
 struct xnand_platform_data {
         unsigned int            options;
+	unsigned int		bbt_options;
         struct mtd_partition    *parts;
 	int			nr_parts;
 };

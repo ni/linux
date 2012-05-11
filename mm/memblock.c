@@ -58,7 +58,8 @@ static unsigned long __init_memblock memblock_addrs_overlap(phys_addr_t base1, p
 	return ((base1 < (base2 + size2)) && (base2 < (base1 + size1)));
 }
 
-long __init_memblock memblock_overlaps_region(struct memblock_type *type, phys_addr_t base, phys_addr_t size)
+static long __init_memblock memblock_overlaps_region(struct memblock_type *type,
+					phys_addr_t base, phys_addr_t size)
 {
 	unsigned long i;
 
@@ -267,7 +268,7 @@ static int __init_memblock memblock_double_array(struct memblock_type *type)
 	return 0;
 }
 
-extern int __init_memblock __weak memblock_memory_can_coalesce(phys_addr_t addr1, phys_addr_t size1,
+int __init_memblock __weak memblock_memory_can_coalesce(phys_addr_t addr1, phys_addr_t size1,
 					  phys_addr_t addr2, phys_addr_t size2)
 {
 	return 1;
@@ -626,6 +627,12 @@ phys_addr_t __init memblock_phys_mem_size(void)
 	return memblock.memory_size;
 }
 
+/* lowest address */
+phys_addr_t __init_memblock memblock_start_of_DRAM(void)
+{
+	return memblock.memory.regions[0].base;
+}
+
 phys_addr_t __init_memblock memblock_end_of_DRAM(void)
 {
 	int idx = memblock.memory.cnt - 1;
@@ -758,9 +765,9 @@ void __init memblock_analyze(void)
 
 	/* Check marker in the unused last array entry */
 	WARN_ON(memblock_memory_init_regions[INIT_MEMBLOCK_REGIONS].base
-		!= (phys_addr_t)RED_INACTIVE);
+		!= MEMBLOCK_INACTIVE);
 	WARN_ON(memblock_reserved_init_regions[INIT_MEMBLOCK_REGIONS].base
-		!= (phys_addr_t)RED_INACTIVE);
+		!= MEMBLOCK_INACTIVE);
 
 	memblock.memory_size = 0;
 
@@ -786,8 +793,8 @@ void __init memblock_init(void)
 	memblock.reserved.max	= INIT_MEMBLOCK_REGIONS;
 
 	/* Write a marker in the unused last array entry */
-	memblock.memory.regions[INIT_MEMBLOCK_REGIONS].base = (phys_addr_t)RED_INACTIVE;
-	memblock.reserved.regions[INIT_MEMBLOCK_REGIONS].base = (phys_addr_t)RED_INACTIVE;
+	memblock.memory.regions[INIT_MEMBLOCK_REGIONS].base = MEMBLOCK_INACTIVE;
+	memblock.reserved.regions[INIT_MEMBLOCK_REGIONS].base = MEMBLOCK_INACTIVE;
 
 	/* Create a dummy zero size MEMBLOCK which will get coalesced away later.
 	 * This simplifies the memblock_add() code below...

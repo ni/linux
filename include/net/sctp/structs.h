@@ -60,7 +60,7 @@
 #include <linux/in6.h>		/* We get struct in6_addr     */
 #include <linux/ipv6.h>
 #include <asm/param.h>		/* We get MAXHOSTNAMELEN.     */
-#include <asm/atomic.h>		/* This gets us atomic counters.  */
+#include <linux/atomic.h>		/* This gets us atomic counters.  */
 #include <linux/skbuff.h>	/* We need sk_buff_head. */
 #include <linux/workqueue.h>	/* We need tq_struct.	 */
 #include <linux/sctp.h>		/* We need sctp* header structs.  */
@@ -205,6 +205,11 @@ extern struct sctp_globals {
 	 * It is a list of sctp_sockaddr_entry.
 	 */
 	struct list_head local_addr_list;
+	int default_auto_asconf;
+	struct list_head addr_waitq;
+	struct timer_list addr_wq_timer;
+	struct list_head auto_asconf_splist;
+	spinlock_t addr_wq_lock;
 
 	/* Lock that protects the local_addr_list writers */
 	spinlock_t addr_list_lock;
@@ -236,6 +241,9 @@ extern struct sctp_globals {
 	 * bits is an indicator of when to send and window update SACK.
 	 */
 	int rwnd_update_shift;
+
+	/* Threshold for autoclose timeout, in seconds. */
+	unsigned long max_autoclose;
 } sctp_globals;
 
 #define sctp_rto_initial		(sctp_globals.rto_initial)
@@ -264,6 +272,11 @@ extern struct sctp_globals {
 #define sctp_port_hashtable		(sctp_globals.port_hashtable)
 #define sctp_local_addr_list		(sctp_globals.local_addr_list)
 #define sctp_local_addr_lock		(sctp_globals.addr_list_lock)
+#define sctp_auto_asconf_splist		(sctp_globals.auto_asconf_splist)
+#define sctp_addr_waitq			(sctp_globals.addr_waitq)
+#define sctp_addr_wq_timer		(sctp_globals.addr_wq_timer)
+#define sctp_addr_wq_lock		(sctp_globals.addr_wq_lock)
+#define sctp_default_auto_asconf	(sctp_globals.default_auto_asconf)
 #define sctp_scope_policy		(sctp_globals.ipv4_scope_policy)
 #define sctp_addip_enable		(sctp_globals.addip_enable)
 #define sctp_addip_noauth		(sctp_globals.addip_noauth_enable)
@@ -271,6 +284,7 @@ extern struct sctp_globals {
 #define sctp_auth_enable		(sctp_globals.auth_enable)
 #define sctp_checksum_disable		(sctp_globals.checksum_disable)
 #define sctp_rwnd_upd_shift		(sctp_globals.rwnd_update_shift)
+#define sctp_max_autoclose		(sctp_globals.max_autoclose)
 
 /* SCTP Socket type: UDP or TCP style. */
 typedef enum {
@@ -341,6 +355,8 @@ struct sctp_sock {
 	atomic_t pd_mode;
 	/* Receive to here while partial delivery is in effect. */
 	struct sk_buff_head pd_lobby;
+	struct list_head auto_asconf_list;
+	int do_auto_asconf;
 };
 
 static inline struct sctp_sock *sctp_sk(const struct sock *sk)
@@ -792,6 +808,8 @@ struct sctp_sockaddr_entry {
 	__u8 valid;
 };
 
+#define SCTP_ADDRESS_TICK_DELAY	500
+
 typedef struct sctp_chunk *(sctp_packet_phandler_t)(struct sctp_association *);
 
 /* This structure holds lists of chunks as we are assembling for
@@ -1236,6 +1254,7 @@ sctp_scope_t sctp_scope(const union sctp_addr *);
 int sctp_in_scope(const union sctp_addr *addr, const sctp_scope_t scope);
 int sctp_is_any(struct sock *sk, const union sctp_addr *addr);
 int sctp_addr_is_valid(const union sctp_addr *addr);
+int sctp_is_ep_boundall(struct sock *sk);
 
 
 /* What type of endpoint?  */
@@ -1898,6 +1917,9 @@ struct sctp_association {
 	 * after reaching 4294967295.
 	 */
 	__u32 addip_serial;
+	union sctp_addr *asconf_addr_del_pending;
+	int src_out_of_asoc_ok;
+	struct sctp_transport *new_transport;
 
 	/* SCTP AUTH: list of the endpoint shared keys.  These
 	 * keys are provided out of band by the user applicaton

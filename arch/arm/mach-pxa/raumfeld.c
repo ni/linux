@@ -46,10 +46,7 @@
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 
-#include <mach/hardware.h>
-#include <mach/pxa3xx-regs.h>
-#include <mach/mfp-pxa3xx.h>
-#include <mach/mfp-pxa300.h>
+#include <mach/pxa300.h>
 #include <mach/ohci.h>
 #include <mach/pxafb.h>
 #include <mach/mmc.h>
@@ -349,8 +346,9 @@ static struct mtd_partition raumfeld_nand_partitions[] = {
 static struct pxa3xx_nand_platform_data raumfeld_nand_info = {
 	.enable_arbiter	= 1,
 	.keep_config	= 1,
-	.parts		= raumfeld_nand_partitions,
-	.nr_parts	= ARRAY_SIZE(raumfeld_nand_partitions),
+	.num_cs		= 1,
+	.parts[0]	= raumfeld_nand_partitions,
+	.nr_parts[0]	= ARRAY_SIZE(raumfeld_nand_partitions),
 };
 
 /**
@@ -1089,30 +1087,33 @@ static void __init raumfeld_speaker_init(void)
 
 #ifdef CONFIG_MACH_RAUMFELD_RC
 MACHINE_START(RAUMFELD_RC, "Raumfeld Controller")
-	.boot_params	= RAUMFELD_SDRAM_BASE + 0x100,
+	.atag_offset	= 0x100,
 	.init_machine	= raumfeld_controller_init,
 	.map_io		= pxa3xx_map_io,
 	.init_irq	= pxa3xx_init_irq,
+	.handle_irq	= pxa3xx_handle_irq,
 	.timer		= &pxa_timer,
 MACHINE_END
 #endif
 
 #ifdef CONFIG_MACH_RAUMFELD_CONNECTOR
 MACHINE_START(RAUMFELD_CONNECTOR, "Raumfeld Connector")
-	.boot_params	= RAUMFELD_SDRAM_BASE + 0x100,
+	.atag_offset	= 0x100,
 	.init_machine	= raumfeld_connector_init,
 	.map_io		= pxa3xx_map_io,
 	.init_irq	= pxa3xx_init_irq,
+	.handle_irq	= pxa3xx_handle_irq,
 	.timer		= &pxa_timer,
 MACHINE_END
 #endif
 
 #ifdef CONFIG_MACH_RAUMFELD_SPEAKER
 MACHINE_START(RAUMFELD_SPEAKER, "Raumfeld Speaker")
-	.boot_params	= RAUMFELD_SDRAM_BASE + 0x100,
+	.atag_offset	= 0x100,
 	.init_machine	= raumfeld_speaker_init,
 	.map_io		= pxa3xx_map_io,
 	.init_irq	= pxa3xx_init_irq,
+	.handle_irq	= pxa3xx_handle_irq,
 	.timer		= &pxa_timer,
 MACHINE_END
 #endif

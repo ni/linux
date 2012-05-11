@@ -41,6 +41,7 @@
 #include <linux/i2c.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/module.h>
 #include <linux/xilinx_devices.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>

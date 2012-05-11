@@ -5,7 +5,7 @@
  * system manages static and dynamic label mappings for network protocols such
  * as CIPSO and RIPSO.
  *
- * Author: Paul Moore <paul.moore@hp.com>
+ * Author: Paul Moore <paul@paul-moore.com>
  *
  */
 
@@ -39,7 +39,7 @@
 #include <net/netlabel.h>
 #include <net/cipso_ipv4.h>
 #include <asm/bug.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 
 #include "netlabel_domainhash.h"
 #include "netlabel_unlabeled.h"
@@ -111,8 +111,6 @@ int netlbl_cfg_unlbl_map_add(const char *domain,
 	struct netlbl_domaddr_map *addrmap = NULL;
 	struct netlbl_domaddr4_map *map4 = NULL;
 	struct netlbl_domaddr6_map *map6 = NULL;
-	const struct in_addr *addr4, *mask4;
-	const struct in6_addr *addr6, *mask6;
 
 	entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
 	if (entry == NULL)
@@ -133,9 +131,9 @@ int netlbl_cfg_unlbl_map_add(const char *domain,
 		INIT_LIST_HEAD(&addrmap->list6);
 
 		switch (family) {
-		case AF_INET:
-			addr4 = addr;
-			mask4 = mask;
+		case AF_INET: {
+			const struct in_addr *addr4 = addr;
+			const struct in_addr *mask4 = mask;
 			map4 = kzalloc(sizeof(*map4), GFP_ATOMIC);
 			if (map4 == NULL)
 				goto cfg_unlbl_map_add_failure;
@@ -148,9 +146,11 @@ int netlbl_cfg_unlbl_map_add(const char *domain,
 			if (ret_val != 0)
 				goto cfg_unlbl_map_add_failure;
 			break;
-		case AF_INET6:
-			addr6 = addr;
-			mask6 = mask;
+			}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+		case AF_INET6: {
+			const struct in6_addr *addr6 = addr;
+			const struct in6_addr *mask6 = mask;
 			map6 = kzalloc(sizeof(*map6), GFP_ATOMIC);
 			if (map6 == NULL)
 				goto cfg_unlbl_map_add_failure;
@@ -162,11 +162,13 @@ int netlbl_cfg_unlbl_map_add(const char *domain,
 			map6->list.addr.s6_addr32[3] &= mask6->s6_addr32[3];
 			ipv6_addr_copy(&map6->list.mask, mask6);
 			map6->list.valid = 1;
-			ret_val = netlbl_af4list_add(&map4->list,
-						     &addrmap->list4);
+			ret_val = netlbl_af6list_add(&map6->list,
+						     &addrmap->list6);
 			if (ret_val != 0)
 				goto cfg_unlbl_map_add_failure;
 			break;
+			}
+#endif /* IPv6 */
 		default:
 			goto cfg_unlbl_map_add_failure;
 			break;
@@ -225,9 +227,11 @@ int netlbl_cfg_unlbl_static_add(struct net *net,
 	case AF_INET:
 		addr_len = sizeof(struct in_addr);
 		break;
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	case AF_INET6:
 		addr_len = sizeof(struct in6_addr);
 		break;
+#endif /* IPv6 */
 	default:
 		return -EPFNOSUPPORT;
 	}
@@ -266,9 +270,11 @@ int netlbl_cfg_unlbl_static_del(struct net *net,
 	case AF_INET:
 		addr_len = sizeof(struct in_addr);
 		break;
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	case AF_INET6:
 		addr_len = sizeof(struct in6_addr);
 		break;
+#endif /* IPv6 */
 	default:
 		return -EPFNOSUPPORT;
 	}
@@ -341,11 +347,11 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 
 	entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
 	if (entry == NULL)
-		return -ENOMEM;
+		goto out_entry;
 	if (domain != NULL) {
 		entry->domain = kstrdup(domain, GFP_ATOMIC);
 		if (entry->domain == NULL)
-			goto cfg_cipsov4_map_add_failure;
+			goto out_domain;
 	}
 
 	if (addr == NULL && mask == NULL) {
@@ -354,13 +360,13 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 	} else if (addr != NULL && mask != NULL) {
 		addrmap = kzalloc(sizeof(*addrmap), GFP_ATOMIC);
 		if (addrmap == NULL)
-			goto cfg_cipsov4_map_add_failure;
+			goto out_addrmap;
 		INIT_LIST_HEAD(&addrmap->list4);
 		INIT_LIST_HEAD(&addrmap->list6);
 
 		addrinfo = kzalloc(sizeof(*addrinfo), GFP_ATOMIC);
 		if (addrinfo == NULL)
-			goto cfg_cipsov4_map_add_failure;
+			goto out_addrinfo;
 		addrinfo->type_def.cipsov4 = doi_def;
 		addrinfo->type = NETLBL_NLTYPE_CIPSOV4;
 		addrinfo->list.addr = addr->s_addr & mask->s_addr;
@@ -374,7 +380,7 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 		entry->type = NETLBL_NLTYPE_ADDRSELECT;
 	} else {
 		ret_val = -EINVAL;
-		goto cfg_cipsov4_map_add_failure;
+		goto out_addrmap;
 	}
 
 	ret_val = netlbl_domhsh_add(entry, audit_info);
@@ -384,11 +390,15 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 	return 0;
 
 cfg_cipsov4_map_add_failure:
-	cipso_v4_doi_putdef(doi_def);
-	kfree(entry->domain);
-	kfree(entry);
-	kfree(addrmap);
 	kfree(addrinfo);
+out_addrinfo:
+	kfree(addrmap);
+out_addrmap:
+	kfree(entry->domain);
+out_domain:
+	kfree(entry);
+out_entry:
+	cipso_v4_doi_putdef(doi_def);
 	return ret_val;
 }
 

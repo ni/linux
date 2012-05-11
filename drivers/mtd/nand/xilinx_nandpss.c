@@ -976,8 +976,7 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 	int ez_nand_supported = 0;
 	unsigned long ecc_cfg;
 	struct xnand_platform_data	*pdata = NULL;
-	int  nr_parts;
-	static const char *part_probe_types[] = {"cmdlinepart", NULL};
+	struct mtd_part_parser_data ppdata;
 #ifdef CONFIG_OF
 	const struct of_device_id *match;
 	struct device_node *parts = pdev->dev.of_node;
@@ -1073,6 +1072,7 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 
 	/* Set the device option and flash width */
 	nand_chip->options = pdata->options;
+	nand_chip->bbt_options = pdata->bbt_options;
 
 	platform_set_drvdata(pdev, xnand);
 
@@ -1085,10 +1085,6 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "nand_scan_ident for NAND failed\n");
 		goto out_unmap_all_mem;
 	}
-
-	/* Make sure to restore the options cleared by nand_flash_detect_onfi */
-	if (pdata->options & NAND_USE_FLASH_BBT)
-		nand_chip->options |= NAND_USE_FLASH_BBT;
 
 	/* Check if On-Die ECC flash or Clear NAND flash */
 	nand_chip->cmdfunc(mtd, NAND_CMD_RESET, -1, -1);
@@ -1232,47 +1228,15 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 		goto out_unmap_all_mem;
 	}
 
-#ifdef CONFIG_MTD_CMDLINE_PARTS
-	/* Get the partition information from command line argument */
-	nr_parts = parse_mtd_partitions(mtd, part_probe_types,
-					&xnand->parts, 0);
-	if (nr_parts > 0) {
-		dev_info(&pdev->dev, "found %d partitions in command line",
-				nr_parts);
-		err = mtd_device_register(&xnand->mtd, xnand->parts, nr_parts);
-/*		mtd_add_partition(mtd, xnand->parts, nr_parts);
-		return 0;
-*/
-	}
-#ifdef CONFIG_MTD_OF_PARTS
-	nr_parts = of_mtd_parse_partitions(&pdev->dev, parts, &xnand->parts);
-	if (nr_parts > 0) {
-		dev_info(&pdev->dev, "found %d partitions in device tree",
-				nr_parts);
-		err = mtd_device_register(&xnand->mtd, xnand->parts, nr_parts);
-/*		mtd_add_partition(mtd, xnand->parts, nr_parts);
-		return 0;
-*/
-	}
-#endif
-	if (pdata->parts) {
-		dev_info(&pdev->dev, "found %d partitions in platform data",
-				pdata->nr_parts);
-		err = mtd_device_register(&xnand->mtd, pdata->parts,
-							pdata->nr_parts);
-/*		mtd_add_partition(&xnand->mtd, pdata->parts,
-							pdata->nr_parts);
-*/
-	}
-#endif
-/*	err = add_mtd_device(mtd); */
-	if (!err) {
-		dev_info(&pdev->dev, "at 0x%08X mapped to 0x%08X\n",
-				smc_res->start, (u32 __force) xnand->nand_base);
-		return 0;
+	ppdata.of_node = parts;
+	err = mtd_device_parse_register(mtd, NULL, &ppdata, pdata->parts,
+					pdata->nr_parts);
+	if (err) {
+		dev_err(&pdev->dev, "failed to parse mtd partitions\n");
+		goto out_unmap_all_mem;
 	}
 
-	nand_release(mtd);
+	return 0;
 
 out_unmap_all_mem:
 	platform_set_drvdata(pdev, NULL);
@@ -1323,7 +1287,8 @@ static int __devexit xnandpss_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct xnand_platform_data xnandpss_config = {
-	.options = NAND_NO_AUTOINCR | NAND_USE_FLASH_BBT,
+	.options = NAND_NO_AUTOINCR,
+	.bbt_options = NAND_BBT_USE_FLASH,
 };
 
 /* Match table for device tree binding */

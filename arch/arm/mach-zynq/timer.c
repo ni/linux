@@ -30,7 +30,6 @@
 
 #include <mach/zynq_soc.h>
 #include "common.h"
-
 /*
  * This driver configures the 2 16-bit count-up timers as follows:
  *

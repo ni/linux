@@ -23,8 +23,7 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/irq.h>
 
-#include <mach/pxa3xx-regs.h>
-#include <mach/mfp-pxa320.h>
+#include <mach/pxa320.h>
 #include <mach/colibri.h>
 #include <mach/pxafb.h>
 #include <mach/ohci.h>
@@ -147,7 +146,7 @@ static void __init colibri_pxa320_init_eth(void)
 static inline void __init colibri_pxa320_init_eth(void) {}
 #endif /* CONFIG_AX88796 */
 
-#if defined(CONFIG_USB_GADGET_PXA27X)||defined(CONFIG_USB_GADGET_PXA27X_MODULE)
+#if defined(CONFIG_USB_PXA27X)||defined(CONFIG_USB_PXA27X_MODULE)
 static struct gpio_vbus_mach_info colibri_pxa320_gpio_vbus_info = {
 	.gpio_vbus		= mfp_to_gpio(MFP_PIN_GPIO96),
 	.gpio_pullup		= -1,
@@ -254,10 +253,11 @@ void __init colibri_pxa320_init(void)
 }
 
 MACHINE_START(COLIBRI320, "Toradex Colibri PXA320")
-	.boot_params	= COLIBRI_SDRAM_BASE + 0x100,
+	.atag_offset	= 0x100,
 	.init_machine	= colibri_pxa320_init,
 	.map_io		= pxa3xx_map_io,
 	.init_irq	= pxa3xx_init_irq,
+	.handle_irq	= pxa3xx_handle_irq,
 	.timer		= &pxa_timer,
 MACHINE_END
 

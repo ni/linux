@@ -45,6 +45,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <xen/xenbus.h>
+#include <xen/xen.h>
 #include "xenbus_comms.h"
 
 struct xs_stored_msg {
@@ -638,8 +639,7 @@ int register_xenbus_watch(struct xenbus_watch *watch)
 
 	err = xs_watch(watch->node, token);
 
-	/* Ignore errors due to multiple registration. */
-	if ((err != 0) && (err != -EEXIST)) {
+	if (err) {
 		spin_lock(&watches_lock);
 		list_del(&watch->list);
 		spin_unlock(&watches_lock);
