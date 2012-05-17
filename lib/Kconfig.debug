@@ -62,28 +62,6 @@ config MAGIC_SYSRQ
 	  keys are documented in <file:Documentation/sysrq.txt>. Don't say Y
 	  unless you really know what this hack does.
 
-config MAGIC_SYSRQ_FORCE_PRINTK
-	bool "Force printk from Magic SysRq"
-	depends on MAGIC_SYSRQ && PREEMPT_RT_FULL
-	default n
-	help
-	  Allow the output from Magic SysRq to be output immediately, even if
-	  this causes large latencies.  This can cause performance problems
-	  for real-time processes.
-
-	  If PREEMPT_RT_FULL, printk() will not try to acquire the console lock
-	  when interrupts or preemption are disabled.  If the console lock is
-	  not acquired the printk() output will be buffered, but will not be
-	  output immediately.  Some drivers call into the Magic SysRq code
-	  with interrupts or preemption disabled, so the output of Magic SysRq
-	  will be buffered instead of printing immediately if this option is
-	  not selected.
-
-	  Even with this option selected, Magic SysRq output will be delayed
-	  if the attempt to acquire the console lock fails.
-
-	  Don't say Y unless you really know what this hack does.
-
 config STRIP_ASM_SYMS
 	bool "Strip assembler-generated symbols during link"
 	default n

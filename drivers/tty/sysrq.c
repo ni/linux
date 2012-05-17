@@ -492,23 +492,6 @@ static void __sysrq_put_key_op(int key, struct sysrq_key_op *op_p)
                 sysrq_key_table[i] = op_p;
 }
 
-#ifdef CONFIG_MAGIC_SYSRQ_FORCE_PRINTK
-
-int sysrq_in_progress;
-
-static void set_sysrq_in_progress(int value)
-{
-	sysrq_in_progress = value;
-}
-
-#else
-
-static void set_sysrq_in_progress(int value)
-{
-}
-
-#endif
-
 void __handle_sysrq(int key, bool check_mask)
 {
 	struct sysrq_key_op *op_p;
@@ -517,9 +500,6 @@ void __handle_sysrq(int key, bool check_mask)
 	unsigned long flags;
 
 	spin_lock_irqsave(&sysrq_key_table_lock, flags);
-
-	set_sysrq_in_progress(1);
-
 	/*
 	 * Raise the apparent loglevel to maximum so that the sysrq header
 	 * is shown to provide the user with positive feedback.  We do not
@@ -561,9 +541,6 @@ void __handle_sysrq(int key, bool check_mask)
 		printk("\n");
 		console_loglevel = orig_log_level;
 	}
-
-	set_sysrq_in_progress(0);
-
 	spin_unlock_irqrestore(&sysrq_key_table_lock, flags);
 }
 
