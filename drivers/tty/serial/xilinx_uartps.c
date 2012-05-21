@@ -143,6 +143,32 @@ MODULE_PARM_DESC(rx_timeout, "Rx timeout, 1-255");
 #define CDNS_UART_SR_TXFULL	0x00000010 /* TX FIFO full */
 #define CDNS_UART_SR_RXTRIG	0x00000001 /* Rx Trigger */
 
+/** Modem Control Register
+ *
+ * The modem control register (MCR) is used to control the modem lines
+ * manually and to set automatic flow control mode.
+ */
+
+#define CDNS_UART_MODEMCR_FCM	0x00000020 /* Automatic flow control mode */
+#define CDNS_UART_MODEMCR_RTS	0x00000002 /* Request to send */
+#define CDNS_UART_MODEMCR_DTR	0x00000001 /* Data terminal ready */
+
+/** Modem Status Register
+ *
+ * The modem status register (MSR) is used to monitor the status of modem
+ * lines (DCD, RI, DSR, CTS)
+ */
+
+#define CDNS_UART_MODEMSR_FCMS	0x00000100 /* Flow control mode */
+#define CDNS_UART_MODEMSR_DCD	0x00000080 /* Data carrier detect */
+#define CDNS_UART_MODEMSR_RI	0x00000040 /* Ring indicator */
+#define CDNS_UART_MODEMSR_DSR	0x00000020 /* Data set ready */
+#define CDNS_UART_MODEMSR_CTS	0x00000010 /* Clear to send */
+#define CDNS_UART_MODEMSR_DDCD	0x00000008 /* Delta data carrier detect */
+#define CDNS_UART_MODEMSR_TERI	0x00000004 /* Trailing edge ring indicator */
+#define CDNS_UART_MODEMSR_DDSR	0x00000002 /* Delta data set ready */
+#define CDNS_UART_MODEMSR_DCTS	0x00000001 /* Delta clear to send */
+
 /* baud dividers min/max values */
 #define CDNS_UART_BDIV_MIN	4
 #define CDNS_UART_BDIV_MAX	255
@@ -512,13 +538,13 @@ static int cdns_uart_clk_notifier_cb(struct notifier_block *nb,
 static inline void cdns_uart_enable_tx(struct uart_port *port)
 {
 	unsigned int status;
-	status = cdns_uart_readl(XUARTPS_CR_OFFSET);
+	status = cdns_uart_readl(CDNS_UART_CR_OFFSET);
 
 	/* Set the TX enable bit and clear the TX disable bit to enable the
 	 * transmitter.
 	 */
-	cdns_uart_writel((status & ~XUARTPS_CR_TX_DIS) | XUARTPS_CR_TX_EN,
-		XUARTPS_CR_OFFSET);
+	cdns_uart_writel((status & ~CDNS_UART_CR_TX_DIS) | CDNS_UART_CR_TX_EN,
+		CDNS_UART_CR_OFFSET);
 }
 
 /**
@@ -530,10 +556,10 @@ static inline void cdns_uart_disable_tx(struct uart_port *port)
 {
 	unsigned int status;
 
-	status = cdns_uart_readl(XUARTPS_CR_OFFSET);
+	status = cdns_uart_readl(CDNS_UART_CR_OFFSET);
 
 	/* Disable the transmitter */
-	cdns_uart_writel(status | XUARTPS_CR_TX_DIS, XUARTPS_CR_OFFSET);
+	cdns_uart_writel(status | CDNS_UART_CR_TX_DIS, CDNS_UART_CR_OFFSET);
 }
 
 /**
@@ -543,9 +569,9 @@ static inline void cdns_uart_disable_tx(struct uart_port *port)
  **/
 static inline void cdns_uart_enable_txempty(struct uart_port *port)
 {
-	cdns_uart_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_ISR_OFFSET);
+	cdns_uart_writel(CDNS_UART_IXR_TXEMPTY, CDNS_UART_ISR_OFFSET);
 	/* Enable the TX Empty interrupt */
-	cdns_uart_writel(XUARTPS_IXR_TXEMPTY, XUARTPS_IER_OFFSET);
+	cdns_uart_writel(CDNS_UART_IXR_TXEMPTY, CDNS_UART_IER_OFFSET);
 }
 
 /**
@@ -563,7 +589,7 @@ static void cdns_uart_start_tx(struct uart_port *port)
 	 * send a xoff character immediately.
 	 */
 	if (port->x_char) {
-		cdns_uart_writel(port->x_char, XUARTPS_FIFO_OFFSET);
+		cdns_uart_writel(port->x_char, CDNS_UART_FIFO_OFFSET);
 
 		port->icount.tx++;
 		port->x_char = 0;
@@ -576,8 +602,8 @@ static void cdns_uart_start_tx(struct uart_port *port)
 		return;
 
 	while (!uart_circ_empty(&port->state->xmit)
-		&& numbytes-- && ((cdns_uart_readl(XUARTPS_SR_OFFSET)
-		& XUARTPS_SR_TXFULL)) != XUARTPS_SR_TXFULL) {
+		&& numbytes-- && ((cdns_uart_readl(CDNS_UART_SR_OFFSET)
+		& CDNS_UART_SR_TXFULL)) != CDNS_UART_SR_TXFULL) {
 
 		/* Get the data from the UART circular buffer and
 		 * write it to the cdns_uart's TX_FIFO register.
@@ -968,12 +994,40 @@ static void cdns_uart_config_port(struct uart_port *port, int flags)
  */
 static unsigned int cdns_uart_get_mctrl(struct uart_port *port)
 {
-	return TIOCM_CTS | TIOCM_DSR | TIOCM_CAR;
+	unsigned int msr; /* Modem status register */
+	unsigned int ret = 0; /* Return value */
+
+	msr = cdns_uart_readl(CDNS_UART_MODEMSR_OFFSET);
+
+	if (msr & CDNS_UART_MODEMSR_DCD)
+		ret |= TIOCM_CAR;
+	if (msr & CDNS_UART_MODEMSR_RI)
+		ret |= TIOCM_RNG;
+	if (msr & CDNS_UART_MODEMSR_DSR)
+		ret |= TIOCM_DSR;
+	if (msr & CDNS_UART_MODEMSR_CTS)
+		ret |= TIOCM_CTS;
+
+	return ret;
 }
 
+/**
+ * cdns_uart_set_mctrl - Set the modem control lines
+ *
+ * @port: Handle to the uart port structure
+ * @mctrl: Modem control lines to set/unset
+ *
+ **/
 static void cdns_uart_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
-	/* N/A */
+	unsigned int mcr = 0; /* Modem control register */
+
+	if (mctrl & TIOCM_RTS)
+		mcr |= CDNS_UART_MODEMCR_RTS;
+	if (mctrl & TIOCM_DTR)
+		mcr |= CDNS_UART_MODEMCR_DTR;
+
+	cdns_uart_writel(mcr, CDNS_UART_MODEMCR_OFFSET);
 }
 
 static void cdns_uart_enable_ms(struct uart_port *port)
