@@ -148,6 +148,32 @@ MODULE_PARM_DESC (rx_timeout, "Rx timeout, 1-255");
 #define XUARTPS_SR_TXFULL	0x00000010 /* TX FIFO full */
 #define XUARTPS_SR_RXTRIG	0x00000001 /* Rx Trigger */
 
+/** Modem Control Register
+ *
+ * The modem control register (MCR) is used to control the modem lines
+ * manually and to set automatic flow control mode.
+ */
+
+#define XUARTPS_MODEMCR_FCM	0x00000020 /* Automatic flow control mode */
+#define XUARTPS_MODEMCR_RTS	0x00000002 /* Request to send */
+#define XUARTPS_MODEMCR_DTR	0x00000001 /* Data terminal ready */
+
+/** Modem Status Register
+ *
+ * The modem status register (MSR) is used to monitor the status of modem
+ * lines (DCD, RI, DSR, CTS)
+ */
+
+#define XUARTPS_MODEMSR_FCMS	0x00000100 /* Flow control mode */
+#define XUARTPS_MODEMSR_DCD	0x00000080 /* Data carrier detect */
+#define XUARTPS_MODEMSR_RI	0x00000040 /* Ring indicator */
+#define XUARTPS_MODEMSR_DSR	0x00000020 /* Data set ready */
+#define XUARTPS_MODEMSR_CTS	0x00000010 /* Clear to send */
+#define XUARTPS_MODEMSR_DDCD	0x00000008 /* Delta data carrier detect */
+#define XUARTPS_MODEMSR_TERI	0x00000004 /* Trailing edge ring indicator */
+#define XUARTPS_MODEMSR_DDSR	0x00000002 /* Delta data set ready */
+#define XUARTPS_MODEMSR_DCTS	0x00000001 /* Delta clear to send */
+
 /**
  * xuartps_isr - Interrupt handler
  * @irq: Irq number
@@ -797,12 +823,40 @@ static void xuartps_config_port(struct uart_port *port, int flags)
  **/
 static unsigned int xuartps_get_mctrl(struct uart_port *port)
 {
-	return TIOCM_CTS | TIOCM_DSR | TIOCM_CAR;
+	unsigned int msr; /* Modem status register */
+	unsigned int ret = 0; /* Return value */
+
+	msr = xuartps_readl(XUARTPS_MODEMSR_OFFSET);
+
+	if (msr & XUARTPS_MODEMSR_DCD)
+		ret |= TIOCM_CAR;
+	if (msr & XUARTPS_MODEMSR_RI)
+		ret |= TIOCM_RNG;
+	if (msr & XUARTPS_MODEMSR_DSR)
+		ret |= TIOCM_DSR;
+	if (msr & XUARTPS_MODEMSR_CTS)
+		ret |= TIOCM_CTS;
+
+	return ret;
 }
 
+/**
+ * xuartps_set_mctrl - Set the modem control lines
+ *
+ * @port: Handle to the uart port structure
+ * @mctrl: Modem control lines to set/unset
+ *
+ **/
 static void xuartps_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
-	/* N/A */
+	unsigned int mcr = 0; /* Modem control register */
+
+	if (mctrl & TIOCM_RTS)
+		mcr |= XUARTPS_MODEMCR_RTS;
+	if (mctrl & TIOCM_DTR)
+		mcr |= XUARTPS_MODEMCR_DTR;
+
+	xuartps_writel(mcr, XUARTPS_MODEMCR_OFFSET);
 }
 
 static void xuartps_enable_ms(struct uart_port *port)
