@@ -684,8 +684,8 @@ static void cdns_uart_break_ctl(struct uart_port *port, int ctl)
 	status = cdns_uart_readl(CDNS_UART_CR_OFFSET);
 
 	if (ctl == -1)
-		cdns_uart_writel(CDNS_UART_CR_STARTBRK | status,
-					CDNS_UART_CR_OFFSET);
+		cdns_uart_writel((status & ~CDNS_UART_CR_STOPBK) | 
+				CDNS_UART_CR_STARTBR, CDNS_UART_CR_OFFSET);
 	else {
 		if ((status & CDNS_UART_CR_STOPBRK) == 0)
 			cdns_uart_writel(CDNS_UART_CR_STOPBRK | status,
@@ -889,11 +889,8 @@ static int cdns_uart_startup(struct uart_port *port)
  */
 static void cdns_uart_shutdown(struct uart_port *port)
 {
-	int status;
-
 	/* Disable interrupts */
-	status = cdns_uart_readl(CDNS_UART_IMR_OFFSET);
-	cdns_uart_writel(status, CDNS_UART_IDR_OFFSET);
+	cdns_uart_writel(CDNS_UART_IXR_MASK, CDNS_UART_IDR_OFFSET);
 
 	/* Disable the RX, we intentionally leave TX enabled since it might be
 	 * used by the cdns_uart_console_write path, and it doesn't hurt anything
@@ -1190,7 +1187,7 @@ static void cdns_uart_console_write(struct console *co, const char *s,
 
 	/* save and disable interrupt */
 	imr = cdns_uart_readl(CDNS_UART_IMR_OFFSET);
-	cdns_uart_writel(imr, CDNS_UART_IDR_OFFSET);
+	cdns_uart_writel(CDNS_UART_IXR_MASK, CDNS_UART_IDR_OFFSET);
 
 	/*
 	 * Make sure that the tx part is enabled. Set the TX enable bit and
