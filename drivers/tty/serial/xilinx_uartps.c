@@ -508,8 +508,8 @@ static void xuartps_break_ctl(struct uart_port *port, int ctl)
 	status = xuartps_readl(XUARTPS_CR_OFFSET);
 
 	if (ctl == -1)
-		xuartps_writel(XUARTPS_CR_STARTBRK | status,
-					XUARTPS_CR_OFFSET);
+		xuartps_writel((status & ~XUARTPS_CR_STOPBRK) |
+				XUARTPS_CR_STARTBRK, XUARTPS_CR_OFFSET);
 	else {
 		if ((status & XUARTPS_CR_STOPBRK) == 0)
 			xuartps_writel(XUARTPS_CR_STOPBRK | status,
@@ -682,7 +682,7 @@ static int xuartps_startup(struct uart_port *port)
 	 */
 	xuartps_writel(rx_trigger_level, XUARTPS_RXWM_OFFSET);
 
- 	/* Receive Timeout register is enabled but it
+	/* Receive Timeout register is enabled but it
 	 * can be tuned with a module parameter
 	 */
 	xuartps_writel(rx_timeout, XUARTPS_RXTOUT_OFFSET);
@@ -694,9 +694,6 @@ static int xuartps_startup(struct uart_port *port)
 	xuartps_writel(XUARTPS_IXR_TXEMPTY | XUARTPS_IXR_PARITY |
 		XUARTPS_IXR_FRAMING | XUARTPS_IXR_OVERRUN |
 		XUARTPS_IXR_RXTRIG | XUARTPS_IXR_TOUT, XUARTPS_IER_OFFSET);
-	xuartps_writel(~(XUARTPS_IXR_TXEMPTY | XUARTPS_IXR_PARITY |
-		XUARTPS_IXR_FRAMING | XUARTPS_IXR_OVERRUN |
-		XUARTPS_IXR_RXTRIG | XUARTPS_IXR_TOUT), XUARTPS_IDR_OFFSET);
 
 	spin_unlock_irqrestore(&port->lock, flags);
 
@@ -710,14 +707,12 @@ static int xuartps_startup(struct uart_port *port)
  **/
 static void xuartps_shutdown(struct uart_port *port)
 {
-	int status;
 	unsigned long flags;
 
 	spin_lock_irqsave(&port->lock, flags);
 
 	/* Disable interrupts */
-	status = xuartps_readl(XUARTPS_IMR_OFFSET);
-	xuartps_writel(status, XUARTPS_IDR_OFFSET);
+	xuartps_writel(XUARTPS_IXR_MASK, XUARTPS_IDR_OFFSET);
 
 	/* Disable the RX, we intentionally leave TX enabled since it might be
 	 * used by the xuartps_console_write path, and it doesn't hurt anything
@@ -984,16 +979,12 @@ static void xuartps_console_write(struct console *co, const char *s,
 
 	/* save and disable interrupt */
 	imr = xuartps_readl(XUARTPS_IMR_OFFSET);
-	xuartps_writel(imr, XUARTPS_IDR_OFFSET);
+	xuartps_writel(XUARTPS_IXR_MASK, XUARTPS_IDR_OFFSET);
 
 	uart_console_write(port, s, count, xuartps_console_putchar);
 	xuartps_console_wait_tx(port);
 
-	/* restore interrupt state, it seems like there may be a h/w bug
-	 * in that the interrupt enable register should not need to be
-	 * written based on the data sheet
-	 */
-	xuartps_writel(~imr, XUARTPS_IDR_OFFSET);
+	/* reenable the interrupts */
 	xuartps_writel(imr, XUARTPS_IER_OFFSET);
 
 	if (locked)
