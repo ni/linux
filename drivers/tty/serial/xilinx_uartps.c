@@ -707,12 +707,19 @@ static int xuartps_startup(struct uart_port *port)
  **/
 static void xuartps_shutdown(struct uart_port *port)
 {
+	unsigned int status;
 	unsigned long flags;
 
 	spin_lock_irqsave(&port->lock, flags);
 
 	/* Disable interrupts */
 	xuartps_writel(XUARTPS_IXR_MASK, XUARTPS_IDR_OFFSET);
+
+	/* Clear line break, if set */
+	status = xuartps_readl(XUARTPS_CR_OFFSET);
+	if ((status & XUARTPS_CR_STOPBRK) == 0)
+		xuartps_writel(XUARTPS_CR_STOPBRK | status,
+				 XUARTPS_CR_OFFSET);
 
 	/* Disable the RX, we intentionally leave TX enabled since it might be
 	 * used by the xuartps_console_write path, and it doesn't hurt anything
