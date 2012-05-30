@@ -117,6 +117,7 @@ MODULE_PARM_DESC(rx_timeout, "Rx timeout, 1-255");
  * Reading either IER or IDR returns 0x00.
  * All four registers have the same bit definitions.
  */
+#define CDNS_UART_IXR_DMS		0x00000200 /* Delta Modem Status interrupt */
 #define CDNS_UART_IXR_TOUT	0x00000100 /* RX Timeout error interrupt */
 #define CDNS_UART_IXR_PARITY	0x00000080 /* Parity error interrupt */
 #define CDNS_UART_IXR_FRAMING	0x00000040 /* Framing error interrupt */
@@ -204,6 +205,7 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 	struct uart_port *port = (struct uart_port *)dev_id;
 	unsigned long flags;
 	unsigned int isrstatus, numbytes;
+	unsigned int msr;
 	unsigned int data;
 	unsigned int l_HandledStatus = 0;
 	char status = TTY_NORMAL;
@@ -237,6 +239,20 @@ static irqreturn_t cdns_uart_isr(int irq, void *dev_id)
 
 	isrstatus &= port->read_status_mask;
 	isrstatus &= ~port->ignore_status_mask;
+
+	if (isrstatus & CDNS_UART_IXR_DMS) {
+		msr = cdns_uart_readl(CDNS_UART_MODEMSR_OFFSET);
+		if (msr & CDNS_UART_MODEMSR_DDCD)
+			uart_handle_dcd_change(port, msr & CDNS_UART_MODEMSR_DCD);
+		if (msr & CDNS_UART_MODEMSR_TERI)
+			port->icount.rng++;
+		if (msr & CDNS_UART_MODEMSR_DDSR)
+			port->icount.dsr++;
+		if (msr & CDNS_UART_MODEMSR_DCTS)
+			uart_handle_cts_change(port, msr & CDNS_UART_MODEMSR_CTS);
+		l_HandledStatus |= CDNS_UART_IXR_DMS;
+		cdns_uart_writel(msr, CDNS_UART_MODEMSR_OFFSET);
+	}
 
 	if ((isrstatus & CDNS_UART_IXR_TOUT) ||
 		(isrstatus & CDNS_UART_IXR_RXTRIG)) {
@@ -684,8 +700,8 @@ static void cdns_uart_break_ctl(struct uart_port *port, int ctl)
 	status = cdns_uart_readl(CDNS_UART_CR_OFFSET);
 
 	if (ctl == -1)
-		cdns_uart_writel((status & ~CDNS_UART_CR_STOPBK) | 
-				CDNS_UART_CR_STARTBR, CDNS_UART_CR_OFFSET);
+		cdns_uart_writel((status & ~CDNS_UART_CR_STOPBRK) |
+				CDNS_UART_CR_STARTBRK, CDNS_UART_CR_OFFSET);
 	else {
 		if ((status & CDNS_UART_CR_STOPBRK) == 0)
 			cdns_uart_writel(CDNS_UART_CR_STOPBRK | status,
@@ -755,7 +771,8 @@ static void cdns_uart_set_termios(struct uart_port *port,
 	cdns_uart_writel(rx_timeout, CDNS_UART_RXTOUT_OFFSET);
 
 	port->read_status_mask = CDNS_UART_IXR_TXEMPTY | CDNS_UART_IXR_RXTRIG |
-			CDNS_UART_IXR_OVERRUN | CDNS_UART_IXR_TOUT | CDNS_UART_IXR_FRAMING;
+		CDNS_UART_IXR_OVERRUN | CDNS_UART_IXR_TOUT | CDNS_UART_IXR_FRAMING |
+		CDNS_UART_IXR_DMS;
 	port->ignore_status_mask = 0;
 
 	if (termios->c_iflag & INPCK)
@@ -877,8 +894,12 @@ static int cdns_uart_startup(struct uart_port *port)
 	/* Set the Interrupt Registers with desired interrupts */
 	cdns_uart_writel(CDNS_UART_IXR_TXEMPTY | CDNS_UART_IXR_PARITY |
 		CDNS_UART_IXR_FRAMING | CDNS_UART_IXR_OVERRUN |
-		CDNS_UART_IXR_RXTRIG | CDNS_UART_IXR_TOUT,
+		CDNS_UART_IXR_RXTRIG | CDNS_UART_IXR_TOUT | CDNS_UART_IXR_DMS,
 		CDNS_UART_IER_OFFSET);
+
+	/* Clear any existing delta modem status */
+	cdns_uart_writel(cdns_uart_readl(CDNS_UART_MODEMSR_OFFSET),
+		CDNS_UART_MODEMSR_OFFSET);
 
 	return retval;
 }
@@ -889,8 +910,16 @@ static int cdns_uart_startup(struct uart_port *port)
  */
 static void cdns_uart_shutdown(struct uart_port *port)
 {
+	unsigned int status;
+
 	/* Disable interrupts */
 	cdns_uart_writel(CDNS_UART_IXR_MASK, CDNS_UART_IDR_OFFSET);
+
+	/* Clear line break, if set */
+	status = cdns_uart_readl(CDNS_UART_CR_OFFSET);
+	if ((status & CDNS_UART_CR_STOPBRK) == 0)
+		cdns_uart_writel(CDNS_UART_CR_STOPBRK | status,
+				 CDNS_UART_CR_OFFSET);
 
 	/* Disable the RX, we intentionally leave TX enabled since it might be
 	 * used by the cdns_uart_console_write path, and it doesn't hurt anything
