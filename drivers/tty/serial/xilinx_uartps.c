@@ -125,6 +125,8 @@ MODULE_PARM_DESC (rx_timeout, "Rx timeout, 1-255");
  *
  * All four registers have the same bit definitions.
  */
+
+#define XUARTPS_IXR_DMS		0x00000200 /* Delta Modem Status interrupt */
 #define XUARTPS_IXR_TOUT	0x00000100 /* RX Timeout error interrupt */
 #define XUARTPS_IXR_PARITY	0x00000080 /* Parity error interrupt */
 #define XUARTPS_IXR_FRAMING	0x00000040 /* Framing error interrupt */
@@ -187,6 +189,7 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 	struct tty_struct *tty;
 	unsigned long flags;
 	unsigned int isrstatus, numbytes;
+	unsigned int msr;
 	unsigned int data;
 	unsigned int l_HandledStatus = 0;
 	char status = TTY_NORMAL;
@@ -207,6 +210,20 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 
 	isrstatus &= port->read_status_mask;
 	isrstatus &= ~port->ignore_status_mask;
+
+	if (isrstatus & XUARTPS_IXR_DMS) {
+		msr = xuartps_readl(XUARTPS_MODEMSR_OFFSET);
+		if (msr & XUARTPS_MODEMSR_DDCD)
+			uart_handle_dcd_change(port, msr & XUARTPS_MODEMSR_DCD);
+		if (msr & XUARTPS_MODEMSR_TERI)
+			port->icount.rng++;
+		if (msr & XUARTPS_MODEMSR_DDSR)
+			port->icount.dsr++;
+		if (msr & XUARTPS_MODEMSR_DCTS)
+			uart_handle_cts_change(port, msr & XUARTPS_MODEMSR_CTS);
+		l_HandledStatus |= XUARTPS_IXR_DMS;
+		xuartps_writel(msr, XUARTPS_MODEMSR_OFFSET);
+	}
 
 	if ((isrstatus & XUARTPS_IXR_TOUT) ||
 		(isrstatus & XUARTPS_IXR_RXTRIG)) {
@@ -576,7 +593,8 @@ static void xuartps_set_termios(struct uart_port *port,
 	xuartps_writel(rx_timeout, XUARTPS_RXTOUT_OFFSET);
 
 	port->read_status_mask = XUARTPS_IXR_TXEMPTY | XUARTPS_IXR_RXTRIG |
-			XUARTPS_IXR_OVERRUN | XUARTPS_IXR_TOUT | XUARTPS_IXR_FRAMING;
+			XUARTPS_IXR_OVERRUN | XUARTPS_IXR_TOUT | XUARTPS_IXR_FRAMING |
+			XUARTPS_IXR_DMS;
 	port->ignore_status_mask = 0;
 
 	if (termios->c_iflag & INPCK)
@@ -693,7 +711,12 @@ static int xuartps_startup(struct uart_port *port)
 	/* Set the Interrupt Registers with desired interrupts */
 	xuartps_writel(XUARTPS_IXR_TXEMPTY | XUARTPS_IXR_PARITY |
 		XUARTPS_IXR_FRAMING | XUARTPS_IXR_OVERRUN |
-		XUARTPS_IXR_RXTRIG | XUARTPS_IXR_TOUT, XUARTPS_IER_OFFSET);
+		XUARTPS_IXR_RXTRIG | XUARTPS_IXR_TOUT | XUARTPS_IXR_DMS,
+		XUARTPS_IER_OFFSET);
+
+	/* Clear any existing delta modem status */
+	xuartps_writel(xuartps_readl(XUARTPS_MODEMSR_OFFSET),
+		XUARTPS_MODEMSR_OFFSET);
 
 	spin_unlock_irqrestore(&port->lock, flags);
 
