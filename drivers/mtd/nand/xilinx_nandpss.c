@@ -487,6 +487,28 @@ static int xnandpss_read_page_raw(struct mtd_info *mtd, struct nand_chip *chip,
 	return 0;
 }
 
+static int xnandpss_read_page_raw_nooob(struct mtd_info *mtd, struct nand_chip *chip,
+			      uint8_t *buf, int page)
+{
+	chip->read_buf(mtd, buf, mtd->writesize);
+	return 0;
+}
+
+static int xnandpss_read_subpage_raw(struct mtd_info *mtd, struct nand_chip *chip,
+					uint32_t data_offs, uint32_t readlen, uint8_t *buf)
+{
+	if (0 != data_offs) {
+		chip->cmdfunc(mtd, NAND_CMD_RNDOUT, data_offs, -1);
+		buf += data_offs;
+	}
+
+	/* readlen must be a multiple of 4. */
+	readlen = (((readlen + 4) >> 2) << 2);
+
+	chip->read_buf(mtd, buf, readlen);
+	return 0;
+}
+
 /**
  * xnandpss_write_page_raw - [Intern] raw page write function
  * @mtd:        mtd info structure
@@ -1165,7 +1187,8 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 		/* The software ECC routines won't work with the
 				SMC controller */
 		nand_chip->ecc.mode = NAND_ECC_HW;
-		nand_chip->ecc.read_page = xnandpss_read_page_raw;
+		nand_chip->ecc.read_page = xnandpss_read_page_raw_nooob;
+		nand_chip->ecc.read_subpage = xnandpss_read_subpage_raw;
 		nand_chip->ecc.write_page = xnandpss_write_page_raw;
 		nand_chip->ecc.read_page_raw = xnandpss_read_page_raw;
 		nand_chip->ecc.write_page_raw = xnandpss_write_page_raw;
@@ -1173,6 +1196,9 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 		nand_chip->ecc.write_oob = xnandpss_write_oob;
 		nand_chip->ecc.size = mtd->writesize;
 		nand_chip->ecc.bytes = 0;
+
+		/* NAND with on-die ECC supports subpage reads */
+		nand_chip->options |= NAND_SUBPAGE_READ;
 
 		/* On-Die ECC spare bytes offset 8 is used for ECC codes */
 		if (ondie_ecc_enabled) {
