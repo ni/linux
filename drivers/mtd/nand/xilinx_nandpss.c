@@ -1106,13 +1106,13 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 #ifdef CONFIG_OF
 	timing_prop = of_get_property(parts, "nand-chip-timing", &len);
 	if (timing_prop && (len / sizeof(u32)) == 7) {
-		chip_timing = ((timing_prop[0] << 20) |		/* t_rr */ 
-				(timing_prop[1] << 17)  |	/* t_ar */ 
-				(timing_prop[2] << 14)  |	/* t_clr */ 
-				(timing_prop[3] << 11)  |	/* t_wp */ 
-				(timing_prop[4] << 8)   |	/* t_rea */ 
-				(timing_prop[5] << 4)   |	/* t_wc */ 
-				(timing_prop[6] << 0));		/* t_rc */
+		chip_timing = ((be32_to_cpup(&timing_prop[0]) << 20) |		/* t_rr */ 
+				(be32_to_cpup(&timing_prop[1]) << 17)  |	/* t_ar */ 
+				(be32_to_cpup(&timing_prop[2]) << 14)  |	/* t_clr */ 
+				(be32_to_cpup(&timing_prop[3]) << 11)  |	/* t_wp */ 
+				(be32_to_cpup(&timing_prop[4]) << 8)   |	/* t_rea */ 
+				(be32_to_cpup(&timing_prop[5]) << 4)   |	/* t_wc */ 
+				(be32_to_cpup(&timing_prop[6]) << 0));		/* t_rc */
 	} else {
 		/* No property, use default values. */
 		chip_timing = XNANDPSS_SET_CYCLES;
