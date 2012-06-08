@@ -503,7 +503,7 @@ static int xnandpss_read_subpage_raw(struct mtd_info *mtd, struct nand_chip *chi
 	}
 
 	/* readlen must be a multiple of 4. */
-	readlen = (((readlen + 4) >> 2) << 2);
+	readlen = (((readlen + 3) >> 2) << 2);
 
 	chip->read_buf(mtd, buf, readlen);
 	return 0;
@@ -877,7 +877,6 @@ static void xnandpss_cmd_function(struct mtd_info *mtd, unsigned int command,
 	ndelay(100);
 
 	if ((command == NAND_CMD_READ0) ||
-		(command == NAND_CMD_ERASE1) ||
 		(command == NAND_CMD_RESET) ||
 		(command == NAND_CMD_PARAM) ||
 		(command == NAND_CMD_GET_FEATURES)) {
