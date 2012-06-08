@@ -38,6 +38,9 @@
 #include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
+#include <mach/slcr.h>
+
+#define XSLCR_SMC_CLK_CTRL_OFFSET	0x148 /* SMC Clk Control */
 #endif
 
 #define XNANDPSS_DRIVER_NAME "Xilinx_PSS_NAND"
@@ -1104,6 +1107,10 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 
 	/* Get the chip timing params from the device tree, if available */	
 #ifdef CONFIG_OF
+	timing_prop = of_get_property(parts, "nand-slcr", 0);
+	if (timing_prop) {
+		xslcr_write(XSLCR_SMC_CLK_CTRL_OFFSET, be32_to_cpup(timing_prop));
+	}
 	timing_prop = of_get_property(parts, "nand-chip-timing", &len);
 	if (timing_prop && (len / sizeof(u32)) == 7) {
 		chip_timing = ((be32_to_cpup(&timing_prop[0]) << 20) |		/* t_rr */ 

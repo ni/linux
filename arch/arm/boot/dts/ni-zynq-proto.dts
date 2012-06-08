@@ -114,8 +114,11 @@
 			reg = <0xE1000000 0x1000000 0xE000E000 0x1000>;
 			bank-width = <1>; /* 8-bit width */
 
-			/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles, 95MHz clock */
-			nand-chip-timing = <0x2 0x1 0x1 0x2 0x1 0x3 0x3>;
+			/* SLCR SMC_CLK_CTRL value, 190MHz clock */
+			nand-slcr = <0x00000721>;
+
+			/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles, 190MHz clock */
+			nand-chip-timing = <0x4 0x2 0x2 0x3 0x1 0x5 0x5>;
 
 			#address-cells = <1>;
 			#size-cells = <1>;
