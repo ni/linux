@@ -419,7 +419,7 @@ static int __devinit ds3232_probe(struct i2c_client *client,
 		goto out_irq;
 	}
 
-	if (client->irq >= 0) {
+	if (client->irq > 0) {
 		ret = request_irq(client->irq, ds3232_irq, 0,
 				 "ds3232", client);
 		if (ret) {
