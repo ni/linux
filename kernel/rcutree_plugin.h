@@ -336,7 +336,7 @@ static noinline void rcu_read_unlock_special(struct task_struct *t)
 	}
 
 	/* Hardware IRQ handlers cannot block. */
-	if (in_irq() || in_serving_softirq()) {
+	if (preempt_count() & (HARDIRQ_MASK | SOFTIRQ_OFFSET)) {
 		local_irq_restore(flags);
 		return;
 	}
@@ -407,7 +407,7 @@ static noinline void rcu_read_unlock_special(struct task_struct *t)
 		 * then we need to report up the rcu_node hierarchy.
 		 */
 		if (!empty_exp && !rcu_preempted_readers_exp(rnp))
-			rcu_report_exp_rnp(&rcu_preempt_state, rnp);
+			rcu_report_exp_rnp(&rcu_preempt_state, rnp, true);
 	} else {
 		local_irq_restore(flags);
 	}
@@ -731,7 +731,8 @@ static int sync_rcu_preempt_exp_done(struct rcu_node *rnp)
  *
  * Caller must hold sync_rcu_preempt_exp_mutex.
  */
-static void rcu_report_exp_rnp(struct rcu_state *rsp, struct rcu_node *rnp)
+static void rcu_report_exp_rnp(struct rcu_state *rsp, struct rcu_node *rnp,
+			       bool wake)
 {
 	unsigned long flags;
 	unsigned long mask;
@@ -744,7 +745,8 @@ static void rcu_report_exp_rnp(struct rcu_state *rsp, struct rcu_node *rnp)
 		}
 		if (rnp->parent == NULL) {
 			raw_spin_unlock_irqrestore(&rnp->lock, flags);
-			wake_up(&sync_rcu_preempt_exp_wq);
+			if (wake)
+				wake_up(&sync_rcu_preempt_exp_wq);
 			break;
 		}
 		mask = rnp->grpmask;
@@ -777,7 +779,7 @@ sync_rcu_preempt_exp_init(struct rcu_state *rsp, struct rcu_node *rnp)
 		must_wait = 1;
 	}
 	if (!must_wait)
-		rcu_report_exp_rnp(rsp, rnp);
+		rcu_report_exp_rnp(rsp, rnp, false);
 }
 
 /*
@@ -1069,9 +1071,9 @@ EXPORT_SYMBOL_GPL(synchronize_rcu_expedited);
  * report on tasks preempted in RCU read-side critical sections during
  * expedited RCU grace periods.
  */
-static void rcu_report_exp_rnp(struct rcu_state *rsp, struct rcu_node *rnp)
+static void rcu_report_exp_rnp(struct rcu_state *rsp, struct rcu_node *rnp,
+			       bool wake)
 {
-	return;
 }
 
 #endif /* #ifdef CONFIG_HOTPLUG_CPU */
@@ -1931,7 +1933,7 @@ EXPORT_SYMBOL_GPL(synchronize_sched_expedited);
 
 #endif /* #else #ifndef CONFIG_SMP */
 
-#if !defined(CONFIG_RCU_FAST_NO_HZ)
+#if 1 /* !defined(CONFIG_RCU_FAST_NO_HZ) */
 
 /*
  * Check to see if any future RCU-related work will need to be done

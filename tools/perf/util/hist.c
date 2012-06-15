@@ -230,6 +230,18 @@ struct hist_entry *__hists__add_entry(struct hists *hists,
 		if (!cmp) {
 			he->period += period;
 			++he->nr_events;
+
+			/* If the map of an existing hist_entry has
+			 * become out-of-date due to an exec() or
+			 * similar, update it.  Otherwise we will
+			 * mis-adjust symbol addresses when computing
+			 * the history counter to increment.
+			 */
+			if (he->ms.map != entry.ms.map) {
+				he->ms.map = entry.ms.map;
+				if (he->ms.map)
+					he->ms.map->referenced = true;
+			}
 			goto out;
 		}
 
@@ -767,7 +779,7 @@ static int hist_entry__pcnt_snprintf(struct hist_entry *self, char *s,
 						     sep ? "%.2f" : "   %6.2f%%",
 						     (period * 100.0) / total);
 		else
-			ret = snprintf(s, size, sep ? "%.2f" : "   %6.2f%%",
+			ret = scnprintf(s, size, sep ? "%.2f" : "   %6.2f%%",
 				       (period * 100.0) / total);
 		if (symbol_conf.show_cpu_utilization) {
 			ret += percent_color_snprintf(s + ret, size - ret,
@@ -790,20 +802,20 @@ static int hist_entry__pcnt_snprintf(struct hist_entry *self, char *s,
 			}
 		}
 	} else
-		ret = snprintf(s, size, sep ? "%" PRIu64 : "%12" PRIu64 " ", period);
+		ret = scnprintf(s, size, sep ? "%" PRIu64 : "%12" PRIu64 " ", period);
 
 	if (symbol_conf.show_nr_samples) {
 		if (sep)
-			ret += snprintf(s + ret, size - ret, "%c%" PRIu64, *sep, nr_events);
+			ret += scnprintf(s + ret, size - ret, "%c%" PRIu64, *sep, nr_events);
 		else
-			ret += snprintf(s + ret, size - ret, "%11" PRIu64, nr_events);
+			ret += scnprintf(s + ret, size - ret, "%11" PRIu64, nr_events);
 	}
 
 	if (symbol_conf.show_total_period) {
 		if (sep)
-			ret += snprintf(s + ret, size - ret, "%c%" PRIu64, *sep, period);
+			ret += scnprintf(s + ret, size - ret, "%c%" PRIu64, *sep, period);
 		else
-			ret += snprintf(s + ret, size - ret, " %12" PRIu64, period);
+			ret += scnprintf(s + ret, size - ret, " %12" PRIu64, period);
 	}
 
 	if (pair_hists) {
@@ -818,25 +830,25 @@ static int hist_entry__pcnt_snprintf(struct hist_entry *self, char *s,
 		diff = new_percent - old_percent;
 
 		if (fabs(diff) >= 0.01)
-			snprintf(bf, sizeof(bf), "%+4.2F%%", diff);
+			ret += scnprintf(bf, sizeof(bf), "%+4.2F%%", diff);
 		else
-			snprintf(bf, sizeof(bf), " ");
+			ret += scnprintf(bf, sizeof(bf), " ");
 
 		if (sep)
-			ret += snprintf(s + ret, size - ret, "%c%s", *sep, bf);
+			ret += scnprintf(s + ret, size - ret, "%c%s", *sep, bf);
 		else
-			ret += snprintf(s + ret, size - ret, "%11.11s", bf);
+			ret += scnprintf(s + ret, size - ret, "%11.11s", bf);
 
 		if (show_displacement) {
 			if (displacement)
-				snprintf(bf, sizeof(bf), "%+4ld", displacement);
+				ret += scnprintf(bf, sizeof(bf), "%+4ld", displacement);
 			else
-				snprintf(bf, sizeof(bf), " ");
+				ret += scnprintf(bf, sizeof(bf), " ");
 
 			if (sep)
-				ret += snprintf(s + ret, size - ret, "%c%s", *sep, bf);
+				ret += scnprintf(s + ret, size - ret, "%c%s", *sep, bf);
 			else
-				ret += snprintf(s + ret, size - ret, "%6.6s", bf);
+				ret += scnprintf(s + ret, size - ret, "%6.6s", bf);
 		}
 	}
 
@@ -854,7 +866,7 @@ int hist_entry__snprintf(struct hist_entry *he, char *s, size_t size,
 		if (se->elide)
 			continue;
 
-		ret += snprintf(s + ret, size - ret, "%s", sep ?: "  ");
+		ret += scnprintf(s + ret, size - ret, "%s", sep ?: "  ");
 		ret += se->se_snprintf(he, s + ret, size - ret,
 				       hists__col_len(hists, se->se_width_idx));
 	}

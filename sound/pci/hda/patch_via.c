@@ -198,6 +198,9 @@ struct via_spec {
 	unsigned int no_pin_power_ctl;
 	enum VIA_HDA_CODEC codec_type;
 
+	/* analog low-power control */
+	bool alc_mode;
+
 	/* smart51 setup */
 	unsigned int smart51_nums;
 	hda_nid_t smart51_pins[2];
@@ -662,6 +665,9 @@ static void via_auto_init_analog_input(struct hda_codec *codec)
 	/* init input-src */
 	for (i = 0; i < spec->num_adc_nids; i++) {
 		int adc_idx = spec->inputs[spec->cur_mux[i]].adc_idx;
+		/* secondary ADCs must have the unique MUX */
+		if (i > 0 && !spec->mux_nids[i])
+			break;
 		if (spec->mux_nids[adc_idx]) {
 			int mux_idx = spec->inputs[spec->cur_mux[i]].mux_idx;
 			snd_hda_codec_write(codec, spec->mux_nids[adc_idx], 0,
@@ -748,6 +754,7 @@ static int via_pin_power_ctl_put(struct snd_kcontrol *kcontrol,
 		return 0;
 	spec->no_pin_power_ctl = val;
 	set_widgets_power_state(codec);
+	analog_low_current_mode(codec);
 	return 1;
 }
 
@@ -1035,13 +1042,19 @@ static bool is_aa_path_mute(struct hda_codec *codec)
 }
 
 /* enter/exit analog low-current mode */
-static void analog_low_current_mode(struct hda_codec *codec)
+static void __analog_low_current_mode(struct hda_codec *codec, bool force)
 {
 	struct via_spec *spec = codec->spec;
 	bool enable;
 	unsigned int verb, parm;
 
-	enable = is_aa_path_mute(codec) && (spec->opened_streams != 0);
+	if (spec->no_pin_power_ctl)
+		enable = false;
+	else
+		enable = is_aa_path_mute(codec) && !spec->opened_streams;
+	if (enable == spec->alc_mode && !force)
+		return;
+	spec->alc_mode = enable;
 
 	/* decide low current mode's verb & parameter */
 	switch (spec->codec_type) {
@@ -1071,6 +1084,11 @@ static void analog_low_current_mode(struct hda_codec *codec)
 	}
 	/* send verb */
 	snd_hda_codec_write(codec, codec->afg, 0, verb, parm);
+}
+
+static void analog_low_current_mode(struct hda_codec *codec)
+{
+	return __analog_low_current_mode(codec, false);
 }
 
 /*
@@ -1445,6 +1463,7 @@ static int via_build_controls(struct hda_codec *codec)
 	struct snd_kcontrol *kctl;
 	int err, i;
 
+	spec->no_pin_power_ctl = 1;
 	if (spec->set_widgets_power_state)
 		if (!via_clone_control(spec, &via_pin_power_ctl_enum))
 			return -ENOMEM;
@@ -1497,10 +1516,6 @@ static int via_build_controls(struct hda_codec *codec)
 		if (err < 0)
 			return err;
 	}
-
-	/* init power states */
-	set_widgets_power_state(codec);
-	analog_low_current_mode(codec);
 
 	via_free_kctls(codec); /* no longer needed */
 	return 0;
@@ -2200,7 +2215,10 @@ static int via_auto_create_loopback_switch(struct hda_codec *codec)
 {
 	struct via_spec *spec = codec->spec;
 
-	if (!spec->aa_mix_nid || !spec->out_mix_path.depth)
+	if (!spec->aa_mix_nid)
+		return 0; /* no loopback switching available */
+	if (!(spec->out_mix_path.depth || spec->hp_mix_path.depth ||
+	      spec->speaker_path.depth))
 		return 0; /* no loopback switching available */
 	if (!via_clone_control(spec, &via_aamix_ctl_enum))
 		return -ENOMEM;
@@ -2767,6 +2785,10 @@ static int via_init(struct hda_codec *codec)
 
 	for (i = 0; i < spec->num_iverbs; i++)
 		snd_hda_sequence_write(codec, spec->init_verbs[i]);
+
+	/* init power states */
+	set_widgets_power_state(codec);
+	__analog_low_current_mode(codec, true);
 
 	via_auto_init_multi_out(codec);
 	via_auto_init_hp_out(codec);

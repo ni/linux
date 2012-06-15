@@ -34,6 +34,7 @@
 #include <linux/sched.h>
 #include <linux/mount.h>
 #include <linux/namei.h>
+#include <linux/delay.h>
 #include <asm/current.h>
 #include <asm/uaccess.h>
 
@@ -267,6 +268,17 @@ static inline void managed_dentry_clear_managed(struct dentry *dentry)
 int autofs4_fill_super(struct super_block *, void *, int);
 struct autofs_info *autofs4_new_ino(struct autofs_sb_info *);
 void autofs4_clean_ino(struct autofs_info *);
+
+static inline int autofs_prepare_pipe(struct file *pipe)
+{
+	if (!pipe->f_op || !pipe->f_op->write)
+		return -EINVAL;
+	if (!S_ISFIFO(pipe->f_dentry->d_inode->i_mode))
+		return -EINVAL;
+	/* We want a packet pipe */
+	pipe->f_flags |= O_DIRECT;
+	return 0;
+}
 
 /* Queue management functions */
 

@@ -1140,24 +1140,40 @@ static unsigned int xhci_parse_exponent_interval(struct usb_device *udev,
 }
 
 /*
- * Convert bInterval expressed in frames (in 1-255 range) to exponent of
+ * Convert bInterval expressed in microframes (in 1-255 range) to exponent of
  * microframes, rounded down to nearest power of 2.
  */
-static unsigned int xhci_parse_frame_interval(struct usb_device *udev,
-		struct usb_host_endpoint *ep)
+static unsigned int xhci_microframes_to_exponent(struct usb_device *udev,
+		struct usb_host_endpoint *ep, unsigned int desc_interval,
+		unsigned int min_exponent, unsigned int max_exponent)
 {
 	unsigned int interval;
 
-	interval = fls(8 * ep->desc.bInterval) - 1;
-	interval = clamp_val(interval, 3, 10);
-	if ((1 << interval) != 8 * ep->desc.bInterval)
+	interval = fls(desc_interval) - 1;
+	interval = clamp_val(interval, min_exponent, max_exponent);
+	if ((1 << interval) != desc_interval)
 		dev_warn(&udev->dev,
 			 "ep %#x - rounding interval to %d microframes, ep desc says %d microframes\n",
 			 ep->desc.bEndpointAddress,
 			 1 << interval,
-			 8 * ep->desc.bInterval);
+			 desc_interval);
 
 	return interval;
+}
+
+static unsigned int xhci_parse_microframe_interval(struct usb_device *udev,
+		struct usb_host_endpoint *ep)
+{
+	return xhci_microframes_to_exponent(udev, ep,
+			ep->desc.bInterval, 0, 15);
+}
+
+
+static unsigned int xhci_parse_frame_interval(struct usb_device *udev,
+		struct usb_host_endpoint *ep)
+{
+	return xhci_microframes_to_exponent(udev, ep,
+			ep->desc.bInterval * 8, 3, 10);
 }
 
 /* Return the polling or NAK interval.
@@ -1178,7 +1194,7 @@ static unsigned int xhci_get_endpoint_interval(struct usb_device *udev,
 		/* Max NAK rate */
 		if (usb_endpoint_xfer_control(&ep->desc) ||
 		    usb_endpoint_xfer_bulk(&ep->desc)) {
-			interval = ep->desc.bInterval;
+			interval = xhci_parse_microframe_interval(udev, ep);
 			break;
 		}
 		/* Fall through - SS and HS isoc/int have same decoding */
@@ -1683,16 +1699,19 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
 {
 	struct pci_dev	*pdev = to_pci_dev(xhci_to_hcd(xhci)->self.controller);
 	struct dev_info	*dev_info, *next;
+	struct list_head *tt_list_head;
+	struct list_head *tt;
+	struct list_head *endpoints;
+	struct list_head *ep, *q;
+	struct xhci_tt_bw_info *tt_info;
+	struct xhci_interval_bw_table *bwt;
+	struct xhci_virt_ep *virt_ep;
+
 	unsigned long	flags;
 	int size;
 	int i;
 
 	/* Free the Event Ring Segment Table and the actual Event Ring */
-	if (xhci->ir_set) {
-		xhci_writel(xhci, 0, &xhci->ir_set->erst_size);
-		xhci_write_64(xhci, 0, &xhci->ir_set->erst_base);
-		xhci_write_64(xhci, 0, &xhci->ir_set->erst_dequeue);
-	}
 	size = sizeof(struct xhci_erst_entry)*(xhci->erst.num_entries);
 	if (xhci->erst.entries)
 		dma_free_coherent(&pdev->dev, size,
@@ -1704,7 +1723,7 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
 	xhci->event_ring = NULL;
 	xhci_dbg(xhci, "Freed event ring\n");
 
-	xhci_write_64(xhci, 0, &xhci->op_regs->cmd_ring);
+	xhci->cmd_ring_reserved_trbs = 0;
 	if (xhci->cmd_ring)
 		xhci_ring_free(xhci, xhci->cmd_ring);
 	xhci->cmd_ring = NULL;
@@ -1733,7 +1752,6 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
 	xhci->medium_streams_pool = NULL;
 	xhci_dbg(xhci, "Freed medium stream array pool\n");
 
-	xhci_write_64(xhci, 0, &xhci->op_regs->dcbaa_ptr);
 	if (xhci->dcbaa)
 		dma_free_coherent(&pdev->dev, sizeof(*xhci->dcbaa),
 				xhci->dcbaa, xhci->dcbaa->dma);
@@ -1748,8 +1766,26 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
 	}
 	spin_unlock_irqrestore(&xhci->lock, flags);
 
+	bwt = &xhci->rh_bw->bw_table;
+	for (i = 0; i < XHCI_MAX_INTERVAL; i++) {
+		endpoints = &bwt->interval_bw[i].endpoints;
+		list_for_each_safe(ep, q, endpoints) {
+			virt_ep = list_entry(ep, struct xhci_virt_ep, bw_endpoint_list);
+			list_del(&virt_ep->bw_endpoint_list);
+			kfree(virt_ep);
+		}
+	}
+
+	tt_list_head = &xhci->rh_bw->tts;
+	list_for_each_safe(tt, q, tt_list_head) {
+		tt_info = list_entry(tt, struct xhci_tt_bw_info, tt_list);
+		list_del(tt);
+		kfree(tt_info);
+	}
+
 	xhci->num_usb2_ports = 0;
 	xhci->num_usb3_ports = 0;
+	xhci->num_active_eps = 0;
 	kfree(xhci->usb2_ports);
 	kfree(xhci->usb3_ports);
 	kfree(xhci->port_array);
@@ -2342,6 +2378,8 @@ int xhci_mem_init(struct xhci_hcd *xhci, gfp_t flags)
 
 fail:
 	xhci_warn(xhci, "Couldn't initialize memory\n");
+	xhci_halt(xhci);
+	xhci_reset(xhci);
 	xhci_mem_cleanup(xhci);
 	return -ENOMEM;
 }

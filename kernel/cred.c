@@ -35,7 +35,7 @@ static struct kmem_cache *cred_jar;
 static struct thread_group_cred init_tgcred = {
 	.usage	= ATOMIC_INIT(2),
 	.tgid	= 0,
-	.lock	= __SPIN_LOCK_UNLOCKED(init_cred.tgcred.lock),
+	.lock	= __SPIN_LOCK_UNLOCKED(init_tgcred.lock),
 };
 #endif
 
@@ -384,6 +384,8 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 #endif
 	struct cred *new;
 	int ret;
+
+	p->replacement_session_keyring = NULL;
 
 	if (
 #ifdef CONFIG_KEYS

@@ -46,7 +46,12 @@ static int cpu_hotplug_disabled;
 
 static struct {
 	struct task_struct *active_writer;
+#ifdef CONFIG_PREEMPT_RT_FULL
+	/* Makes the lock keep the task's state */
+	spinlock_t lock;
+#else
 	struct mutex lock; /* Synchronizes accesses to refcount, */
+#endif
 	/*
 	 * Also blocks the new readers during
 	 * an ongoing cpu hotplug operation.
@@ -54,18 +59,128 @@ static struct {
 	int refcount;
 } cpu_hotplug = {
 	.active_writer = NULL,
+#ifdef CONFIG_PREEMPT_RT_FULL
+	.lock = __SPIN_LOCK_UNLOCKED(cpu_hotplug.lock),
+#else
 	.lock = __MUTEX_INITIALIZER(cpu_hotplug.lock),
+#endif
 	.refcount = 0,
 };
+
+#ifdef CONFIG_PREEMPT_RT_FULL
+# define hotplug_lock() rt_spin_lock(&cpu_hotplug.lock)
+# define hotplug_unlock() rt_spin_unlock(&cpu_hotplug.lock)
+#else
+# define hotplug_lock() mutex_lock(&cpu_hotplug.lock)
+# define hotplug_unlock() mutex_unlock(&cpu_hotplug.lock)
+#endif
+
+struct hotplug_pcp {
+	struct task_struct *unplug;
+	int refcount;
+	struct completion synced;
+};
+
+static DEFINE_PER_CPU(struct hotplug_pcp, hotplug_pcp);
+
+/**
+ * pin_current_cpu - Prevent the current cpu from being unplugged
+ *
+ * Lightweight version of get_online_cpus() to prevent cpu from being
+ * unplugged when code runs in a migration disabled region.
+ *
+ * Must be called with preemption disabled (preempt_count = 1)!
+ */
+void pin_current_cpu(void)
+{
+	struct hotplug_pcp *hp;
+
+retry:
+	hp = &__get_cpu_var(hotplug_pcp);
+
+	if (!hp->unplug || hp->refcount || preempt_count() > 1 ||
+	    hp->unplug == current || (current->flags & PF_STOMPER)) {
+		hp->refcount++;
+		return;
+	}
+	preempt_enable();
+	hotplug_lock();
+	hotplug_unlock();
+	preempt_disable();
+	goto retry;
+}
+
+/**
+ * unpin_current_cpu - Allow unplug of current cpu
+ *
+ * Must be called with preemption or interrupts disabled!
+ */
+void unpin_current_cpu(void)
+{
+	struct hotplug_pcp *hp = &__get_cpu_var(hotplug_pcp);
+
+	WARN_ON(hp->refcount <= 0);
+
+	/* This is safe. sync_unplug_thread is pinned to this cpu */
+	if (!--hp->refcount && hp->unplug && hp->unplug != current &&
+	    !(current->flags & PF_STOMPER))
+		wake_up_process(hp->unplug);
+}
+
+/*
+ * FIXME: Is this really correct under all circumstances ?
+ */
+static int sync_unplug_thread(void *data)
+{
+	struct hotplug_pcp *hp = data;
+
+	preempt_disable();
+	hp->unplug = current;
+	set_current_state(TASK_UNINTERRUPTIBLE);
+	while (hp->refcount) {
+		schedule_preempt_disabled();
+		set_current_state(TASK_UNINTERRUPTIBLE);
+	}
+	set_current_state(TASK_RUNNING);
+	preempt_enable();
+	complete(&hp->synced);
+	return 0;
+}
+
+/*
+ * Start the sync_unplug_thread on the target cpu and wait for it to
+ * complete.
+ */
+static int cpu_unplug_begin(unsigned int cpu)
+{
+	struct hotplug_pcp *hp = &per_cpu(hotplug_pcp, cpu);
+	struct task_struct *tsk;
+
+	init_completion(&hp->synced);
+	tsk = kthread_create(sync_unplug_thread, hp, "sync_unplug/%d", cpu);
+	if (IS_ERR(tsk))
+		return (PTR_ERR(tsk));
+	kthread_bind(tsk, cpu);
+	wake_up_process(tsk);
+	wait_for_completion(&hp->synced);
+	return 0;
+}
+
+static void cpu_unplug_done(unsigned int cpu)
+{
+	struct hotplug_pcp *hp = &per_cpu(hotplug_pcp, cpu);
+
+	hp->unplug = NULL;
+}
 
 void get_online_cpus(void)
 {
 	might_sleep();
 	if (cpu_hotplug.active_writer == current)
 		return;
-	mutex_lock(&cpu_hotplug.lock);
+	hotplug_lock();
 	cpu_hotplug.refcount++;
-	mutex_unlock(&cpu_hotplug.lock);
+	hotplug_unlock();
 
 }
 EXPORT_SYMBOL_GPL(get_online_cpus);
@@ -74,10 +189,10 @@ void put_online_cpus(void)
 {
 	if (cpu_hotplug.active_writer == current)
 		return;
-	mutex_lock(&cpu_hotplug.lock);
+	hotplug_lock();
 	if (!--cpu_hotplug.refcount && unlikely(cpu_hotplug.active_writer))
 		wake_up_process(cpu_hotplug.active_writer);
-	mutex_unlock(&cpu_hotplug.lock);
+	hotplug_unlock();
 
 }
 EXPORT_SYMBOL_GPL(put_online_cpus);
@@ -109,11 +224,11 @@ static void cpu_hotplug_begin(void)
 	cpu_hotplug.active_writer = current;
 
 	for (;;) {
-		mutex_lock(&cpu_hotplug.lock);
+		hotplug_lock();
 		if (likely(!cpu_hotplug.refcount))
 			break;
 		__set_current_state(TASK_UNINTERRUPTIBLE);
-		mutex_unlock(&cpu_hotplug.lock);
+		hotplug_unlock();
 		schedule();
 	}
 }
@@ -121,7 +236,7 @@ static void cpu_hotplug_begin(void)
 static void cpu_hotplug_done(void)
 {
 	cpu_hotplug.active_writer = NULL;
-	mutex_unlock(&cpu_hotplug.lock);
+	hotplug_unlock();
 }
 
 #else /* #if CONFIG_HOTPLUG_CPU */
@@ -211,13 +326,14 @@ static int __ref take_cpu_down(void *_param)
 /* Requires cpu_add_remove_lock to be held */
 static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 {
-	int err, nr_calls = 0;
+	int mycpu, err, nr_calls = 0;
 	void *hcpu = (void *)(long)cpu;
 	unsigned long mod = tasks_frozen ? CPU_TASKS_FROZEN : 0;
 	struct take_cpu_down_param tcd_param = {
 		.mod = mod,
 		.hcpu = hcpu,
 	};
+	cpumask_var_t cpumask;
 
 	if (num_online_cpus() == 1)
 		return -EBUSY;
@@ -225,7 +341,26 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 	if (!cpu_online(cpu))
 		return -EINVAL;
 
+	/* Move the downtaker off the unplug cpu */
+	if (!alloc_cpumask_var(&cpumask, GFP_KERNEL))
+		return -ENOMEM;
+	cpumask_andnot(cpumask, cpu_online_mask, cpumask_of(cpu));
+	set_cpus_allowed_ptr(current, cpumask);
+	free_cpumask_var(cpumask);
+	migrate_disable();
+	mycpu = smp_processor_id();
+	if (mycpu == cpu) {
+		printk(KERN_ERR "Yuck! Still on unplug CPU\n!");
+		migrate_enable();
+		return -EBUSY;
+	}
+
 	cpu_hotplug_begin();
+	err = cpu_unplug_begin(cpu);
+	if (err) {
+		printk("cpu_unplug_begin(%d) failed\n", cpu);
+		goto out_cancel;
+	}
 
 	err = __cpu_notify(CPU_DOWN_PREPARE | mod, hcpu, -1, &nr_calls);
 	if (err) {
@@ -264,6 +399,9 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 	check_for_tasks(cpu);
 
 out_release:
+	cpu_unplug_done(cpu);
+out_cancel:
+	migrate_enable();
 	cpu_hotplug_done();
 	if (!err)
 		cpu_notify_nofail(CPU_POST_DEAD | mod, hcpu);

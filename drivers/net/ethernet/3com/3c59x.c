@@ -843,9 +843,9 @@ static void poll_vortex(struct net_device *dev)
 {
 	struct vortex_private *vp = netdev_priv(dev);
 	unsigned long flags;
-	local_irq_save(flags);
+	local_irq_save_nort(flags);
 	(vp->full_bus_master_rx ? boomerang_interrupt:vortex_interrupt)(dev->irq,dev);
-	local_irq_restore(flags);
+	local_irq_restore_nort(flags);
 }
 #endif
 
@@ -1842,7 +1842,7 @@ vortex_timer(unsigned long data)
 		ok = 1;
 	}
 
-	if (!netif_carrier_ok(dev))
+	if (dev->flags & IFF_SLAVE || !netif_carrier_ok(dev))
 		next_tick = 5*HZ;
 
 	if (vp->medialock)
@@ -1921,12 +1921,12 @@ static void vortex_tx_timeout(struct net_device *dev)
 			 * Block interrupts because vortex_interrupt does a bare spin_lock()
 			 */
 			unsigned long flags;
-			local_irq_save(flags);
+			local_irq_save_nort(flags);
 			if (vp->full_bus_master_tx)
 				boomerang_interrupt(dev->irq, dev);
 			else
 				vortex_interrupt(dev->irq, dev);
-			local_irq_restore(flags);
+			local_irq_restore_nort(flags);
 		}
 	}
 

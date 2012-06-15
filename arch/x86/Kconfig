@@ -161,10 +161,10 @@ config ARCH_MAY_HAVE_PC_FDC
 	def_bool ISA_DMA_API
 
 config RWSEM_GENERIC_SPINLOCK
-	def_bool !X86_XADD
+	def_bool !X86_XADD || PREEMPT_RT_FULL
 
 config RWSEM_XCHGADD_ALGORITHM
-	def_bool X86_XADD
+	def_bool X86_XADD && !RWSEM_GENERIC_SPINLOCK && !PREEMPT_RT_FULL
 
 config ARCH_HAS_CPU_IDLE_WAIT
 	def_bool y
@@ -730,7 +730,7 @@ config IOMMU_HELPER
 config MAXSMP
 	bool "Enable Maximum number of SMP Processors and NUMA Nodes"
 	depends on X86_64 && SMP && DEBUG_KERNEL && EXPERIMENTAL
-	select CPUMASK_OFFSTACK
+	select CPUMASK_OFFSTACK if !PREEMPT_RT_FULL
 	---help---
 	  Enable maximum number of CPUS and NUMA Nodes for this architecture.
 	  If unsure, say N.

@@ -30,6 +30,10 @@ enum {
  */
 struct page_cgroup {
 	unsigned long flags;
+#ifdef CONFIG_PREEMPT_RT_BASE
+	spinlock_t pcg_lock;
+	spinlock_t pcm_lock;
+#endif
 	struct mem_cgroup *mem_cgroup;
 	struct list_head lru;		/* per cgroup LRU list */
 };
@@ -96,30 +100,54 @@ static inline void lock_page_cgroup(struct page_cgroup *pc)
 	 * Don't take this lock in IRQ context.
 	 * This lock is for pc->mem_cgroup, USED, CACHE, MIGRATION
 	 */
+#ifndef CONFIG_PREEMPT_RT_BASE
 	bit_spin_lock(PCG_LOCK, &pc->flags);
+#else
+	spin_lock(&pc->pcg_lock);
+#endif
 }
 
 static inline void unlock_page_cgroup(struct page_cgroup *pc)
 {
+#ifndef CONFIG_PREEMPT_RT_BASE
 	bit_spin_unlock(PCG_LOCK, &pc->flags);
+#else
+	spin_unlock(&pc->pcg_lock);
+#endif
 }
 
 static inline void move_lock_page_cgroup(struct page_cgroup *pc,
 	unsigned long *flags)
 {
+#ifndef CONFIG_PREEMPT_RT_BASE
 	/*
 	 * We know updates to pc->flags of page cache's stats are from both of
 	 * usual context or IRQ context. Disable IRQ to avoid deadlock.
 	 */
 	local_irq_save(*flags);
 	bit_spin_lock(PCG_MOVE_LOCK, &pc->flags);
+#else
+	spin_lock_irqsave(&pc->pcm_lock, *flags);
+#endif
 }
 
 static inline void move_unlock_page_cgroup(struct page_cgroup *pc,
 	unsigned long *flags)
 {
+#ifndef CONFIG_PREEMPT_RT_BASE
 	bit_spin_unlock(PCG_MOVE_LOCK, &pc->flags);
 	local_irq_restore(*flags);
+#else
+	spin_unlock_irqrestore(&pc->pcm_lock, *flags);
+#endif
+}
+
+static inline void page_cgroup_lock_init(struct page_cgroup *pc)
+{
+#ifdef CONFIG_PREEMPT_RT_BASE
+	spin_lock_init(&pc->pcg_lock);
+	spin_lock_init(&pc->pcm_lock);
+#endif
 }
 
 #ifdef CONFIG_SPARSEMEM

@@ -719,7 +719,7 @@ static unsigned long fcoe_ctlr_age_fcfs(struct fcoe_ctlr *fip)
 	unsigned long sel_time = 0;
 	struct fcoe_dev_stats *stats;
 
-	stats = per_cpu_ptr(fip->lp->dev_stats, get_cpu());
+	stats = per_cpu_ptr(fip->lp->dev_stats, get_cpu_light());
 
 	list_for_each_entry_safe(fcf, next, &fip->fcfs, list) {
 		deadline = fcf->time + fcf->fka_period + fcf->fka_period / 2;
@@ -752,7 +752,7 @@ static unsigned long fcoe_ctlr_age_fcfs(struct fcoe_ctlr *fip)
 				sel_time = fcf->time;
 		}
 	}
-	put_cpu();
+	put_cpu_light();
 	if (sel_time && !fip->sel_fcf && !fip->sel_time) {
 		sel_time += msecs_to_jiffies(FCOE_CTLR_START_DELAY);
 		fip->sel_time = sel_time;

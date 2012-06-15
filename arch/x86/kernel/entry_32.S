@@ -99,12 +99,6 @@
 #endif
 .endm
 
-#ifdef CONFIG_VM86
-#define resume_userspace_sig	check_userspace
-#else
-#define resume_userspace_sig	resume_userspace
-#endif
-
 /*
  * User gs save/restore
  *
@@ -328,10 +322,19 @@ ret_from_exception:
 	preempt_stop(CLBR_ANY)
 ret_from_intr:
 	GET_THREAD_INFO(%ebp)
-check_userspace:
+resume_userspace_sig:
+#ifdef CONFIG_VM86
 	movl PT_EFLAGS(%esp), %eax	# mix EFLAGS and CS
 	movb PT_CS(%esp), %al
 	andl $(X86_EFLAGS_VM | SEGMENT_RPL_MASK), %eax
+#else
+	/*
+	 * We can be coming here from a syscall done in the kernel space,
+	 * e.g. a failed kernel_execve().
+	 */
+	movl PT_CS(%esp), %eax
+	andl $SEGMENT_RPL_MASK, %eax
+#endif
 	cmpl $USER_RPL, %eax
 	jb resume_kernel		# not returning to v8086 or userspace
 
@@ -626,7 +629,11 @@ work_notifysig:				# deal with pending signals and
 	jne work_notifysig_v86		# returning to kernel-space or
 					# vm86-space
 	xorl %edx, %edx
+	TRACE_IRQS_ON
+	ENABLE_INTERRUPTS(CLBR_NONE)
 	call do_notify_resume
+	DISABLE_INTERRUPTS(CLBR_ANY)
+	TRACE_IRQS_OFF
 	jmp resume_userspace_sig
 
 	ALIGN
@@ -639,7 +646,11 @@ work_notifysig_v86:
 	movl %esp, %eax
 #endif
 	xorl %edx, %edx
+	TRACE_IRQS_ON
+	ENABLE_INTERRUPTS(CLBR_NONE)
 	call do_notify_resume
+	DISABLE_INTERRUPTS(CLBR_ANY)
+	TRACE_IRQS_OFF
 	jmp resume_userspace_sig
 END(work_pending)
 

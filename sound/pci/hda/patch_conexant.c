@@ -1120,8 +1120,6 @@ static const char * const cxt5045_models[CXT5045_MODELS] = {
 
 static const struct snd_pci_quirk cxt5045_cfg_tbl[] = {
 	SND_PCI_QUIRK(0x103c, 0x30d5, "HP 530", CXT5045_LAPTOP_HP530),
-	SND_PCI_QUIRK_MASK(0x103c, 0xff00, 0x3000, "HP DV Series",
-			   CXT5045_LAPTOP_HPSENSE),
 	SND_PCI_QUIRK(0x1179, 0xff31, "Toshiba P105", CXT5045_LAPTOP_MICSENSE),
 	SND_PCI_QUIRK(0x152d, 0x0753, "Benq R55E", CXT5045_BENQ),
 	SND_PCI_QUIRK(0x1734, 0x10ad, "Fujitsu Si1520", CXT5045_LAPTOP_MICSENSE),
@@ -1901,6 +1899,10 @@ static void cxt5051_init_mic_port(struct hda_codec *codec, hda_nid_t nid,
 	snd_hda_codec_write(codec, nid, 0,
 			    AC_VERB_SET_UNSOLICITED_ENABLE,
 			    AC_USRSP_EN | event);
+}
+
+static void cxt5051_init_mic_jack(struct hda_codec *codec, hda_nid_t nid)
+{
 	snd_hda_input_jack_add(codec, nid, SND_JACK_MICROPHONE, NULL);
 	snd_hda_input_jack_report(codec, nid);
 }
@@ -1918,7 +1920,6 @@ static int cxt5051_init(struct hda_codec *codec)
 	struct conexant_spec *spec = codec->spec;
 
 	conexant_init(codec);
-	conexant_init_jacks(codec);
 
 	if (spec->auto_mic & AUTO_MIC_PORTB)
 		cxt5051_init_mic_port(codec, 0x17, CXT5051_PORTB_EVENT);
@@ -2038,6 +2039,12 @@ static int patch_cxt5051(struct hda_codec *codec)
 
 	if (spec->beep_amp)
 		snd_hda_attach_beep_device(codec, spec->beep_amp);
+
+	conexant_init_jacks(codec);
+	if (spec->auto_mic & AUTO_MIC_PORTB)
+		cxt5051_init_mic_jack(codec, 0x17);
+	if (spec->auto_mic & AUTO_MIC_PORTC)
+		cxt5051_init_mic_jack(codec, 0x18);
 
 	return 0;
 }
@@ -3996,9 +4003,14 @@ static void cx_auto_init_output(struct hda_codec *codec)
 	int i;
 
 	mute_outputs(codec, spec->multiout.num_dacs, spec->multiout.dac_nids);
-	for (i = 0; i < cfg->hp_outs; i++)
+	for (i = 0; i < cfg->hp_outs; i++) {
+		unsigned int val = PIN_OUT;
+		if (snd_hda_query_pin_caps(codec, cfg->hp_pins[i]) &
+		    AC_PINCAP_HP_DRV)
+			val |= AC_PINCTL_HP_EN;
 		snd_hda_codec_write(codec, cfg->hp_pins[i], 0,
-				    AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_HP);
+				    AC_VERB_SET_PIN_WIDGET_CONTROL, val);
+	}
 	mute_outputs(codec, cfg->hp_outs, cfg->hp_pins);
 	mute_outputs(codec, cfg->line_outs, cfg->line_out_pins);
 	mute_outputs(codec, cfg->speaker_outs, cfg->speaker_pins);
@@ -4125,7 +4137,8 @@ static int cx_auto_add_volume_idx(struct hda_codec *codec, const char *basename,
 		err = snd_hda_ctl_add(codec, nid, kctl);
 		if (err < 0)
 			return err;
-		if (!(query_amp_caps(codec, nid, hda_dir) & AC_AMPCAP_MUTE))
+		if (!(query_amp_caps(codec, nid, hda_dir) &
+		      (AC_AMPCAP_MUTE | AC_AMPCAP_MIN_MUTE)))
 			break;
 	}
 	return 0;
@@ -4400,8 +4413,10 @@ static void apply_pin_fixup(struct hda_codec *codec,
 
 enum {
 	CXT_PINCFG_LENOVO_X200,
+	CXT_PINCFG_LENOVO_TP410,
 };
 
+/* ThinkPad X200 & co with cxt5051 */
 static const struct cxt_pincfg cxt_pincfg_lenovo_x200[] = {
 	{ 0x16, 0x042140ff }, /* HP (seq# overridden) */
 	{ 0x17, 0x21a11000 }, /* dock-mic */
@@ -4409,14 +4424,48 @@ static const struct cxt_pincfg cxt_pincfg_lenovo_x200[] = {
 	{}
 };
 
-static const struct cxt_pincfg *cxt_pincfg_tbl[] = {
-	[CXT_PINCFG_LENOVO_X200] = cxt_pincfg_lenovo_x200,
+/* ThinkPad 410/420/510/520, X201 & co with cxt5066 */
+static const struct cxt_pincfg cxt_pincfg_lenovo_tp410[] = {
+	{ 0x19, 0x042110ff }, /* HP (seq# overridden) */
+	{ 0x1a, 0x21a190f0 }, /* dock-mic */
+	{ 0x1c, 0x212140ff }, /* dock-HP */
+	{}
 };
 
-static const struct snd_pci_quirk cxt_fixups[] = {
+static const struct cxt_pincfg *cxt_pincfg_tbl[] = {
+	[CXT_PINCFG_LENOVO_X200] = cxt_pincfg_lenovo_x200,
+	[CXT_PINCFG_LENOVO_TP410] = cxt_pincfg_lenovo_tp410,
+};
+
+static const struct snd_pci_quirk cxt5051_fixups[] = {
 	SND_PCI_QUIRK(0x17aa, 0x20f2, "Lenovo X200", CXT_PINCFG_LENOVO_X200),
 	{}
 };
+
+static const struct snd_pci_quirk cxt5066_fixups[] = {
+	SND_PCI_QUIRK(0x17aa, 0x20f2, "Lenovo T400", CXT_PINCFG_LENOVO_TP410),
+	SND_PCI_QUIRK(0x17aa, 0x215e, "Lenovo T410", CXT_PINCFG_LENOVO_TP410),
+	SND_PCI_QUIRK(0x17aa, 0x215f, "Lenovo T510", CXT_PINCFG_LENOVO_TP410),
+	SND_PCI_QUIRK(0x17aa, 0x21ce, "Lenovo T420", CXT_PINCFG_LENOVO_TP410),
+	SND_PCI_QUIRK(0x17aa, 0x21cf, "Lenovo T520", CXT_PINCFG_LENOVO_TP410),
+	{}
+};
+
+/* add "fake" mute amp-caps to DACs on cx5051 so that mixer mute switches
+ * can be created (bko#42825)
+ */
+static void add_cx5051_fake_mutes(struct hda_codec *codec)
+{
+	static hda_nid_t out_nids[] = {
+		0x10, 0x11, 0
+	};
+	hda_nid_t *p;
+
+	for (p = out_nids; *p; p++)
+		snd_hda_override_amp_caps(codec, *p, HDA_OUTPUT,
+					  AC_AMPCAP_MIN_MUTE |
+					  query_amp_caps(codec, *p, HDA_OUTPUT));
+}
 
 static int patch_conexant_auto(struct hda_codec *codec)
 {
@@ -4436,9 +4485,14 @@ static int patch_conexant_auto(struct hda_codec *codec)
 	case 0x14f15045:
 		spec->single_adc_amp = 1;
 		break;
+	case 0x14f15051:
+		add_cx5051_fake_mutes(codec);
+		apply_pin_fixup(codec, cxt5051_fixups, cxt_pincfg_tbl);
+		break;
+	default:
+		apply_pin_fixup(codec, cxt5066_fixups, cxt_pincfg_tbl);
+		break;
 	}
-
-	apply_pin_fixup(codec, cxt_fixups, cxt_pincfg_tbl);
 
 	err = cx_auto_search_adcs(codec);
 	if (err < 0)

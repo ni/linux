@@ -194,7 +194,7 @@ static void netpoll_poll_dev(struct net_device *dev)
 
 	poll_napi(dev);
 
-	if (dev->priv_flags & IFF_SLAVE) {
+	if (dev->flags & IFF_SLAVE) {
 		if (dev->npinfo) {
 			struct net_device *bond_dev = dev->master;
 			struct sk_buff *skb;
@@ -763,7 +763,7 @@ int __netpoll_setup(struct netpoll *np)
 	}
 
 	/* last thing to do is link it to the net device structure */
-	RCU_INIT_POINTER(ndev->npinfo, npinfo);
+	rcu_assign_pointer(ndev->npinfo, npinfo);
 
 	return 0;
 

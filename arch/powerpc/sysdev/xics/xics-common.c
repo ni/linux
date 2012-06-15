@@ -134,10 +134,11 @@ static void xics_request_ipi(void)
 	BUG_ON(ipi == NO_IRQ);
 
 	/*
-	 * IPIs are marked IRQF_PERCPU. The handler was set in map.
+	 * IPIs are marked PERCPU and also IRQF_NO_THREAD as they must
+	 * run in hard interrupt context. The handler was set in map.
 	 */
 	BUG_ON(request_irq(ipi, icp_ops->ipi_action,
-			   IRQF_PERCPU, "IPI", NULL));
+			   IRQF_NO_THREAD|IRQF_PERCPU, "IPI", NULL));
 }
 
 int __init xics_smp_probe(void)

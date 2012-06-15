@@ -80,7 +80,6 @@ void __smp_call_function_single(int cpuid, struct call_single_data *data,
 
 int smp_call_function_any(const struct cpumask *mask,
 			  smp_call_func_t func, void *info, int wait);
-
 /*
  * Generic and arch helpers
  */
@@ -172,6 +171,9 @@ smp_call_function_any(const struct cpumask *mask, smp_call_func_t func,
 
 #define get_cpu()		({ preempt_disable(); smp_processor_id(); })
 #define put_cpu()		preempt_enable()
+
+#define get_cpu_light()		({ migrate_disable(); smp_processor_id(); })
+#define put_cpu_light()		migrate_enable()
 
 /*
  * Callback to arch code if there's nosmp or maxcpus=0 on the

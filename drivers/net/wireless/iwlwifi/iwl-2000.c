@@ -51,10 +51,10 @@
 #define IWL135_UCODE_API_MAX 6
 
 /* Oldest version we won't warn about */
-#define IWL2030_UCODE_API_OK 5
-#define IWL2000_UCODE_API_OK 5
-#define IWL105_UCODE_API_OK 5
-#define IWL135_UCODE_API_OK 5
+#define IWL2030_UCODE_API_OK 6
+#define IWL2000_UCODE_API_OK 6
+#define IWL105_UCODE_API_OK 6
+#define IWL135_UCODE_API_OK 6
 
 /* Lowest firmware API version supported */
 #define IWL2030_UCODE_API_MIN 5
@@ -211,7 +211,7 @@ static struct iwl_base_params iwl2000_base_params = {
 	.chain_noise_scale = 1000,
 	.wd_timeout = IWL_DEF_WD_TIMEOUT,
 	.max_event_log_size = 512,
-	.shadow_reg_enable = true,
+	.shadow_reg_enable = false, /* TODO: fix bugs using this feature */
 	.hd_v2 = true,
 };
 
@@ -230,7 +230,7 @@ static struct iwl_base_params iwl2030_base_params = {
 	.chain_noise_scale = 1000,
 	.wd_timeout = IWL_LONG_WD_TIMEOUT,
 	.max_event_log_size = 512,
-	.shadow_reg_enable = true,
+	.shadow_reg_enable = false, /* TODO: fix bugs using this feature */
 	.hd_v2 = true,
 };
 
@@ -372,7 +372,7 @@ struct iwl_cfg iwl135_bgn_cfg = {
 	.ht_params = &iwl2000_ht_params,
 };
 
-MODULE_FIRMWARE(IWL2000_MODULE_FIRMWARE(IWL2000_UCODE_API_MAX));
-MODULE_FIRMWARE(IWL2030_MODULE_FIRMWARE(IWL2030_UCODE_API_MAX));
-MODULE_FIRMWARE(IWL105_MODULE_FIRMWARE(IWL105_UCODE_API_MAX));
-MODULE_FIRMWARE(IWL135_MODULE_FIRMWARE(IWL135_UCODE_API_MAX));
+MODULE_FIRMWARE(IWL2000_MODULE_FIRMWARE(IWL2000_UCODE_API_OK));
+MODULE_FIRMWARE(IWL2030_MODULE_FIRMWARE(IWL2030_UCODE_API_OK));
+MODULE_FIRMWARE(IWL105_MODULE_FIRMWARE(IWL105_UCODE_API_OK));
+MODULE_FIRMWARE(IWL135_MODULE_FIRMWARE(IWL135_UCODE_API_OK));

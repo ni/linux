@@ -29,7 +29,6 @@
 #include <asm/irq.h>
 #include <asm/timer.h>
 #include <asm/nmi.h>
-#include <asm/compat.h>
 #include <asm/smp.h>
 #include "entry.h"
 
@@ -95,9 +94,7 @@ void cpu_idle(void)
 		while (!need_resched())
 			default_idle();
 		tick_nohz_restart_sched_tick();
-		preempt_enable_no_resched();
-		schedule();
-		preempt_disable();
+		schedule_preempt_disabled();
 	}
 }
 

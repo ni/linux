@@ -200,7 +200,9 @@ static irqreturn_t at91ether_phy_interrupt(int irq, void *dev_id)
 	struct net_device *dev = (struct net_device *) dev_id;
 	struct at91_private *lp = netdev_priv(dev);
 	unsigned int phy;
+	unsigned long flags;
 
+	spin_lock_irqsave(&lp->lock, flags);
 	/*
 	 * This hander is triggered on both edges, but the PHY chips expect
 	 * level-triggering.  We therefore have to check if the PHY actually has
@@ -242,6 +244,7 @@ static irqreturn_t at91ether_phy_interrupt(int irq, void *dev_id)
 
 done:
 	disable_mdi();
+	spin_unlock_irqrestore(&lp->lock, flags);
 
 	return IRQ_HANDLED;
 }
@@ -398,9 +401,11 @@ static void at91ether_check_link(unsigned long dev_id)
 	struct net_device *dev = (struct net_device *) dev_id;
 	struct at91_private *lp = netdev_priv(dev);
 
+	spin_lock_irq(&lp->lock);
 	enable_mdi();
 	update_linkspeed(dev, 1);
 	disable_mdi();
+	spin_unlock_irq(&lp->lock);
 
 	mod_timer(&lp->check_timer, jiffies + LINK_POLL_INTERVAL);
 }

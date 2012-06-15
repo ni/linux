@@ -438,10 +438,26 @@ static bool radeon_atom_apply_quirks(struct drm_device *dev,
 	 */
 	if ((dev->pdev->device == 0x9498) &&
 	    (dev->pdev->subsystem_vendor == 0x1682) &&
-	    (dev->pdev->subsystem_device == 0x2452)) {
+	    (dev->pdev->subsystem_device == 0x2452) &&
+	    (i2c_bus->valid == false) &&
+	    !(supported_device & (ATOM_DEVICE_TV_SUPPORT | ATOM_DEVICE_CV_SUPPORT))) {
 		struct radeon_device *rdev = dev->dev_private;
 		*i2c_bus = radeon_lookup_i2c_gpio(rdev, 0x93);
 	}
+
+	/* Fujitsu D3003-S2 board lists DVI-I as DVI-D and VGA */
+	if ((dev->pdev->device == 0x9802) &&
+	    (dev->pdev->subsystem_vendor == 0x1734) &&
+	    (dev->pdev->subsystem_device == 0x11bd)) {
+		if (*connector_type == DRM_MODE_CONNECTOR_VGA) {
+			*connector_type = DRM_MODE_CONNECTOR_DVII;
+			*line_mux = 0x3103;
+		} else if (*connector_type == DRM_MODE_CONNECTOR_DVID) {
+			*connector_type = DRM_MODE_CONNECTOR_DVII;
+		}
+	}
+
+
 	return true;
 }
 
