@@ -119,7 +119,8 @@
 #define NAND_CMD_GET_FEATURES	0xEE
 #define NAND_CMD_SET_FEATURES	0xEF
 
-#define ONDIE_ECC_FEATURE_ADDR	0x90
+#define TIMING_MODE_FEATURE_ADDR	0x01
+#define ONDIE_ECC_FEATURE_ADDR		0x90
 
 /*
  * Macros for the NAND controller register read/write
@@ -1009,6 +1010,8 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 	struct device_node *parts = pdev->dev.of_node;
 	const u32 *timing_prop;
 	int len = 0;
+	u32 smc_clk_ctrl[6];
+	u32 chip_timings[6];
 #endif
 
 #ifdef CONFIG_OF
@@ -1105,25 +1108,36 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, xnand);
 
-	/* Get the chip timing params from the device tree, if available */	
+	/* Get the chip timing params from the device tree, if available */
 #ifdef CONFIG_OF
-	timing_prop = of_get_property(parts, "nand-slcr", 0);
-	if (timing_prop) {
-		xslcr_write(XSLCR_SMC_CLK_CTRL_OFFSET, be32_to_cpup(timing_prop));
+	for (i = 0; i < 6; ++i) {
+		char prop_name[16];
+		sprintf(prop_name, "xlnx,onfi-mode%u", i);
+
+		timing_prop = of_get_property(parts, prop_name, &len);
+
+		if (timing_prop && (len / sizeof(u32)) == 8) {
+			smc_clk_ctrl[i] = be32_to_cpup(&timing_prop[0]);
+			chip_timings[i] = (
+				(be32_to_cpup(&timing_prop[1]) << 20) |	/* t_rr */
+				(be32_to_cpup(&timing_prop[2]) << 17) |	/* t_ar */
+				(be32_to_cpup(&timing_prop[3]) << 14) |	/* t_clr */
+				(be32_to_cpup(&timing_prop[4]) << 11) |	/* t_wp */
+				(be32_to_cpup(&timing_prop[5]) << 8)  |	/* t_rea */
+				(be32_to_cpup(&timing_prop[6]) << 4)  |	/* t_wc */
+				(be32_to_cpup(&timing_prop[7]) << 0));	/* t_rc */
+		} else {
+			/* No property, use default values. */
+			smc_clk_ctrl[i] = xslcr_read(XSLCR_SMC_CLK_CTRL_OFFSET);
+			chip_timings[i] = XNANDPSS_SET_CYCLES;
+		}
 	}
-	timing_prop = of_get_property(parts, "nand-chip-timing", &len);
-	if (timing_prop && (len / sizeof(u32)) == 7) {
-		chip_timing = ((be32_to_cpup(&timing_prop[0]) << 20) |		/* t_rr */ 
-				(be32_to_cpup(&timing_prop[1]) << 17)  |	/* t_ar */ 
-				(be32_to_cpup(&timing_prop[2]) << 14)  |	/* t_clr */ 
-				(be32_to_cpup(&timing_prop[3]) << 11)  |	/* t_wp */ 
-				(be32_to_cpup(&timing_prop[4]) << 8)   |	/* t_rea */ 
-				(be32_to_cpup(&timing_prop[5]) << 4)   |	/* t_wc */ 
-				(be32_to_cpup(&timing_prop[6]) << 0));		/* t_rc */
-	} else {
-		/* No property, use default values. */
-		chip_timing = XNANDPSS_SET_CYCLES;
-	}
+
+	/* Write the SLCR SMC_CLK_CTRL value for timing mode 0 */
+	xslcr_write(XSLCR_SMC_CLK_CTRL_OFFSET, smc_clk_ctrl[0]);
+
+	/* Set chip_timing value for timing mode 0 */
+	chip_timing = chip_timings[0];
 #else
 	chip_timing = XNANDPSS_SET_CYCLES;
 #endif
@@ -1137,6 +1151,45 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 		goto out_unmap_all_mem;
 	}
 
+#ifdef CONFIG_OF
+	/* Find and set the best timing mode */
+	if (nand_chip->onfi_version) {
+		unsigned long timing_modes = nand_chip->onfi_params.async_timing_mode;
+		u8 timing_mode = find_last_bit(&timing_modes, 16);
+
+		nand_chip->cmdfunc(mtd, NAND_CMD_GET_FEATURES,
+						TIMING_MODE_FEATURE_ADDR, -1);
+		get_feature = nand_chip->read_byte(mtd);
+
+		if (timing_mode > get_feature) {
+			nand_chip->cmdfunc(mtd, NAND_CMD_SET_FEATURES,
+						TIMING_MODE_FEATURE_ADDR, -1);
+
+			writeb(timing_mode, nand_chip->IO_ADDR_W);
+			writeb(0, nand_chip->IO_ADDR_W);
+			writeb(0, nand_chip->IO_ADDR_W);
+			writeb(0, nand_chip->IO_ADDR_W);
+
+			ndelay(1000);
+
+			nand_chip->cmdfunc(mtd, NAND_CMD_GET_FEATURES,
+						TIMING_MODE_FEATURE_ADDR, -1);
+			timing_mode = nand_chip->read_byte(mtd);
+		}
+
+		pr_info("NAND device: Using ONFI timing mode %u\n", timing_mode);
+
+		if (timing_mode) {
+			/* Write the SLCR SMC_CLK_CTRL value for the best
+			   timing mode */
+			xslcr_write(XSLCR_SMC_CLK_CTRL_OFFSET, smc_clk_ctrl[timing_mode]);
+
+			/* Initialize the NAND flash interface on NAND
+			   controller to the best timing mode */
+			xnandpss_init_nand_flash(xnand->smc_regs, nand_chip->options, chip_timings[timing_mode]);
+		}
+	}
+#endif
 	/* Check if On-Die ECC flash or Clear NAND flash */
 	nand_chip->cmdfunc(mtd, NAND_CMD_RESET, -1, -1);
 	nand_chip->cmdfunc(mtd, NAND_CMD_READID, 0x00, -1);
