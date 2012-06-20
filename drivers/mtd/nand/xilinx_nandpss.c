@@ -1259,6 +1259,10 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 		/* NAND with on-die ECC supports subpage reads */
 		nand_chip->options |= NAND_SUBPAGE_READ;
 
+		/* NAND with on-die ECC may support subpage writes */
+		if (nand_chip->onfi_version)
+			nand_chip->ecc.size /= nand_chip->onfi_params.programs_per_page;
+
 		/* On-Die ECC spare bytes offset 8 is used for ECC codes */
 		if (ondie_ecc_enabled) {
 			nand_chip->ecc.layout = &ondie_nand_oob_64;
