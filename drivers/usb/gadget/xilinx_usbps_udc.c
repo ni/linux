@@ -2454,7 +2454,8 @@ static int __init xusbps_udc_probe(struct platform_device *pdev)
 
 	/* Setup gadget structure */
 	udc_controller->gadget.ops = &xusbps_gadget_ops;
-	udc_controller->gadget.speed = USB_SPEED_HIGH;
+	udc_controller->gadget.is_dualspeed = 1;
+	udc_controller->gadget.speed = USB_SPEED_UNKNOWN;
 	udc_controller->gadget.ep0 = &udc_controller->eps[0].ep;
 	INIT_LIST_HEAD(&udc_controller->gadget.ep_list);
 	udc_controller->gadget.name = driver_name;
