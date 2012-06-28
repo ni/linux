@@ -1,0 +1,201 @@
+/dts-v1/;
+
+/ {
+	model = "NI Xilinx Zynq prototype";
+	compatible = "xlnx,zynq-zc770-xm010";
+	#address-cells = <0x1>;
+	#size-cells = <0x1>;
+	interrupt-parent = <&gic>;
+
+	memory {
+		device_type = "memory";
+		reg = <0x00000000 0x20000000>;
+	};
+	chosen {
+		bootargs = "console=ttyPS0,115200 ramdisk_size=65536 root=/dev/ram rw ip=:::::eth0:dhcp";
+		linux,stdout-path = "/amba@0/uart@E0001000";
+	};
+
+	amba@0 {
+		compatible = "simple-bus";
+		#address-cells = <0x1>;
+		#size-cells = <0x1>;
+		ranges;
+
+		gic: intc@f8f01000 {
+			interrupt-controller;
+			compatible = "arm,cortex-a9-gic";
+			reg = < 0xf8f01000 0x1000 >,
+			      < 0xf8f00100 0x0100 >;
+			#interrupt-cells = <0x3>;
+			linux,phandle = <0x1>;
+			phandle = <0x1>;
+		};
+
+		uart@e0001000 {
+			compatible = "xlnx,ps7-uart-1.00.a";
+			reg = <0xe0001000 0x1000>;
+			interrupts = <0 50 0>;
+			clock = <50000000>;
+		};
+
+		timer@0xf8001000 {
+			clock-frequency-timer0 = <111111000>;
+			clock-frequency-timer1 = <111111000>;
+			clock-frequency-timer2 = <111111000>;
+			compatible = "xlnx,ps7-ttc-1.00.a";
+			interrupts = <0 10 0
+				      0 11 0
+				      0 12 0>;
+			reg = < 0xf8001000 0x1000 >;
+		};
+
+		eth@e000b000 {
+			compatible = "xlnx,ps7-ethernet-1.00.a";
+			reg = <0xe000b000 0x1000>;
+			interrupts = <0 22 0>;
+			phy-handle = <&phy0>;
+			xlnx,slcr-div0-1000Mbps = <8>;
+			xlnx,slcr-div0-100Mbps = <8>;
+			xlnx,slcr-div0-10Mbps = <8>;
+			xlnx,slcr-div1-1000Mbps = <1>;
+			xlnx,slcr-div1-100Mbps = <5>;
+			xlnx,slcr-div1-10Mbps = <50>;
+			xlnx,mdc-clk-div = <3>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+
+			phy0: phy@0 {
+				compatible = "marvell,88e1512";
+				device_type = "ethernet-phy";
+				reg = <0x0>;
+				/* Interrupt on GPIO1, shared with phy1. */
+				interrupts = <1 0>;
+				interrupt-parent = <&gpio>;
+				/* Page 3, Register 16, LED[2:0] Function
+				   Control Register */
+				leds = <0x1881>;
+			};
+
+			phy1: phy@1 {
+				compatible = "lsi,et1011c";
+				device_type = "ethernet-phy";
+				reg = <0x1>;
+				/* Interrupt on GPIO1, shared with phy0. */
+				interrupts = <1 0>;
+				interrupt-parent = <&gpio>;
+				/* LED Control 1 values for Off, 10Mb, 100Mb,
+				   and 1Gb, followed by LED Control 2 values
+				   for Off, 10Mb, 100Mb, and 1Gb, followed by
+				   LED Control 3 value. */
+				leds = <0x0001 0x0001 0x0001 0x8001 0xFAFE 0xFAFE 0xFAFF 0xFAEF 0x0A55>;
+			};
+		};
+
+		eth@e000c000 {
+			compatible = "xlnx,ps7-ethernet-1.00.a";
+			reg = <0xe000c000 0x1000>;
+			interrupts = <0 45 0>;
+			phy-handle = <&phy1>;
+			xlnx,slcr-div0-1000Mbps = <8>;
+			xlnx,slcr-div0-100Mbps = <8>;
+			xlnx,slcr-div0-10Mbps = <8>;
+			xlnx,slcr-div1-1000Mbps = <1>;
+			xlnx,slcr-div1-100Mbps = <5>;
+			xlnx,slcr-div1-10Mbps = <50>;
+			xlnx,no_mdio_bus;
+			xlnx,emio-fpga-clk = <1>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+		};
+
+		nand@e1000000 {
+			compatible = "xlnx,ps7-nand-1.00.a";
+			reg = <0xE1000000 0x1000000 0xE000E000 0x1000>;
+			bank-width = <1>; /* 8-bit width */
+
+			/* SLCR SMC_CLK_CTRL value, 95MHz clock, 10.5ns cycle time */
+			/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
+			xlnx,onfi-mode0 = <0x0000E21 4 3 2 5 4 10 10>;
+
+			/* SLCR SMC_CLK_CTRL value, 190MHz clock, 5.25ns cycle time */
+			/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
+			xlnx,onfi-mode1 = <0x0000721 4 2 2 5 4 9 10>;
+			xlnx,onfi-mode2 = <0x0000721 4 2 2 4 3 7 7>;
+			xlnx,onfi-mode3 = <0x0000721 4 2 2 3 2 6 6>;
+			xlnx,onfi-mode4 = <0x0000721 4 2 2 3 2 5 5>;
+			xlnx,onfi-mode5 = <0x0000721 4 2 2 2 2 4 4>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+		};
+
+		scugtimer@f8f00000 {
+			compatible = "xlnx,xscugtimer-1.00.a";
+			reg = <0xf8f00200 0x400>;
+			clock-frequency = <333333000>;
+		};
+
+		usb@e0002000 {
+			compatible = "xlnx,ps7-usb-1.00.a";
+			reg = <0xe0002000 0x1000>;
+			interrupts = <0 21 0>;
+			dr_mode = "host";
+			phy_type = "ulpi";
+		};
+
+		gpio: gpio@e000a000 {
+			compatible = "xlnx,ps7-gpio-1.00.a";
+			reg = <0xe000a000 0x1000>;
+			#interrupt-cells = <0x2>;
+			interrupt-controller;
+			interrupts = <0 20 0>;
+			#gpio-cells = <2>;
+			gpio-controller;
+
+			/* You can specify GPIO settings here:
+			 *
+			 *  gpioN-label      String label.
+			 *  gpioN-direction  "input" or "output".
+			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
+			 */
+
+			/* GPIO1 (MIO1) */
+			gpio1-label     = "phy_interupt";
+			gpio1-direction = "input";
+			gpio1-settings  = "level-low";
+		};
+
+		i2c0: i2c@e0004000 {
+			compatible = "xlnx,ps7-i2c-1.00.a";
+			reg = <0xE0004000 0x1000>;
+			interrupts = <0 25 0>;
+			bus-id = <0>;
+			input-clk = <133000000>;
+			i2c-clk = <400000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			nizynqcpld@40 {
+				compatible = "nizynqcpld";
+				reg = <0x40>;
+			};
+
+			ds3231_rtc@68 {
+				compatible = "ds3232";
+				reg = <0x68>;
+			};
+		};
+
+		devcfg@f8007000 {
+			compatible = "xlnx,ps7-dev-cfg-1.00.a";
+			reg = <0xf8007000 0x1000>;
+			interrupts = <0 8 0>;
+		};
+	};
+};
