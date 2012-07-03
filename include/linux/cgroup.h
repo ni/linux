@@ -158,6 +158,11 @@ enum {
 	 * Clone cgroup values when creating a new child cgroup
 	 */
 	CGRP_CLONE_CHILDREN,
+	/*
+	 * Use synchronize_rcu_expedited instead of synchronize_rcu to speed
+	 * up task writes
+	 */
+	CGRP_FAST_TASK_WRITES,
 };
 
 /* which pidlist file are we talking about? */

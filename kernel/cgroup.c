@@ -1864,7 +1864,10 @@ int cgroup_attach_task(struct cgroup *cgrp, struct task_struct *tsk)
 			ss->attach(ss, cgrp, oldcgrp, tsk);
 	}
 
-	synchronize_rcu();
+	if (test_bit(CGRP_FAST_TASK_WRITES, &cgrp->flags))
+		synchronize_rcu_expedited();
+	else
+		synchronize_rcu();
 
 	/*
 	 * wake up rmdir() waiter. the rmdir should fail since the cgroup
@@ -3414,6 +3417,23 @@ static int cgroup_procs_open(struct inode *unused, struct file *file)
 	return cgroup_pidlist_open(file, CGROUP_FILE_PROCS);
 }
 
+static u64 cgroup_read_fast_task_writes(struct cgroup *cgrp,
+					    struct cftype *cft)
+{
+	return test_bit(CGRP_FAST_TASK_WRITES, &cgrp->flags);
+}
+
+static int cgroup_write_fast_task_writes(struct cgroup *cgrp,
+					  struct cftype *cft,
+					  u64 val)
+{
+	if (val)
+		set_bit(CGRP_FAST_TASK_WRITES, &cgrp->flags);
+	else
+		clear_bit(CGRP_FAST_TASK_WRITES, &cgrp->flags);
+	return 0;
+}
+
 static u64 cgroup_read_notify_on_release(struct cgroup *cgrp,
 					    struct cftype *cft)
 {
@@ -3636,6 +3656,11 @@ static struct cftype files[] = {
 		.write_u64 = cgroup_procs_write,
 		.release = cgroup_pidlist_release,
 		.mode = S_IRUGO | S_IWUSR,
+	},
+	{
+		.name = CGROUP_FILE_GENERIC_PREFIX "fast_task_writes",
+		.read_u64 = cgroup_read_fast_task_writes,
+		.write_u64 = cgroup_write_fast_task_writes,
 	},
 	{
 		.name = "notify_on_release",
