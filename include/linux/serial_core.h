@@ -207,6 +207,9 @@
 /* Xilinx PSS UART */
 #define PORT_XUARTPS	98
 
+/* National Instruments 16550 UART */
+#define PORT_NI16550	99
+
 #ifdef __KERNEL__
 
 #include <linux/compiler.h>

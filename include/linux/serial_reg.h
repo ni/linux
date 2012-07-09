@@ -47,17 +47,18 @@
 #define UART_FCR_DMA_SELECT	0x08 /* For DMA applications */
 /*
  * Note: The FIFO trigger levels are chip specific:
- *	RX:76 = 00  01  10  11	TX:54 = 00  01  10  11
- * PC16550D:	 1   4   8  14		xx  xx  xx  xx
- * TI16C550A:	 1   4   8  14          xx  xx  xx  xx
- * TI16C550C:	 1   4   8  14          xx  xx  xx  xx
- * ST16C550:	 1   4   8  14		xx  xx  xx  xx
- * ST16C650:	 8  16  24  28		16   8  24  30	PORT_16650V2
- * NS16C552:	 1   4   8  14		xx  xx  xx  xx
- * ST16C654:	 8  16  56  60		 8  16  32  56	PORT_16654
- * TI16C750:	 1  16  32  56		xx  xx  xx  xx	PORT_16750
- * TI16C752:	 8  16  56  60		 8  16  32  56
- * Tegra:	 1   4   8  14		16   8   4   1	PORT_TEGRA
+ *	RX:76 = 00  01  10   11	TX:54 = 00  01  10  11
+ * PC16550D:	 1   4   8   14		xx  xx  xx  xx
+ * TI16C550A:	 1   4   8   14		xx  xx  xx  xx
+ * TI16C550C:	 1   4   8   14		xx  xx  xx  xx
+ * ST16C550:	 1   4   8   14		xx  xx  xx  xx
+ * ST16C650:	 8  16  24   28		16   8  24  30	PORT_16650V2
+ * NS16C552:	 1   4   8   14		xx  xx  xx  xx
+ * ST16C654:	 8  16  56   60		 8  16  32  56	PORT_16654
+ * TI16C750:	 1  16  32   56		xx  xx  xx  xx	PORT_16750
+ * TI16C752:	 8  16  56   60		 8  16  32  56
+ * Tegra:	 1   4   8   14		16   8   4   1	PORT_TEGRA
+ * NI 16550:	 1  32  64  112		xx  xx  xx  xx	PORT_NI16550
  */
 #define UART_FCR_R_TRIG_00	0x00
 #define UART_FCR_R_TRIG_01	0x40

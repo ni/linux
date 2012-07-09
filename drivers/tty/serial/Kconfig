@@ -1610,4 +1610,10 @@ config SERIAL_XILINX_PS_UART_CONSOLE
 	help
 	  Enable a Xilinx PS UART port to be the system console.
 
+config SERIAL_NI16550
+	bool "NI 16550 UART support"
+	depends on SERIAL_8250 && SERIAL_OF_PLATFORM
+	help
+	  This driver supports the National Instruments (NI) 16550 UART port.
+
 endmenu

@@ -14,6 +14,7 @@
 #include <linux/slab.h>
 #include <linux/serial_core.h>
 #include <linux/serial_8250.h>
+#include <linux/ni16550.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
@@ -121,6 +122,11 @@ static int __devinit of_platform_serial_probe(struct platform_device *ofdev)
 		ret = serial8250_register_port(&port);
 		break;
 #endif
+#ifdef CONFIG_SERIAL_NI16550
+	case PORT_NI16550:
+		ret = ni16550_register_port(&port);
+		break;
+#endif
 #ifdef CONFIG_SERIAL_OF_PLATFORM_NWPSERIAL
 	case PORT_NWPSERIAL:
 		ret = nwpserial_register_port(&port);
@@ -158,6 +164,11 @@ static int of_platform_serial_remove(struct platform_device *ofdev)
 		serial8250_unregister_port(info->line);
 		break;
 #endif
+#ifdef CONFIG_SERIAL_NI16550
+	case PORT_NI16550:
+		ni16550_unregister_port(info->line);
+		break;
+#endif
 #ifdef CONFIG_SERIAL_OF_PLATFORM_NWPSERIAL
 	case PORT_NWPSERIAL:
 		nwpserial_unregister_port(info->line);
@@ -182,6 +193,7 @@ static struct of_device_id __devinitdata of_platform_serial_table[] = {
 	{ .compatible = "ns16750",  .data = (void *)PORT_16750, },
 	{ .compatible = "ns16850",  .data = (void *)PORT_16850, },
 	{ .compatible = "nvidia,tegra20-uart", .data = (void *)PORT_TEGRA, },
+	{ .compatible = "ni16550",  .data = (void *)PORT_NI16550, },
 #ifdef CONFIG_SERIAL_OF_PLATFORM_NWPSERIAL
 	{ .compatible = "ibm,qpace-nwp-serial",
 		.data = (void *)PORT_NWPSERIAL, },
