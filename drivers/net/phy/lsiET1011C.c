@@ -84,6 +84,8 @@ struct lsiET1011CCC_data {
 	u32 led_control3;
 };
 
+static void lsiET1011C_update_status(struct phy_device *phydev);
+
 static int lsiET1011C_probe(struct phy_device *phydev) {
 
 	struct lsiET1011CCC_data *priv;
@@ -198,6 +200,12 @@ static int lsiET1011C_config_init(struct phy_device *phydev) {
 
 	/* Configure the PHY activity LED blink rate. */
 	phy_write(phydev, LSI_PHY_LEDControl3, priv->led_control3);
+
+	/* If interrupts are in use, the status won't be polled, so we need to
+	   get the initial status here. */
+	if (PHY_POLL != phydev->irq) {
+		lsiET1011C_update_status(phydev);
+	}
 
 	mutex_unlock(&phydev->lock);
 
