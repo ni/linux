@@ -1585,7 +1585,7 @@ struct task_struct {
 #ifdef CONFIG_WAKEUP_LATENCY_HIST
 	u64 preempt_timestamp_hist;
 #ifdef CONFIG_MISSED_TIMER_OFFSETS_HIST
-	unsigned long timer_offset;
+	long timer_offset;
 #endif
 #endif
 #endif /* CONFIG_TRACING */
