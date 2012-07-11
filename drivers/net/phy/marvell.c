@@ -129,6 +129,8 @@
 #define MII_88E3016_PHY_SPEC_CTRL	0x10
 #define MII_88E3016_DISABLE_SCRAMBLER	0x0200
 #define MII_88E3016_AUTO_MDIX_CROSSOVER	0x0030
+#define MII_88E1512_LEDTimerControl_InterruptEnable 0x0080
+
 
 MODULE_DESCRIPTION("Marvell PHY driver");
 MODULE_AUTHOR("Andy Fleming");
@@ -728,6 +730,35 @@ static int m88e1145_config_init(struct phy_device *phydev)
 	return 0;
 }
 
+static int m88e151x_probe(struct phy_device *phydev)
+{
+	u32 led_timer_control;
+	int err;
+
+	/* Enable the interrupt output. This is just a pin configuration,
+	 * we're not actually enabling any interrupts here. But the default
+	 * configuration causes our interrupt pin to be asserted. We need
+	 * to stop that as early as possible.
+	 */
+	err = phy_write(phydev, MII_MARVELL_PHY_PAGE, MII_88E1121_PHY_LED_PAGE);
+
+	if (err < 0)
+		return err;
+
+	led_timer_control = phy_read(phydev, MII_88E1318S_PHY_LED_TCR);
+	led_timer_control |= MII_88E1512_LEDTimerControl_InterruptEnable;
+
+	err = phy_write(phydev, MII_88E1318S_PHY_LED_TCR, led_timer_control);
+	if (err < 0)
+		return err;
+
+	err = phy_write(phydev, MII_MARVELL_PHY_PAGE, 0);
+	if (err < 0)
+		return err;
+
+	return 0;
+}
+
 /* marvell_read_status
  *
  * Generic status code does not detect Fiber correctly!
@@ -1092,6 +1123,7 @@ static struct phy_driver marvell_drivers[] = {
 		.name = "Marvell 88E1510",
 		.features = PHY_GBIT_FEATURES,
 		.flags = PHY_HAS_INTERRUPT,
+		.probe = &m88e151x_probe,
 		.config_aneg = &m88e1510_config_aneg,
 		.read_status = &marvell_read_status,
 		.ack_interrupt = &marvell_ack_interrupt,
