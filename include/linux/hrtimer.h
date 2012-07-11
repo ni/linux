@@ -113,6 +113,9 @@ struct hrtimer {
 	unsigned long			state;
 	struct list_head		cb_entry;
 	int				irqsafe;
+#ifdef CONFIG_MISSED_TIMER_OFFSETS_HIST
+	ktime_t 			praecox;
+#endif
 #ifdef CONFIG_TIMER_STATS
 	int				start_pid;
 	void				*start_site;
