@@ -2072,7 +2072,10 @@ CONFIG_RTC_DRV_DS3232=y
 # CONFIG_RTC_DRV_PL031 is not set
 # CONFIG_DMADEVICES is not set
 # CONFIG_AUXDISPLAY is not set
-# CONFIG_UIO is not set
+CONFIG_UIO=y
+# CONFIG_UIO_PDRV is not set
+# CONFIG_UIO_PDRV_GENIRQ is not set
+CONFIG_UIO_LCI=y
 
 #
 # Virtio drivers
