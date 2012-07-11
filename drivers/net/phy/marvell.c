@@ -133,6 +133,8 @@
 #define MII_88E3016_PHY_SPEC_CTRL	0x10
 #define MII_88E3016_DISABLE_SCRAMBLER	0x0200
 #define MII_88E3016_AUTO_MDIX_CROSSOVER	0x0030
+#define MII_88E1512_LEDTimerControl_InterruptEnable 0x0080
+
 
 #define MII_88E1510_GEN_CTRL_REG_1		0x14
 #define MII_88E1510_GEN_CTRL_REG_1_MODE_MASK	0x7
@@ -1946,9 +1948,44 @@ static int m88e1121_probe(struct phy_device *phydev)
 	return m88e1121_hwmon_probe(phydev);
 }
 
+static int m88e151x_setup_interrupt_pin(struct phy_device *phydev)
+{
+	u32 led_timer_control;
+	int err, old_page;
+
+	old_page = marvell_get_page(phydev);
+	if (old_page < 0)
+		return old_page;
+
+	/* Enable the interrupt output. This is just a pin configuration,
+	 * we're not actually enabling any interrupts here. But the default
+	 * configuration causes our interrupt pin to be asserted. We need
+	 * to stop that as early as possible.
+	 */
+	err = marvell_set_page(phydev, MII_MARVELL_LED_PAGE);
+
+	if (err < 0)
+		return err;
+
+	led_timer_control = phy_read(phydev, MII_88E1318S_PHY_LED_TCR);
+	led_timer_control |= MII_88E1512_LEDTimerControl_InterruptEnable;
+
+	err = phy_write(phydev, MII_88E1318S_PHY_LED_TCR, led_timer_control);
+	if (err < 0)
+		return err;
+
+	err = marvell_set_page(phydev, old_page);
+
+	return err;
+}
+
 static int m88e1510_probe(struct phy_device *phydev)
 {
 	int err;
+
+	err = m88e151x_setup_interrupt_pin(phydev);
+	if (err)
+		return err;
 
 	err = marvell_probe(phydev);
 	if (err)
