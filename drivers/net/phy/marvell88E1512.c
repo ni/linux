@@ -52,9 +52,27 @@
 
 static void marvell88E1512_update_status(struct phy_device *phydev);
 
-static int marvell88E1512_config_init(struct phy_device *phydev) {
+static int marvell88E1512_probe(struct phy_device *phydev) {
 
 	u32 led_timer_control;
+
+	dev_dbg (&phydev->dev, "probe\n");
+
+	/* Enable the interrupt output. This is just a pin configuration,
+	   we're not actually enabling any interrupts here. But the default
+	   configuration causes our interrupt pin to be asserted. We need
+	   to stop that as early as possible. */
+	phy_write (phydev, MARVELL_88E1512_PageAddress, MARVELL_88E1512_PageAddress_LED);
+	led_timer_control = phy_read (phydev, MARVELL_88E1512_LEDTimerControl);
+	led_timer_control |= MARVELL_88E1512_LEDTimerControl_InterruptEnable;
+	phy_write (phydev, MARVELL_88E1512_LEDTimerControl, led_timer_control);
+	phy_write (phydev, MARVELL_88E1512_PageAddress, 0);
+
+	return 0;
+}
+
+static int marvell88E1512_config_init(struct phy_device *phydev) {
+
 #ifdef CONFIG_OF
 	const u32 * led_prop;
 	int len;
@@ -63,14 +81,6 @@ static int marvell88E1512_config_init(struct phy_device *phydev) {
 	dev_dbg (&phydev->dev, "config_init\n");
 
 	mutex_lock(&phydev->lock);
-
-	/* Enable the interrupt output. This is just a pin configuration, we're
-	   not actually enabling any interrupts here. */
-	phy_write (phydev, MARVELL_88E1512_PageAddress, MARVELL_88E1512_PageAddress_LED);
-	led_timer_control = phy_read (phydev, MARVELL_88E1512_LEDTimerControl);
-	led_timer_control |= MARVELL_88E1512_LEDTimerControl_InterruptEnable;
-	phy_write (phydev, MARVELL_88E1512_LEDTimerControl, led_timer_control);
-	phy_write (phydev, MARVELL_88E1512_PageAddress, 0);
 
 #ifdef CONFIG_OF
 
@@ -182,6 +192,7 @@ static struct phy_driver marvell88E1512_driver = {
 	.phy_id_mask	= MARVELL_PHY_ID_MASK,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
+	.probe		= marvell88E1512_probe,
 	.config_init	= marvell88E1512_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= marvell88E1512_read_status,
