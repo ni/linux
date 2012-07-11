@@ -3277,6 +3277,14 @@ err_out:
  * xemacps_remove - called when platform driver is unregistered
  * @pdev: Pointer to the platform device structure
  *
+ * Note: it's currently only safe to remove the second MAC driver. Removing
+ * the first one will cause a crash. You can remove the first one if the
+ * second one has already been removed, but that doesn't seem very useful.
+ * Our current EtherCAT use case is for secondary Ethernet only, but that
+ * may change in the future, in which case we would need to resolve this
+ * problem. The cause of this problem is the shared MDIO interface attached
+ * to the primary MAC.
+ *
  * return: 0 on success
  **/
 static int __exit xemacps_remove(struct platform_device *pdev)
@@ -3289,9 +3297,11 @@ static int __exit xemacps_remove(struct platform_device *pdev)
 		if (lp->phy_dev)
 			phy_disconnect(lp->phy_dev);
 
-		mdiobus_unregister(lp->mii_bus);
-		kfree(lp->mii_bus->irq);
-		mdiobus_free(lp->mii_bus);
+		if (lp->mii_bus) {
+			mdiobus_unregister(lp->mii_bus);
+			kfree(lp->mii_bus->irq);
+			mdiobus_free(lp->mii_bus);
+		}
 		unregister_netdev(ndev);
 		iounmap(lp->baseaddr);
 		free_netdev(ndev);
@@ -3299,6 +3309,11 @@ static int __exit xemacps_remove(struct platform_device *pdev)
 	}
 
 	return 0;
+}
+
+int xemacps_dev_remove (struct device *dev)
+{
+	return xemacps_remove(to_platform_device(dev));
 }
 
 /**
@@ -3363,6 +3378,7 @@ static struct platform_driver xemacps_driver = {
 		.name  = DRIVER_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = xemacps_of_match,
+		.remove = xemacps_dev_remove,
 	},
 };
 
