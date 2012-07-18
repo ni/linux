@@ -29,10 +29,18 @@ static int __devinit lci_probe(struct platform_device *dev)
 
 	pdev->info.name = "lci_dev";
 	pdev->info.version = "1.00a";
+	//Mem region 0 is for the FPGA registers
 	pdev->info.mem[0].name = "registers";
 	pdev->info.mem[0].addr = dev->resource[0].start;
 	pdev->info.mem[0].size = dev->resource[0].end - dev->resource[0].start + 1;
 	pdev->info.mem[0].memtype = UIO_MEM_PHYS;
+	//Mem region 1 is for accessing the DMA memory
+	//(the top half of physical RAM)
+	pdev->info.mem[1].name = "DMA_mem";
+	pdev->info.mem[1].addr = dev->resource[1].start;
+	pdev->info.mem[1].size = dev->resource[1].end - dev->resource[1].start + 1;
+	pdev->info.mem[1].memtype = UIO_MEM_PHYS;
+
 	if(uio_register_device(&dev->dev, &pdev->info))
 		goto err_register;
 
