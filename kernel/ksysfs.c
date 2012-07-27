@@ -18,6 +18,7 @@
 #include <linux/stat.h>
 #include <linux/sched.h>
 #include <linux/capability.h>
+#include <asm/unistd.h>
 
 #define KERNEL_ATTR_RO(_name) \
 static struct kobj_attribute _name##_attr = __ATTR_RO(_name)
@@ -150,6 +151,36 @@ static ssize_t fscaps_show(struct kobject *kobj,
 }
 KERNEL_ATTR_RO(fscaps);
 
+#if defined(__NR_clock_converttime)
+static ssize_t ni_syscall_clock_converttime_show(struct kobject *kobj,
+						struct kobj_attribute *attr,
+						char *buf)
+{
+	return sprintf(buf, "%d\n", __NR_clock_converttime);
+}
+KERNEL_ATTR_RO(ni_syscall_clock_converttime);
+#endif
+
+#if defined(__NR_sched_wake_up)
+static ssize_t ni_syscall_sched_wake_up_show(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					char *buf)
+{
+	return sprintf(buf, "%d\n", __NR_sched_wake_up);
+}
+KERNEL_ATTR_RO(ni_syscall_sched_wake_up);
+#endif
+
+#if defined(__NR_mcopy)
+static ssize_t ni_syscall_mcopy_show(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				char *buf)
+{
+	return sprintf(buf, "%d\n", __NR_mcopy);
+}
+KERNEL_ATTR_RO(ni_syscall_mcopy);
+#endif
+
 /*
  * Make /sys/kernel/notes give the raw contents of our kernel .notes section.
  */
@@ -193,6 +224,15 @@ static struct attribute * kernel_attrs[] = {
 #endif
 #ifdef CONFIG_PREEMPT_RT_FULL
 	&realtime_attr.attr,
+#endif
+#ifdef __NR_clock_converttime
+	&ni_syscall_clock_converttime_attr.attr,
+#endif
+#ifdef __NR_sched_wake_up
+	&ni_syscall_sched_wake_up_attr.attr,
+#endif
+#ifdef __NR_mcopy
+	&ni_syscall_mcopy_attr.attr,
 #endif
 	NULL
 };
