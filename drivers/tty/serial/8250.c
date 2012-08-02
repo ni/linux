@@ -3236,6 +3236,7 @@ int serial8250_register_port(struct uart_port *port)
 		uart->port.regshift     = port->regshift;
 		uart->port.iotype       = port->iotype;
 		uart->port.flags        = port->flags | UPF_BOOT_AUTOCONF;
+		uart->port.rs485        = port->rs485;
 		uart->port.mapbase      = port->mapbase;
 		uart->port.private_data = port->private_data;
 		if (port->dev)
@@ -3252,6 +3253,8 @@ int serial8250_register_port(struct uart_port *port)
 			uart->port.serial_out = port->serial_out;
 		if (port->handle_irq)
 			uart->port.handle_irq = port->handle_irq;
+		if (port->txvr_ops)
+			uart->port.txvr_ops = port->txvr_ops;
 		/*  Possibly override set_termios call */
 		if (port->set_termios)
 			uart->port.set_termios = port->set_termios;
