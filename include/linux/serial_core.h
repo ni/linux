@@ -83,6 +83,15 @@ struct uart_ops {
 #endif
 };
 
+/*
+ * This structure describes all the operations that can be done through
+ * transceiver controllers.
+ */
+struct txvr_ops {
+	int (*enable_transceivers)(struct uart_port *);
+	int (*disable_transceivers)(struct uart_port *);
+};
+
 #define NO_POLL_CHAR		0x00ff0000
 #define UART_CONFIG_TYPE	(1 << 0)
 #define UART_CONFIG_IRQ		(1 << 1)
@@ -236,6 +245,7 @@ struct uart_port {
 	unsigned int		frame_time;		/* frame timing in ns */
 	unsigned int		type;			/* port type */
 	const struct uart_ops	*ops;
+	const struct txvr_ops	*txvr_ops;		/* transceiver ops */
 	unsigned int		custom_divisor;
 	unsigned int		line;			/* port index */
 	unsigned int		minor;
