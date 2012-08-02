@@ -250,7 +250,7 @@ struct uart_ops {
 	/*
 	 * Return a string describing the type of the port
 	 */
-	const char *(*type)(struct uart_port *);
+	const char	*(*type)(struct uart_port *);
 
 	/*
 	 * Release IO and memory resources used by the port.
@@ -267,9 +267,19 @@ struct uart_ops {
 	int		(*verify_port)(struct uart_port *, struct serial_struct *);
 	int		(*ioctl)(struct uart_port *, unsigned int, unsigned long);
 #ifdef CONFIG_CONSOLE_POLL
-	void	(*poll_put_char)(struct uart_port *, unsigned char);
+	void		(*poll_put_char)(struct uart_port *, unsigned char);
 	int		(*poll_get_char)(struct uart_port *);
 #endif
+};
+
+/*
+ * This structure describes all the operations that can be done through
+ * tranceiver controllers.
+ */
+struct txvr_ops {
+	int (*enable_transceivers)(struct uart_port *);
+	int (*disable_transceivers)(struct uart_port *);
+	int (*config_rs485)(struct uart_port *, struct serial_rs485 *rs485);
 };
 
 #define NO_POLL_CHAR		0x00ff0000
@@ -365,6 +375,8 @@ struct uart_port {
 	unsigned int		timeout;		/* character-based timeout */
 	unsigned int		type;			/* port type */
 	const struct uart_ops	*ops;
+	const struct txvr_ops	*txvr_ops;		/* transceiver ops */
+	struct serial_rs485	rs485;			/* rs485 settings */
 	unsigned int		custom_divisor;
 	unsigned int		line;			/* port index */
 	resource_size_t		mapbase;		/* for ioremap */

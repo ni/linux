@@ -173,6 +173,10 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 		 */
 		uart_change_speed(tty, state, NULL);
 
+		/* Enable Transceivers */
+		if (uport->txvr_ops && uport->txvr_ops->enable_transceivers)
+			uport->txvr_ops->enable_transceivers(uport);
+
 		if (init_hw) {
 			/*
 			 * Setup the RTS and DTR signals once the
@@ -227,6 +231,10 @@ static void uart_shutdown(struct tty_struct *tty, struct uart_state *state)
 		 */
 		if (!tty || (tty->termios->c_cflag & HUPCL))
 			uart_clear_mctrl(uport, TIOCM_DTR | TIOCM_RTS);
+
+		/* Disable Transceivers */
+		if (uport->txvr_ops && uport->txvr_ops->disable_transceivers)
+			uport->txvr_ops->disable_transceivers(uport);
 
 		/*
 		 * clear delta_msr_wait queue to avoid mem leaks: we may free
@@ -908,6 +916,58 @@ static int uart_get_lsr_info(struct tty_struct *tty,
 	return put_user(result, value);
 }
 
+/**
+ *	uart_set_rs485	-	set RS-485 state
+ *	@tty: tty associated with the UART
+ *	@state: UART being modified
+ *	@value: RS-485 data to set
+ *
+ *	Note: uart_ioctl protects us against hangups.
+ */
+static int uart_set_rs485(struct tty_struct *tty,
+			struct uart_state *state, unsigned int __user *value)
+{
+	struct uart_port *uport = state->uart_port;
+	struct serial_rs485 rs485;
+	int ret = -ENOIOCTLCMD;
+
+	if (!value)
+		return -EINVAL;
+
+	if (copy_from_user(&rs485, (struct serial_rs485 *)value,
+				 sizeof(rs485)))
+		return -EFAULT;
+
+	if (uport->txvr_ops && uport->txvr_ops->config_rs485)
+		ret = uport->txvr_ops->config_rs485(uport, &rs485);
+
+	return ret;
+}
+
+/**
+ *	uart_get_rs485	-	get RS-485 data
+ *	@tty: tty associated with the UART
+ *	@state: UART being queried
+ *	@value: returned RS-485 data
+ *
+ *	Note: uart_ioctl protects us against hangups.
+ */
+static int uart_get_rs485(struct tty_struct *tty,
+			struct uart_state *state, unsigned int __user *value)
+{
+	struct uart_port *uport = state->uart_port;
+
+	/* We assume that if rs485 is configurable, the rs485 member of the
+	 * uart port struct is valid. */
+	if (!(uport->txvr_ops && uport->txvr_ops->config_rs485))
+		return -ENOIOCTLCMD;
+
+	if (copy_to_user((void *)value, &uport->rs485, sizeof(uport->rs485)))
+		return -EFAULT;
+
+	return 0;
+}
+
 static int uart_tiocmget(struct tty_struct *tty)
 {
 	struct uart_state *state = tty->driver_data;
@@ -1168,7 +1228,12 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd,
 	case TIOCSERGETLSR: /* Get line status register */
 		ret = uart_get_lsr_info(tty, state, uarg);
 		break;
-
+	case TIOCSRS485:
+		ret = uart_set_rs485(tty, state, uarg);
+		break;
+	case TIOCGRS485:
+		ret = uart_get_rs485(tty, state, uarg);
+		break;
 	default: {
 		struct uart_port *uport = state->uart_port;
 		if (uport->ops->ioctl)
