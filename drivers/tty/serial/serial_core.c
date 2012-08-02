@@ -179,6 +179,10 @@ static int uart_port_startup(struct tty_struct *tty, struct uart_state *state,
 		 */
 		uart_change_speed(tty, state, NULL);
 
+		/* Enable Transceivers */
+		if (uport->txvr_ops && uport->txvr_ops->enable_transceivers)
+			uport->txvr_ops->enable_transceivers(uport);
+
 		if (init_hw) {
 			/*
 			 * Setup the RTS and DTR signals once the
@@ -1601,6 +1605,10 @@ static void uart_port_shutdown(struct tty_port *port)
 	struct uart_state *state = container_of(port, struct uart_state, port);
 	struct uart_port *uport = state->uart_port;
 
+	/* Disable Transceivers */
+	if (uport->txvr_ops && uport->txvr_ops->disable_transceivers)
+		uport->txvr_ops->disable_transceivers(uport);
+
 	/*
 	 * clear delta_msr_wait queue to avoid mem leaks: we may free
 	 * the irq here so the queue might never be woken up.  Note
@@ -2210,6 +2218,9 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
 				if (tty)
 					uart_change_speed(tty, state, NULL);
 				spin_lock_irq(&uport->lock);
+				if (uport->rs485_config)
+					uport->rs485_config(uport,
+							    &uport->rs485);
 				ops->set_mctrl(uport, uport->mctrl);
 				ops->start_tx(uport);
 				spin_unlock_irq(&uport->lock);
