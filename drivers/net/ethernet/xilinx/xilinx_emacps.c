@@ -1163,7 +1163,8 @@ static int xemacps_rx(struct net_local *lp, int budget)
 	u32 packets = 0;
 
 	cur_p = &lp->rx_bd[lp->rx_bd_ci];
-	while (cur_p->addr & XEMACPS_RXBUF_NEW_MASK) {
+	while ((cur_p->addr & XEMACPS_RXBUF_NEW_MASK) &&
+	       (numbdfree < budget)) {
 		/* the packet length */
 		len = cur_p->ctrl & XEMACPS_RXBUF_LEN_MASK;
 		skb = lp->rx_skb[lp->rx_bd_ci].skb;
