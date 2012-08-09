@@ -20,11 +20,7 @@
  *    it is fixed. The speed cannot be changed to 10 Mbps or 1000 Mbps. However
  *    for Zynq there is no such issue and it can work at all 3 speeds after
  *    autonegotiation.
- * 3. The SLCR clock divisors are hard coded for Zynq board for the time being.
- *    The assumption is IO PLL output is 1000 MHz. However, this will not
- *    be the case always. Ideally the divisors need to be calculated at
- *    runtime depending upon the IO PLL output frequency. Hence this
- *    needs to be revsited.
+ * 3. The SLCR clock divisors are hard coded for PEEP board.
  */
 
 #include <linux/module.h>
