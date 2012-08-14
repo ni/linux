@@ -1767,7 +1767,7 @@ static int atmel_serial_resume(struct platform_device *pdev)
 
 static int __devinit atmel_serial_probe(struct platform_device *pdev)
 {
-	struct atmel_uart_port *port;
+	struct atmel_uart_port *atmel_port;
 	struct device_node *np = pdev->dev.of_node;
 	struct atmel_uart_data *pdata = pdev->dev.platform_data;
 	void *data;
@@ -1798,53 +1798,53 @@ static int __devinit atmel_serial_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	port = &atmel_ports[ret];
-	port->backup_imr = 0;
-	port->uart.line = ret;
+	atmel_port = &atmel_ports[ret];
+	atmel_port->backup_imr = 0;
+	atmel_port->uart.line = ret;
 
-	atmel_init_port(port, pdev);
+	atmel_init_port(atmel_port, pdev);
 
-	if (!atmel_use_dma_rx(&port->uart)) {
+	if (!atmel_use_dma_rx(&atmel_port->uart)) {
 		ret = -ENOMEM;
 		data = kmalloc(sizeof(struct atmel_uart_char)
 				* ATMEL_SERIAL_RINGSIZE, GFP_KERNEL);
 		if (!data)
 			goto err_alloc_ring;
-		port->rx_ring.buf = data;
+		atmel_port->rx_ring.buf = data;
 	}
 
-	ret = uart_add_one_port(&atmel_uart, &port->uart);
+	ret = uart_add_one_port(&atmel_uart, &atmel_port->uart);
 	if (ret)
 		goto err_add_port;
 
 #ifdef CONFIG_SERIAL_ATMEL_CONSOLE
-	if (atmel_is_console_port(&port->uart)
+	if (atmel_is_console_port(&atmel_port->uart)
 			&& ATMEL_CONSOLE_DEVICE->flags & CON_ENABLED) {
 		/*
 		 * The serial core enabled the clock for us, so undo
 		 * the clk_enable() in atmel_console_setup()
 		 */
-		clk_disable(port->clk);
+		clk_disable(atmel_port->clk);
 	}
 #endif
 
 	device_init_wakeup(&pdev->dev, 1);
-	platform_set_drvdata(pdev, port);
+	platform_set_drvdata(pdev, atmel_port);
 
-	if (port->rs485.flags & SER_RS485_ENABLED) {
-		UART_PUT_MR(&port->uart, ATMEL_US_USMODE_NORMAL);
-		UART_PUT_CR(&port->uart, ATMEL_US_RTSEN);
+	if (atmel_port->rs485.flags & SER_RS485_ENABLED) {
+		UART_PUT_MR(&atmel_port->uart, ATMEL_US_USMODE_NORMAL);
+		UART_PUT_CR(&atmel_port->uart, ATMEL_US_RTSEN);
 	}
 
 	return 0;
 
 err_add_port:
-	kfree(port->rx_ring.buf);
-	port->rx_ring.buf = NULL;
+	kfree(atmel_port->rx_ring.buf);
+	atmel_port->rx_ring.buf = NULL;
 err_alloc_ring:
-	if (!atmel_is_console_port(&port->uart)) {
-		clk_put(port->clk);
-		port->clk = NULL;
+	if (!atmel_is_console_port(&atmel_port->uart)) {
+		clk_put(atmel_port->clk);
+		atmel_port->clk = NULL;
 	}
 err:
 	return ret;
