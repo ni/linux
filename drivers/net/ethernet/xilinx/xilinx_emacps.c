@@ -56,44 +56,6 @@
 #include <linux/of_mdio.h>
 #endif
 
-#ifdef CONFIG_XILINX_PS_EMAC_LEDTRIGGER
-#include <linux/leds.h>
-
-static struct led_trigger xemacps_speed_trigger = {
-	.name	= "xemacps_speed",
-};
-
-static int xemacps_led_trigger_register(void)
-{
-	return led_trigger_register(&xemacps_speed_trigger);
-}
-
-static void xemacps_led_trigger_speed(unsigned int speed)
-{
-	int brightness;
-	switch (speed) {
-	case 100:
-		brightness = 1;
-		break;
-	case 1000:
-		brightness = 2;
-		break;
-	case 10:
-	default:
-		brightness = 0;
-		break;
-	}
-	led_trigger_event(&xemacps_speed_trigger, brightness);
-}
-#else
-static inline int xemacps_led_trigger_register(void)
-{
-	return 0;
-}
-
-static inline void xemacps_led_trigger_speed(unsigned int speed) { }
-#endif
-
 /************************** Constant Definitions *****************************/
 
 /* Must be shorter than length of ethtool_drvinfo.driver field to fit */
@@ -760,7 +722,9 @@ static void xemacps_adjust_link(struct net_device *ndev)
 	struct net_local *lp = netdev_priv(ndev);
 	struct phy_device *phydev = lp->phy_dev;
 	unsigned long flags;
+#ifdef DEBUG
 	int status_change = 0;
+#endif
 	u32 regval;
 	u32 regval1;
 
@@ -810,32 +774,33 @@ static void xemacps_adjust_link(struct net_device *ndev)
 
 			lp->speed = phydev->speed;
 			lp->duplex = phydev->duplex;
+#ifdef DEBUG
 			status_change = 1;
+#endif
 		}
 	}
 
 	if (phydev->link != lp->link) {
 		lp->link = phydev->link;
+#ifdef DEBUG
 		status_change = 1;
+#endif
 	}
 
 	spin_unlock_irqrestore(&lp->lock, flags);
 
-	if (status_change) {
-		if (phydev->link) {
 #ifdef DEBUG
+	if (status_change) {
+		if (phydev->link)
 			printk(KERN_INFO "%s: link up (%d/%s)\n",
 				ndev->name, phydev->speed,
 				DUPLEX_FULL == phydev->duplex ?
 				"FULL" : "HALF");
-#endif
-			xemacps_led_trigger_speed(phydev->speed);
-		} else {
-#ifdef DEBUG
+		else
 			printk(KERN_INFO "%s: link down\n", ndev->name);
-#endif
-		}
 	}
+#endif
+
 }
 
 /**
@@ -3272,7 +3237,6 @@ static int __init xemacps_init(void)
 	* to remove run-once probe from memory.
 	* Typical use for system-on-chip processor.
 	*/
-	xemacps_led_trigger_register();
 	return platform_driver_probe(&xemacps_driver, xemacps_probe);
 }
 
