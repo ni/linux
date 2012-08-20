@@ -348,7 +348,68 @@ static SWITCH_ATTR(console_out, NICPLD_SWITCHANDLED, 1 << 7);
 static SWITCH_ATTR(ip_reset,    NICPLD_SWITCHANDLED, 1 << 6);
 static SWITCH_ATTR(safe_mode,   NICPLD_SWITCHANDLED, 1 << 5);
 
+static const char * const bootmode_strings[] = {
+	"runtime", "safemode", "recovery",
+};
+
+static ssize_t nizynqcpld_bootmode_show(struct device *dev, struct device_attribute *attr,
+			char *buf)
+{
+	int err;
+	u8 tmp;
+
+	nizynqcpld_lock();
+	err = nizynqcpld_read(NICPLD_SCRATCHPADHR, &tmp);
+	nizynqcpld_unlock();
+
+	if (err)
+		return err;
+
+	tmp &= 0x3;
+	if (tmp >= ARRAY_SIZE(bootmode_strings))
+		return -EINVAL;
+
+	return sprintf(buf, "%s\n", bootmode_strings[tmp]);
+}
+
+static int nizynqcpld_set_bootmode(u8 mode)
+{
+	int err;
+	u8 tmp;
+
+	nizynqcpld_lock();
+
+	err = nizynqcpld_read(NICPLD_SCRATCHPADHR, &tmp);
+	if (err)
+		goto unlock_out;
+
+	tmp &= ~0x3;
+	tmp |= mode;
+
+	err = nizynqcpld_write(NICPLD_SCRATCHPADHR, tmp);
+
+unlock_out:
+	nizynqcpld_unlock();
+	return err;
+}
+
+static ssize_t nizynqcpld_bootmode_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	u8 i;
+
+	for (i = 0; i < ARRAY_SIZE(bootmode_strings); i++)
+		if (!strcmp(buf, bootmode_strings[i]))
+			return nizynqcpld_set_bootmode(i) ?: count;
+
+	return -EINVAL;
+}
+
+static DEVICE_ATTR(bootmode, S_IRUSR|S_IWUSR, nizynqcpld_bootmode_show,
+		   nizynqcpld_bootmode_store);
+
 static struct attribute *nizynqcpld_attrs[] = {
+	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
 	&dev_attr_console_out.dev_attr.attr,
