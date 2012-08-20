@@ -3036,7 +3036,6 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	struct net_local *lp;
 	struct device_node *np;
 	const void *prop;
-	u32 propval;
 	u32 regval = 0;
 	int rc = -ENXIO;
 	int create_mdio_bus = 1;
@@ -3105,8 +3104,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	}
 
 #ifdef CONFIG_OF
-	propval = be32_to_cpup(of_get_property(lp->pdev->dev.of_node, "interrupts", NULL));
-	if (propval == 54) { /* If it is ENET0 */
+	if (ndev->irq == 54) { /* If it is ENET0 */
 		enetnum = 0;
 		lp->slcr_div_reg = XSLCR_EMAC0_CLK_CTRL_OFFSET;
 	} else {	     /* If it is ENET1 */
