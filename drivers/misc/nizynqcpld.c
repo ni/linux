@@ -121,7 +121,14 @@ static enum led_brightness
 nizynqcpld_led_get_brightness(struct led_classdev *led_cdev)
 {
 	struct nizynqcpld_led *led = to_nizynqcpld_led(led_cdev);
-	return led->on;
+	u8 tmp;
+
+	nizynqcpld_lock();
+	/* can't handle an error here, so, roll with it. */
+	nizynqcpld_read(led->addr, &tmp);
+	nizynqcpld_unlock();
+
+	return tmp & led->bit ? LED_FULL : 0;
 }
 
 static struct nizynqcpld nizynqcpld = {
