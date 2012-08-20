@@ -33,6 +33,7 @@
 #define DOSX_STATUSLEDSHIFTBYTE0	0x06
 #define DOSX_LED			0x07
 #define DOSX_ETHERNETLED		0x08
+#define DOSX_DEBUGSWITCH		0x09
 #define DOSX_SCRATCHPADSR		0x1E
 #define DOSX_SCRATCHPADHR		0x1F
 
@@ -69,6 +70,7 @@ struct nizynqcpld_desc {
 	u8 reboot_addr;
 	u8 scratch_hr_addr;
 	u8 scratch_sr_addr;
+	u8 switch_addr;
 };
 
 struct nizynqcpld {
@@ -337,6 +339,45 @@ static DEVICE_ATTR(scratch_softreset, S_IRUSR|S_IWUSR,
 static DEVICE_ATTR(scratch_hardreset, S_IRUSR|S_IWUSR,
 		nizynqcpld_scratchhr_show, nizynqcpld_scratchhr_store);
 
+struct switch_attribute {
+	struct device_attribute dev_attr;
+	u8 bit;
+};
+
+static inline ssize_t nizynqcpld_switch_show(struct device *dev,
+					     struct device_attribute *attr,
+					     char *buf)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	struct switch_attribute *sa =
+		container_of(attr, struct switch_attribute, dev_attr);
+	int err;
+	u8 data;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, desc->switch_addr, &data);
+	nizynqcpld_unlock(cpld);
+
+	if (err) {
+		dev_err(dev, "Error reading switch state.\n");
+		return err;
+	}
+
+	return sprintf(buf, "%u\n", !!(data & sa->bit));
+}
+
+#define SWITCH_ATTR(_name, _bit) \
+	struct switch_attribute dev_attr_##_name = { \
+		.bit = _bit, \
+		.dev_attr = \
+			__ATTR(_name, 0444, nizynqcpld_switch_show, NULL), \
+	}
+
+static SWITCH_ATTR(console_out, 1 << 7);
+static SWITCH_ATTR(ip_reset,    1 << 6);
+static SWITCH_ATTR(safe_mode,   1 << 5);
+
 static const char * const bootmode_strings[] = {
 	"runtime", "safemode", "recovery",
 };
@@ -407,6 +448,9 @@ static const struct attribute *nizynqcpld_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_console_out.dev_attr.attr,
+	&dev_attr_ip_reset.dev_attr.attr,
+	&dev_attr_safe_mode.dev_attr.attr,
 	NULL
 };
 
@@ -414,6 +458,9 @@ static const struct attribute *dosequis6_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_console_out.dev_attr.attr,
+	&dev_attr_ip_reset.dev_attr.attr,
+	&dev_attr_safe_mode.dev_attr.attr,
 	NULL
 };
 
@@ -518,6 +565,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= PROTO_PROCESSORSTATE,
 		.scratch_hr_addr	= PROTO_SCRATCHPADHR,
 		.scratch_sr_addr	= PROTO_SCRATCHPADSR,
+		.switch_addr		= PROTO_SWITCHANDLED,
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
@@ -529,6 +577,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= DOSX_DEBUGSWITCH,
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
@@ -540,6 +589,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= DOSX_DEBUGSWITCH,
 	},
 	/* DosEquis CPLD */
 	{
@@ -551,6 +601,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= DOSX_DEBUGSWITCH,
 	},
 	/* myRIO CPLD */
 	{
@@ -562,6 +613,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= DOSX_DEBUGSWITCH,
 	},
 };
 
