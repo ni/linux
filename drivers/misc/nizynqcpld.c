@@ -311,9 +311,49 @@ static DEVICE_ATTR(scratch_softreset, S_IRUSR|S_IWUSR,
 static DEVICE_ATTR(scratch_hardreset, S_IRUSR|S_IWUSR,
 		nizynqcpld_scratchhr_show, nizynqcpld_scratchhr_store);
 
+
+struct switch_attribute {
+	u8 reg;
+	u8 bit;
+	struct device_attribute dev_attr;
+};
+
+static inline ssize_t nizynqcpld_switch_show(struct device *dev, struct device_attribute *attr,
+			char *buf)
+{
+	struct switch_attribute *sa = container_of(attr, struct switch_attribute, dev_attr);
+	int err;
+	u8 data;
+
+	nizynqcpld_lock();
+	err = nizynqcpld_read(sa->reg, &data);
+	nizynqcpld_unlock();
+
+	if (err) {
+		dev_err(dev, "Error reading switch state.\n");
+		return err;
+	}
+
+	return sprintf(buf, "%u\n", !!(data & sa->bit));
+}
+
+#define SWITCH_ATTR(_name,_reg,_bit) \
+	struct switch_attribute dev_attr_##_name = {				\
+		.reg = _reg,							\
+		.bit = _bit,							\
+		.dev_attr = __ATTR(_name, 0444, nizynqcpld_switch_show, NULL),	\
+	}
+
+static SWITCH_ATTR(console_out, NICPLD_SWITCHANDLED, 1 << 7);
+static SWITCH_ATTR(ip_reset,    NICPLD_SWITCHANDLED, 1 << 6);
+static SWITCH_ATTR(safe_mode,   NICPLD_SWITCHANDLED, 1 << 5);
+
 static struct attribute *nizynqcpld_attrs[] = {
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_console_out.dev_attr.attr,
+	&dev_attr_ip_reset.dev_attr.attr,
+	&dev_attr_safe_mode.dev_attr.attr,
 	NULL
 };
 
