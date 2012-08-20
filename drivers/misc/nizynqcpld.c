@@ -95,7 +95,10 @@ static int nizynqcpld_led_init(struct nizynqcpld_led *led)
 	int err;
 	u8 tmp;
 
+	nizynqcpld_lock();
 	err = nizynqcpld_read(led->addr, &tmp);
+	nizynqcpld_unlock();
+
 	if (err)
 		goto out;
 
@@ -235,7 +238,10 @@ static inline ssize_t nizynqcpld_scratch_show(struct device *dev, struct device_
 	u8 data;
 	int err;
 
+	nizynqcpld_lock();
 	err = nizynqcpld_read(reg_addr, &data);
+	nizynqcpld_unlock();
+
 	if (err) {
 		dev_err(dev, "Error reading scratch register state.\n");
 		return err;
@@ -269,7 +275,10 @@ static inline ssize_t nizynqcpld_scratch_store(struct device *dev, struct device
 
 	data = (u8) tmp;
 
+	nizynqcpld_lock();
 	err = nizynqcpld_write(reg_addr, data);
+	nizynqcpld_unlock();
+
 	if (err) {
 		dev_err(dev, "Error writing to  scratch register.\n");
 		return err;
