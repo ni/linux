@@ -816,6 +816,12 @@ static int irq_thread(void *data)
 			action_ret = handler_fn(desc, action);
 			if (!noirqdebug)
 				note_interrupt(action->irq, desc, action_ret);
+#ifdef CONFIG_PREEMPT_RT_FULL
+			migrate_disable();
+			add_interrupt_randomness(action->irq, 0,
+						 desc->random_ip ^ (u64) action);
+			migrate_enable();
+#endif
 		}
 
 		wake = atomic_dec_and_test(&desc->threads_active);
