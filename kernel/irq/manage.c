@@ -1089,9 +1089,6 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		if (new->flags & IRQF_NO_SOFTIRQ_CALL)
 			irq_settings_set_no_softirq_call(desc);
 
-		/* Set default affinity mask once everything is setup */
-		setup_affinity(irq, desc, mask);
-
 	} else if (new->flags & IRQF_TRIGGER_MASK) {
 		unsigned int nmsk = new->flags & IRQF_TRIGGER_MASK;
 		unsigned int omsk = irq_settings_get_trigger_mask(desc);
@@ -1104,6 +1101,17 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 	new->irq = irq;
 	*old_ptr = new;
+
+	/* Set default affinity mask once everything is setup.
+	 * We have to do this after the desc->action is assigned the new action
+	 * just above. If setup_affinity is called before, then the IRQ thread 
+	 * associated with the new action does not inherit the core affinity 
+	 * specified in /proc/irq/<irq_num>/smp_affinity file whereas the IRQ 
+	 * threads of the existing action handlers do inherit.
+	 */
+	if (!shared) {
+		setup_affinity(irq, desc, mask);
+	}
 
 	/* Reset broken irq detection when installing new handler */
 	desc->irq_count = 0;
