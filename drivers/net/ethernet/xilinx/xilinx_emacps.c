@@ -578,6 +578,7 @@ struct net_local {
 	struct napi_struct     napi;    /* napi information for device */
 	struct net_device_stats stats;  /* Statistics for this device */
 
+	struct work_struct     tx_task;
 	struct work_struct     reset_task;
 
 	struct timer_list watchdog_timer;
@@ -1380,7 +1381,7 @@ static void xemacps_tx_poll(struct net_device *ndev)
 		dma_unmap_single(&lp->pdev->dev, rp->mapping, skb->len,
 			DMA_TO_DEVICE);
 		rp->skb = NULL;
-		dev_kfree_skb_irq(skb);
+		dev_kfree_skb(skb);
 #ifdef DEBUG_VERBOSE_TX
 		printk(KERN_INFO "GEM: TX bd index %d BD_STAT 0x%08x after sent.\n",
 			bdidx, regval);
@@ -1411,6 +1412,24 @@ static void xemacps_tx_poll(struct net_device *ndev)
 tx_poll_out:
 	if (netif_queue_stopped(ndev))
 		netif_start_queue(ndev);
+}
+
+static void xemacps_tx_task(struct work_struct *work)
+{
+	struct net_local *lp =
+		container_of(work, struct net_local, tx_task);
+
+	spin_lock_bh(&lp->lock);
+
+	xemacps_tx_poll(lp->ndev);
+
+	spin_unlock_bh(&lp->lock);
+
+	/* We disable TX interrupts in interrupt service
+	 * routine, now it is time to enable it back.
+	 */
+	xemacps_write(lp->baseaddr, XEMACPS_IER_OFFSET,
+		      XEMACPS_IXR_TXCOMPL_MASK | XEMACPS_IXR_TX_ERR_MASK);
 }
 
 /**
@@ -1448,8 +1467,8 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 		(XEMACPS_IXR_FRAMERX_MASK | XEMACPS_IXR_RX_ERR_MASK)) {
 
 			if (napi_schedule_prep(&lp->napi)) {
-				/* acknowledge RX interrupt and disable it,
-				 * napi will be the one processing it.  */
+				/* disable RX interrupt, napi will be the
+				 * one processing it.  */
 				xemacps_write(lp->baseaddr,
 					XEMACPS_IDR_OFFSET,
 					(XEMACPS_IXR_FRAMERX_MASK |
@@ -1462,8 +1481,16 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 
 		/* TX interrupts */
 		if (regisr &
-		(XEMACPS_IXR_TXCOMPL_MASK | XEMACPS_IXR_TX_ERR_MASK))
-			xemacps_tx_poll(ndev);
+		(XEMACPS_IXR_TXCOMPL_MASK | XEMACPS_IXR_TX_ERR_MASK)) {
+			/* disable TX interrupt */
+			xemacps_write(lp->baseaddr,
+				XEMACPS_IDR_OFFSET,
+				(XEMACPS_IXR_TXCOMPL_MASK|
+				 XEMACPS_IXR_TX_ERR_MASK));
+
+			/* Schedule our Tx task. */
+			schedule_work(&lp->tx_task);
+		}
 
 		regisr = xemacps_read(lp->baseaddr, XEMACPS_ISR_OFFSET);
 	}
@@ -3058,6 +3085,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		goto err_out_sysfs_remove_file2;
 	}
 
+	INIT_WORK(&lp->tx_task, xemacps_tx_task);
 	INIT_WORK(&lp->reset_task, xemacps_reset_task);
 
 	setup_timer(&lp->watchdog_timer, xemacps_watchdog_timer,
