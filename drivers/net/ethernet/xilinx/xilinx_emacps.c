@@ -44,6 +44,7 @@
 #include <linux/vmalloc.h>
 #include <linux/version.h>
 #include <linux/of.h>
+#include <linux/kthread.h>
 #include <mach/board.h>
 #include <mach/slcr.h>
 
@@ -626,6 +627,12 @@ struct net_local {
 
 	struct napi_struct     napi;    /* napi information for device */
 	struct net_device_stats stats;  /* Statistics for this device */
+
+	int                    ni_polling_interval;
+	int                    ni_polling_policy;
+	int                    ni_polling_priority;
+
+	struct task_struct     *ni_polling_task;
 
 	/* Manage internal timer for packet timestamping */
 	struct cyclecounter    cycles;
@@ -1807,7 +1814,14 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 	if (unlikely(!regisr))
 		return IRQ_NONE;
 
-	spin_lock(&lp->lock);
+	/* In polling mode, we get several "NOHZ: local_softirq_pending"
+	   messages if we don't use spin_lock_bh and spin_unlock_bh. We
+	   don't understand why this is the case, and need to look into
+	   it further. */
+	if (lp->ni_polling_task)
+		spin_lock_bh(&lp->lock);
+	else
+		spin_lock(&lp->lock);
 
 	while (regisr) {
 		/* acknowledge interrupt and clear it */
@@ -1843,10 +1857,184 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 
 		regisr = xemacps_read(lp->baseaddr, XEMACPS_ISR_OFFSET);
 	}
-	spin_unlock(&lp->lock);
+
+	if (lp->ni_polling_task)
+		spin_unlock_bh(&lp->lock);
+	else
+		spin_unlock(&lp->lock);
 
 	return IRQ_HANDLED;
 }
+
+static int xemacps_polling_thread(void *info)
+{
+	struct net_device *ndev = info;
+	struct net_local *lp = netdev_priv(ndev);
+	int ni_polling_interval = lp->ni_polling_interval;
+	int ni_polling_interval_us = ni_polling_interval * 1000;
+	const struct sched_param param = {
+		.sched_priority = lp->ni_polling_priority,
+	};
+
+	BUG_ON(0 > ni_polling_interval);
+
+	sched_setscheduler(current, lp->ni_polling_policy, &param);
+
+	while (!kthread_should_stop()) {
+		xemacps_interrupt(ndev->irq, ndev);
+
+		if (0 == ni_polling_interval)
+			cpu_relax();
+		else if (20 > ni_polling_interval)
+			usleep_range(ni_polling_interval_us,
+				     ni_polling_interval_us);
+		else
+			msleep(ni_polling_interval);
+	}
+
+	return 0;
+}
+
+static ssize_t xemacps_get_ni_polling_interval(struct device *dev,
+					       struct device_attribute *attr,
+					       char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct net_local *lp = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n", lp->ni_polling_interval);
+}
+
+static ssize_t xemacps_set_ni_polling_interval(struct device *dev,
+					       struct device_attribute *attr,
+					       const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct net_local *lp = netdev_priv(ndev);
+	int val;
+	int rc = kstrtoint(buf, 0, &val);
+
+	if (0 <= rc)
+		lp->ni_polling_interval = val;
+
+	return count;
+}
+
+static DEVICE_ATTR(ni_polling_interval, S_IWUSR | S_IRUGO,
+		   xemacps_get_ni_polling_interval,
+		   xemacps_set_ni_polling_interval);
+
+static ssize_t xemacps_get_ni_polling_policy(struct device *dev,
+					     struct device_attribute *attr,
+					     char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct net_local *lp = netdev_priv(ndev);
+
+	switch (lp->ni_polling_policy) {
+		case SCHED_NORMAL:
+			return sprintf(buf, "SCHED_NORMAL (SCHED_OTHER)\n");
+		case SCHED_FIFO:
+			return sprintf(buf, "SCHED_FIFO\n");
+		case SCHED_RR:
+			return sprintf(buf, "SCHED_RR\n");
+		case SCHED_BATCH:
+			return sprintf(buf, "SCHED_BATCH\n");
+		case SCHED_IDLE:
+			return sprintf(buf, "SCHED_IDLE\n");
+		default:
+			return sprintf(buf, "unknown\n");
+	}
+}
+
+static ssize_t xemacps_set_ni_polling_policy(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct net_local *lp = netdev_priv(ndev);
+	unsigned long flags;
+	char policy_str [16] = { 0, };
+	int policy;
+
+	if (1 == sscanf(buf, "%15s", policy_str)) {
+		if ((0 == strcmp(policy_str, "SCHED_NORMAL") ||
+		    (0 == strcmp(policy_str, "SCHED_OTHER"))))
+			policy = SCHED_NORMAL;
+		else if (0 == strcmp(policy_str, "SCHED_FIFO"))
+			policy = SCHED_FIFO;
+		else if (0 == strcmp(policy_str, "SCHED_RR"))
+			policy = SCHED_RR;
+		else if (0 == strcmp(policy_str, "SCHED_BATCH"))
+			policy = SCHED_BATCH;
+		else if (0 == strcmp(policy_str, "SCHED_IDLE"))
+			policy = SCHED_IDLE;
+		else
+			return count;
+
+		spin_lock_irqsave(&lp->lock, flags);
+
+		lp->ni_polling_policy = policy;
+
+		if (lp->ni_polling_task) {
+			const struct sched_param param = {
+				.sched_priority = lp->ni_polling_priority,
+			};
+			sched_setscheduler(lp->ni_polling_task,
+					   lp->ni_polling_policy, &param);
+		}
+
+		spin_unlock_irqrestore(&lp->lock, flags);
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR(ni_polling_policy, S_IWUSR | S_IRUGO,
+		   xemacps_get_ni_polling_policy,
+		   xemacps_set_ni_polling_policy);
+
+static ssize_t xemacps_get_ni_polling_priority(struct device *dev,
+					       struct device_attribute *attr,
+					       char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct net_local *lp = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n", lp->ni_polling_priority);
+}
+
+static ssize_t xemacps_set_ni_polling_priority(struct device *dev,
+					       struct device_attribute *attr,
+					       const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct net_local *lp = netdev_priv(ndev);
+	unsigned long flags;
+	int priority;
+
+	if (1 == sscanf(buf, "%d", &priority)) {
+		spin_lock_irqsave(&lp->lock, flags);
+
+		lp->ni_polling_priority = priority;
+
+		if (lp->ni_polling_task) {
+			const struct sched_param param = {
+				.sched_priority = lp->ni_polling_priority,
+			};
+			sched_setscheduler(lp->ni_polling_task,
+					   lp->ni_polling_policy, &param);
+		}
+
+		spin_unlock_irqrestore(&lp->lock, flags);
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR(ni_polling_priority, S_IWUSR | S_IRUGO,
+		   xemacps_get_ni_polling_priority,
+		   xemacps_set_ni_polling_priority);
 
 /*
  * Free all packets presently in the descriptor rings.
@@ -2154,6 +2342,8 @@ static void xemacps_init_hw(struct net_local *lp)
 	/* Enable interrupts */
 	regval  = XEMACPS_IXR_ALL_MASK;
 	xemacps_write(lp->baseaddr, XEMACPS_IER_OFFSET, regval);
+	if (lp->ni_polling_task)
+		wake_up_process(lp->ni_polling_task);
 }
 
 /**
@@ -2179,12 +2369,28 @@ static int xemacps_open(struct net_device *ndev)
 	if (!is_valid_ether_addr(ndev->dev_addr))
 		return  -EADDRNOTAVAIL;
 
-	rc = request_irq(ndev->irq, xemacps_interrupt, IRQF_SAMPLE_RANDOM,
-		ndev->name, ndev);
-	if (rc) {
-		printk(KERN_ERR "%s: Unable to request IRQ, error %d\n",
-		ndev->name, rc);
-		return rc;
+	if (0 <= lp->ni_polling_interval) {
+		lp->ni_polling_task =
+			kthread_create(xemacps_polling_thread, ndev,
+				       "poll/%s", ndev->name);
+
+		if (IS_ERR(lp->ni_polling_task)) {
+			rc = PTR_ERR(lp->ni_polling_task);
+			lp->ni_polling_task = NULL;
+			printk(KERN_ERR "%s: Unable to create polling "
+			       "thread, error %d\n",
+			ndev->name, rc);
+			return rc;
+		}
+	} else {
+		rc = request_irq(ndev->irq, xemacps_interrupt,
+				 IRQF_SAMPLE_RANDOM, ndev->name, ndev);
+		if (rc) {
+			printk(KERN_ERR "%s: Unable to request IRQ, "
+			       "error %d\n",
+			ndev->name, rc);
+			return rc;
+		}
 	}
 
 	rc = xemacps_descriptor_init(lp);
@@ -2241,7 +2447,11 @@ static int xemacps_close(struct net_device *ndev)
 	if (lp->phy_dev)
 		phy_disconnect(lp->phy_dev);
 	xemacps_descriptor_free(lp);
-	free_irq(ndev->irq, ndev);
+	if (lp->ni_polling_task) {
+		kthread_stop(lp->ni_polling_task);
+		lp->ni_polling_task = NULL;
+	} else
+		free_irq(ndev->irq, ndev);
 
 	return 0;
 }
@@ -3266,6 +3476,36 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		goto err_out_unregister_netdev;
 	}
 
+	/* Default to interrupt mode. */
+	lp->ni_polling_interval = -1;
+
+	if (0 != sysfs_create_file(&ndev->dev.kobj,
+				   &dev_attr_ni_polling_interval.attr)) {
+		printk(KERN_ERR "%s: error creating sysfs file\n",
+		       ndev->name);
+		goto err_out_unregister_netdev;
+	}
+
+	/* Default to SCHED_FIFO policy. */
+	lp->ni_polling_policy = SCHED_FIFO;
+
+	if (0 != sysfs_create_file(&ndev->dev.kobj,
+				   &dev_attr_ni_polling_policy.attr)) {
+		printk(KERN_ERR "%s: error creating sysfs file\n",
+		       ndev->name);
+		goto err_out_sysfs_remove_file1;
+	}
+
+	/* Default to priority 40. */
+	lp->ni_polling_priority = 40;
+
+	if (0 != sysfs_create_file(&ndev->dev.kobj,
+				   &dev_attr_ni_polling_priority.attr)) {
+		printk(KERN_ERR "%s: error creating sysfs file\n",
+		       ndev->name);
+		goto err_out_sysfs_remove_file2;
+	}
+
 	xemacps_update_hwaddr(lp);
 
 	platform_set_drvdata(pdev, ndev);
@@ -3275,6 +3515,12 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	return 0;
 
+err_out_sysfs_remove_file2:
+	sysfs_remove_file(&ndev->dev.kobj,
+			  &dev_attr_ni_polling_policy.attr);
+err_out_sysfs_remove_file1:
+	sysfs_remove_file(&ndev->dev.kobj,
+			  &dev_attr_ni_polling_interval.attr);
 err_out_unregister_netdev:
 	unregister_netdev(ndev);
 err_out_iounmap:
@@ -3315,6 +3561,12 @@ static int __exit xemacps_remove(struct platform_device *pdev)
 			kfree(lp->mii_bus->irq);
 			mdiobus_free(lp->mii_bus);
 		}
+		sysfs_remove_file(&ndev->dev.kobj,
+				  &dev_attr_ni_polling_priority.attr);
+		sysfs_remove_file(&ndev->dev.kobj,
+				  &dev_attr_ni_polling_policy.attr);
+		sysfs_remove_file(&ndev->dev.kobj,
+				  &dev_attr_ni_polling_interval.attr);
 		unregister_netdev(ndev);
 		iounmap(lp->baseaddr);
 		free_netdev(ndev);
