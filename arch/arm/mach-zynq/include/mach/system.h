@@ -25,6 +25,9 @@ static inline void arch_reset(char mode, const char *cmd)
 #if defined(CONFIG_NIZYNQ_PROTO_CPLD)
 	extern int nizynqprotocpld_reboot(void);
 	nizynqprotocpld_reboot();
+#elif defined(CONFIG_NI_DOSEQUIS_CPLD)
+	extern int nidosequiscpld_reboot(void);
+	nidosequiscpld_reboot();
 #endif
 }
 
