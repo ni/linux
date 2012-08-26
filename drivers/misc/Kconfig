@@ -178,7 +178,7 @@ config NIZYNQ_PROTO_CPLD
 	  on the NI Zynq proto board.
 
 	  This driver can also be built as a module.  If so, the module
-	  will be called nizynqcpld.ko.
+	  will be called nizynqprotocpld.ko.
 
 config PHANTOM
 	tristate "Sensable PHANToM (PCI)"

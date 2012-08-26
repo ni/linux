@@ -22,8 +22,10 @@ static inline void arch_idle(void)
 
 static inline void arch_reset(char mode, const char *cmd)
 {
-	extern int nizynqcpld_reboot(void);
-	nizynqcpld_reboot();
+#if defined(CONFIG_NIZYNQ_PROTO_CPLD)
+	extern int nizynqprotocpld_reboot(void);
+	nizynqprotocpld_reboot();
+#endif
 }
 
 #endif

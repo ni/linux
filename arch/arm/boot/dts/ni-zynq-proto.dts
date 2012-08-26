@@ -181,8 +181,8 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			nizynqcpld@40 {
-				compatible = "nizynqcpld";
+			nizynqprotocpld@40 {
+				compatible = "nizynqprotocpld";
 				reg = <0x40>;
 			};
 
