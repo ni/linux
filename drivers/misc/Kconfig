@@ -57,6 +57,15 @@ config DUMMY_IRQ
 	  The sole purpose of this module is to help with debugging of systems on
 	  which spurious IRQs would happen on disabled IRQ vector.
 
+config FPGA_PERIPHERAL
+	bool "FPGA Peripheral Driver"
+	help
+	  FPGA Peripheral driver to notify peripheral devices of an
+	  impending download.
+
+	  Used to make sure the devices routed through the FPGA are
+	  powered off when an FPGA download occurs.
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT

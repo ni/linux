@@ -77,3 +77,4 @@ obj-y				+= amd-sbi/
 obj-$(CONFIG_MISC_RP1)		+= rp1/
 obj-$(CONFIG_NI_RT_FEATURES)	+= nirtfeatures.o
 obj-$(CONFIG_NI_WATCHDOG)	+= niwatchdog.o
+obj-$(CONFIG_FPGA_PERIPHERAL)   += fpgaperipheral.o
