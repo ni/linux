@@ -3079,6 +3079,10 @@ static int xemacps_probe(struct platform_device *pdev)
 	lp->txtimeout_handler_wq = create_singlethread_workqueue(DRIVER_NAME);
 	INIT_WORK(&lp->txtimeout_reinit, xemacps_reinit_for_txtimeout);
 
+	/* We use this to keep track of whether the interface is opened
+	   or closed. It defaults to on for some reason. */
+	netif_carrier_off(ndev);
+
 	platform_set_drvdata(pdev, ndev);
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
