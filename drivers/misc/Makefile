@@ -59,3 +59,4 @@ obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
 obj-$(CONFIG_CXL_BASE)		+= cxl/
 obj-$(CONFIG_NI_RT_FEATURES)	+= nirtfeatures.o
 obj-$(CONFIG_NI_WATCHDOG)	+= niwatchdog.o
+obj-$(CONFIG_FPGA_PERIPHERAL)   += fpgaperipheral.o
