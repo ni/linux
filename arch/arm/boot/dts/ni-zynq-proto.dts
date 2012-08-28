@@ -39,6 +39,11 @@
 			clock = <50000000>;
 		};
 
+		fpgaperipheral@0 {
+			compatible = "fpgaperipheral";
+			reg = <0xf8007000 0x1000>;
+		};
+
 		timer@0xf8001000 {
 			clock-frequency-timer0 = <111111000>;
 			clock-frequency-timer1 = <111111000>;
