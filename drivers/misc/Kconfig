@@ -190,6 +190,15 @@ config NI_DOSEQUIS_CPLD
 	  This driver can also be built as a module.  If so, the module
 	  will be called nidosequiscpld.ko.
 
+config FPGA_PERIPHERAL
+	bool "FPGA Peripheral Driver"
+	help
+	  FPGA Peripheral driver to notify peripheral devices of
+	  an impending download.
+
+	  Used to make sure the devices routed through the FPGA are powered
+	  off when an FPGA download occurs.
+
 config PHANTOM
 	tristate "Sensable PHANToM (PCI)"
 	depends on PCI
