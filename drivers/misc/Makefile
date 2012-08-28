@@ -58,6 +58,7 @@ obj-$(CONFIG_ASPEED_LPC_SNOOP)	+= aspeed-lpc-snoop.o
 obj-$(CONFIG_PCI_ENDPOINT_TEST)	+= pci_endpoint_test.o
 obj-$(CONFIG_NI_RT_FEATURES)	+= nirtfeatures.o
 obj-$(CONFIG_NI_WATCHDOG)	+= niwatchdog.o
+obj-$(CONFIG_FPGA_PERIPHERAL)   += fpgaperipheral.o
 
 lkdtm-$(CONFIG_LKDTM)		+= lkdtm_core.o
 lkdtm-$(CONFIG_LKDTM)		+= lkdtm_bugs.o
