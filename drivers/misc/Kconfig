@@ -123,6 +123,15 @@ config IBM_ASM
 	  for information on the specific driver level and support statement
 	  for your IBM server.
 
+config FPGA_PERIPHERAL
+	bool "FPGA Peripheral Driver"
+	help
+	  FPGA Peripheral driver to notify peripheral devices of an
+	  impending download.
+
+	  Used to make sure the devices routed through the FPGA are
+	  powered off when an FPGA download occurs.
+
 config PHANTOM
 	tristate "Sensable PHANToM (PCI)"
 	depends on PCI
