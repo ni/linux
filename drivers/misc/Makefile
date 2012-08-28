@@ -58,3 +58,4 @@ obj-y				+= mic/
 obj-$(CONFIG_GENWQE)		+= genwqe/
 obj-$(CONFIG_NI_RT_FEATURES)	+= nirtfeatures.o
 obj-$(CONFIG_NI_WATCHDOG)	+= niwatchdog.o
+obj-$(CONFIG_FPGA_PERIPHERAL)   += fpgaperipheral.o
