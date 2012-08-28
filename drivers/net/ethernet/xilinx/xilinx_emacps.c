@@ -1479,15 +1479,28 @@ static int xemacps_polling_thread(void *info)
 {
 	struct net_device *ndev = info;
 	struct net_local *lp = netdev_priv(ndev);
-	int ni_polling_interval = lp->ni_polling_interval;
-	int ni_polling_interval_us = ni_polling_interval * 1000;
-	const struct sched_param param = {
-		.sched_priority = lp->ni_polling_priority,
-	};
+	unsigned long flags;
+	int ni_polling_interval;
+	int ni_polling_interval_us;
+	struct sched_param param;
 
-	BUG_ON(0 > ni_polling_interval);
+	spin_lock_irqsave(&lp->lock, flags);
+
+	ni_polling_interval = lp->ni_polling_interval;
+	ni_polling_interval_us = ni_polling_interval * 1000;
+	param.sched_priority = lp->ni_polling_priority;
 
 	sched_setscheduler(current, lp->ni_polling_policy, &param);
+
+	spin_unlock_irqrestore(&lp->lock, flags);
+
+	/* If we got changed to interrupt mode before the polling thread
+	   started. */
+	if (unlikely(0 > ni_polling_interval)) {
+		while (!kthread_should_stop())
+			msleep(1);
+		return -EINTR;
+	}
 
 	while (!kthread_should_stop()) {
 		xemacps_interrupt(ndev->irq, ndev);
@@ -1520,11 +1533,22 @@ static ssize_t xemacps_set_ni_polling_interval(struct device *dev,
 {
 	struct net_device *ndev = to_net_dev(dev);
 	struct net_local *lp = netdev_priv(ndev);
+	unsigned long flags;
 	int val;
 	int rc = kstrtoint(buf, 0, &val);
 
-	if (0 <= rc)
-		lp->ni_polling_interval = val;
+	if (0 <= rc) {
+		spin_lock_irqsave(&lp->lock, flags);
+
+		if (lp->ni_polling_interval != val) {
+			lp->ni_polling_interval = val;
+			/* If the interface is open, schedule a reset. */
+			if (netif_carrier_ok(ndev))
+				schedule_work(&lp->reset_task);
+		}
+
+		spin_unlock_irqrestore(&lp->lock, flags);
+	}
 
 	return count;
 }
@@ -3082,6 +3106,10 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		    (unsigned long)lp);
 
 	xemacps_update_hwaddr(lp);
+
+	/* We use this to keep track of whether the interface is opened
+	   or closed. It defaults to on for some reason. */
+	netif_carrier_off(ndev);
 
 	platform_set_drvdata(pdev, ndev);
 
