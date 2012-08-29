@@ -37,6 +37,32 @@
 			clock = <50000000>;
 		};
 
+		serial@80000000 {
+			device_type = "serial";
+			compatible = "ns16550a";
+			reg = <0x80000000 0x8>;
+			/*interrupts = <0 31 0>;*/
+			clock-frequency = <58824000>;
+			/* Populated by the bootloader */
+			/* current-speed = <0>; */
+		};
+
+		serial@80000010 {
+			device_type = "serial";
+			compatible = "ns16550a";
+			reg = <0x80000010 0x8>;
+			/*interrupts = <0 32 0>;*/
+			clock-frequency = <58824000>;
+		};
+
+		serial@80000020 {
+			device_type = "serial";
+			compatible = "ns16550a";
+			reg = <0x80000020 0x8>;
+			/*interrupts = <0 33 0>;*/
+			clock-frequency = <58824000>;
+		};
+
 		fpgaperipheral@0 {
 			compatible = "fpgaperipheral";
 			reg = <0xf8007000 0x1000>;

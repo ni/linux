@@ -133,6 +133,14 @@ static struct map_desc io_desc[] __initdata = {
 		.type		= MT_DEVICE,
 	},
 
+#ifdef CONFIG_SERIAL_8250_CONSOLE
+	{
+		.virtual	= 0xE0700000,
+		.pfn		= __phys_to_pfn(0x80000000),
+		.length		= SZ_1K,
+		.type		= MT_DEVICE,
+	},
+#endif
 #ifdef CONFIG_DEBUG_LL
 	{
 		.virtual	= UART0_VIRT,
