@@ -540,6 +540,7 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 struct ring_info {
 	struct sk_buff *skb;
 	dma_addr_t     mapping;
+	unsigned long  start_jiffies;
 };
 
 /* DMA buffer descriptor structure. Each BD is two words */
@@ -578,6 +579,8 @@ struct net_local {
 	struct net_device_stats stats;  /* Statistics for this device */
 
 	struct work_struct     reset_task;
+
+	struct timer_list watchdog_timer;
 
 	int                    ni_polling_interval;
 	int                    ni_polling_policy;
@@ -1989,6 +1992,9 @@ static int xemacps_open(struct net_device *ndev)
 		return -ENXIO;
 	}
 
+	lp->watchdog_timer.expires = jiffies + TX_TIMEOUT;
+	add_timer(&lp->watchdog_timer);
+
 	netif_carrier_on(ndev);
 
 	netif_start_queue(ndev);
@@ -2011,6 +2017,7 @@ static int xemacps_close(struct net_device *ndev)
 	struct net_local *lp = netdev_priv(ndev);
 	unsigned long flags;
 
+	del_timer_sync(&lp->watchdog_timer);
 	netif_stop_queue(ndev);
 	napi_disable(&lp->napi);
 	spin_lock_irqsave(&lp->lock, flags);
@@ -2029,21 +2036,37 @@ static int xemacps_close(struct net_device *ndev)
 	return 0;
 }
 
-/**
- * xemacps_tx_timeout - callback uses when the transmitter has not made
- * any progress for dev->watchdog ticks.
- * @ndev: network interface device structure
- **/
-static void xemacps_tx_timeout(struct net_device *ndev)
+/*
+ * We use our own timer routine rather than relying upon netdev->tx_timeout
+ * because we have a very large hardware transmit queue. Due to the large
+ * queue, the netdev->ndo_tx_timeout function cannot detect a transmit stall
+ * in a timely fashion.
+ */
+static void xemacps_watchdog_timer(unsigned long arg)
 {
-	struct net_local *lp = netdev_priv(ndev);
+	struct net_local *lp = (struct net_local *)arg;
+	int reset = 0;
 
-	printk(KERN_ERR "%s transmit timeout %lu ms, reseting...\n",
-		ndev->name, TX_TIMEOUT * 1000UL / HZ);
-	lp->stats.tx_errors++;
+	spin_lock_bh(&lp->lock);
 
-	/* Schedule our reset task. */
-	schedule_work(&lp->reset_task);
+	/* If Tx packets have been sent */
+	if (XEMACPS_SEND_BD_CNT > lp->tx_bd_freecnt) {
+		/* Check if the earliest Tx packet was sent longer ago than
+		   out timeout, and schedule a reset if so. */
+		if (time_after(jiffies, (lp->tx_skb[lp->tx_bd_ci].start_jiffies +
+					 TX_TIMEOUT)))
+			reset = 1;
+	}
+
+	spin_unlock_bh(&lp->lock);
+
+	if (reset) {
+		dev_info(&lp->pdev->dev,
+			 "Tx stall detected, resetting interface\n");
+		schedule_work(&lp->reset_task);
+	} else
+		/* rearm timer */
+		mod_timer(&lp->watchdog_timer, jiffies + TX_TIMEOUT);
 }
 
 static void xemacps_reset_task(struct work_struct *work)
@@ -2131,6 +2154,7 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 		lp->tx_skb[lp->tx_bd_tail].skb = skb;
 		lp->tx_skb[lp->tx_bd_tail].mapping = mapping;
+		lp->tx_skb[lp->tx_bd_tail].start_jiffies = jiffies;
 
 		cur_p->addr = mapping;
 
@@ -2159,7 +2183,7 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 		      (regval | XEMACPS_NWCTRL_STARTTX_MASK));
 
 	spin_unlock_irq(&lp->lock);
-	ndev->trans_start = jiffies;
+
 	return 0;
 }
 
@@ -2825,7 +2849,6 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	ndev->irq = platform_get_irq(pdev, 0);
 
 	ndev->netdev_ops	 = &netdev_ops;
-	ndev->watchdog_timeo     = TX_TIMEOUT;
 	ndev->ethtool_ops        = &xemacps_ethtool_ops;
 	ndev->base_addr          = r_mem->start;
 	ndev->features           = NETIF_F_IP_CSUM;
@@ -3037,6 +3060,9 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	INIT_WORK(&lp->reset_task, xemacps_reset_task);
 
+	setup_timer(&lp->watchdog_timer, xemacps_watchdog_timer,
+		    (unsigned long)lp);
+
 	xemacps_update_hwaddr(lp);
 
 	platform_set_drvdata(pdev, ndev);
@@ -3149,7 +3175,6 @@ static struct net_device_ops netdev_ops = {
 	.ndo_set_mac_address    = xemacps_set_mac_address,
 	.ndo_do_ioctl		= xemacps_ioctl,
 	.ndo_change_mtu		= xemacps_change_mtu,
-	.ndo_tx_timeout		= xemacps_tx_timeout,
 	.ndo_get_stats		= xemacps_get_stats,
 };
 
