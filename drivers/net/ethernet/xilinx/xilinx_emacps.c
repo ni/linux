@@ -577,6 +577,8 @@ struct net_local {
 	struct napi_struct     napi;    /* napi information for device */
 	struct net_device_stats stats;  /* Statistics for this device */
 
+	struct work_struct     reset_task;
+
 	int                    ni_polling_interval;
 	int                    ni_polling_policy;
 	int                    ni_polling_priority;
@@ -1706,64 +1708,6 @@ static void xemacps_descriptor_free(struct net_local *lp)
 	}
 }
 
-static int xemacps_descriptor_ring_init(struct net_local *lp)
-{
-       struct sk_buff *new_skb;
-       u32 new_skb_baddr;
-       u32 i;
-       struct xemacps_bd *cur_p;
-
-       /* Reset the indexes which are used for accessing the BDs */
-       lp->tx_bd_ci = 0;
-       lp->tx_bd_tail = 0;
-       lp->rx_bd_ci = 0;
-
-       memset(lp->rx_bd, 0, sizeof(*lp->rx_bd) * XEMACPS_RECV_BD_CNT);
-       for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
-               cur_p = &lp->rx_bd[i];
-               new_skb = netdev_alloc_skb(lp->ndev, XEMACPS_RX_BUF_SIZE);
-               if (new_skb == NULL) {
-                       dev_err(&lp->ndev->dev, "alloc_skb error %d\n", i);
-                       return -ENOMEM;
-               }
-
-               /* Get dma handle of skb->data */
-               new_skb_baddr = (u32) dma_map_single(lp->ndev->dev.parent,
-                                                       new_skb->data,
-                                                       XEMACPS_RX_BUF_SIZE,
-                                                       DMA_FROM_DEVICE);
-               cur_p->addr = (cur_p->addr & ~XEMACPS_RXBUF_ADD_MASK) | (new_skb_baddr);
-               lp->rx_skb[i].skb = new_skb;
-               lp->rx_skb[i].mapping = new_skb_baddr;
-               wmb();
-       }
-
-       cur_p = &lp->rx_bd[XEMACPS_RECV_BD_CNT - 1];
-               /* wrap bit set for last BD, bdptr is moved to last here */
-       cur_p->ctrl = 0;
-       cur_p->addr |= XEMACPS_RXBUF_WRAP_MASK;
-
-       memset(lp->tx_bd, 0, sizeof(*lp->tx_bd) * XEMACPS_SEND_BD_CNT);
-       for (i = 0; i < XEMACPS_SEND_BD_CNT; i++) {
-               cur_p = &lp->tx_bd[i];
-               cur_p->ctrl = XEMACPS_TXBUF_USED_MASK;
-       }
-       cur_p = &lp->tx_bd[XEMACPS_SEND_BD_CNT - 1];
-       /* wrap bit set for last BD, bdptr is moved to last here */
-       cur_p->ctrl = (XEMACPS_TXBUF_WRAP_MASK | XEMACPS_TXBUF_USED_MASK);
-       lp->tx_bd_freecnt = XEMACPS_SEND_BD_CNT;
-       lp->tx_bd_freecnt = XEMACPS_SEND_BD_CNT;
-
-       for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
-               cur_p = &lp->rx_bd[i];
-               cur_p->ctrl = 0;
-               /* Assign ownership back to hardware */
-               cur_p->addr &= (~XEMACPS_RXBUF_NEW_MASK);
-       }
-       wmb();
-       return 0;
-}
-
 
 /**
  * xemacps_descriptor_init - Allocate both TX and RX BDs
@@ -2092,30 +2036,27 @@ static int xemacps_close(struct net_device *ndev)
  **/
 static void xemacps_tx_timeout(struct net_device *ndev)
 {
-	int rc;
-	unsigned long flags;
 	struct net_local *lp = netdev_priv(ndev);
 
 	printk(KERN_ERR "%s transmit timeout %lu ms, reseting...\n",
 		ndev->name, TX_TIMEOUT * 1000UL / HZ);
 	lp->stats.tx_errors++;
 
-	spin_lock_irqsave(&lp->lock, flags);
+	/* Schedule our reset task. */
+	schedule_work(&lp->reset_task);
+}
 
-	netif_stop_queue(ndev);
-	napi_disable(&lp->napi);
-	xemacps_reset_hw(lp);
-	xemacps_clean_rings(lp);
-	rc = xemacps_descriptor_ring_init(lp);
-	if (rc)
-		printk(KERN_ERR "%s Unable to setup BD or rings, rc %d\n",
-		ndev->name, rc);
-	xemacps_init_hw(lp);
-	ndev->trans_start = jiffies;
-	napi_enable(&lp->napi);
-	netif_wake_queue(ndev);
+static void xemacps_reset_task(struct work_struct *work)
+{
+	struct net_local *lp =
+		container_of(work, struct net_local, reset_task);
 
-	spin_unlock_irqrestore(&lp->lock, flags);
+	/* Shut it down and bring it back up, synchronizing with
+	   other softirqs. */
+	local_bh_disable();
+	xemacps_close(lp->ndev);
+	xemacps_open(lp->ndev);
+	local_bh_enable();
 }
 
 /**
@@ -3093,6 +3034,8 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		       ndev->name);
 		goto err_out_sysfs_remove_file2;
 	}
+
+	INIT_WORK(&lp->reset_task, xemacps_reset_task);
 
 	xemacps_update_hwaddr(lp);
 
