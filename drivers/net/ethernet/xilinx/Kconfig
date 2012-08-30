@@ -48,6 +48,13 @@ config XILINX_PS_EMAC_HWTSTAMP
 	---help---
 	  Generate hardare packet timestamps. This is to facilitate IEEE1588.
 
+config XILINX_PS_EMAC_BROKEN_TX
+	bool "Work around problems with transmit in certain Zynq revs"
+	default n
+	---help---
+	  This enables workarounds for some transmit problems in some revs
+	  of Zynq.
+
 endif
 
 endif # NET_VENDOR_XILINX

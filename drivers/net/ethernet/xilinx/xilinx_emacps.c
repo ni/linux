@@ -133,6 +133,10 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 
 #define XEMACPS_NAPI_WEIGHT	64
 
+#ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
+#define XEMACPS_SEND_BD_TPT	64
+#endif
+
 /* Register offset definitions. Unless otherwise noted, register access is
  * 32 bit. Names are self explained here.
  */
@@ -1322,14 +1326,14 @@ static void xemacps_tx_poll(struct net_device *ndev)
 			ndev->name, regval);
 		lp->stats.tx_errors++;
 	}
-
+#ifndef CONFIG_XILINX_PS_EMAC_BROKEN_TX
 	/* This may happen when a buffer becomes complete
 	 * between reading the ISR and scanning the descriptors.
 	 * Nothing to worry about.
 	 */
 	if (!(regval & XEMACPS_TXSR_TXCOMPL_MASK))
 		goto tx_poll_out;
-
+#endif
 	cur_i = lp->tx_bd_ci;
 	cur_p = &lp->tx_bd[cur_i];
 	while (bdcount < XEMACPS_SEND_BD_CNT) {
@@ -1413,8 +1417,12 @@ static void xemacps_tx_poll(struct net_device *ndev)
 	}
 	wmb();
 
+#ifndef CONFIG_XILINX_PS_EMAC_BROKEN_TX
 tx_poll_out:
 	if (netif_queue_stopped(ndev))
+#else
+	if (netif_queue_stopped(ndev) && (bdcount - bdpartialcount))
+#endif
 		netif_start_queue(ndev);
 }
 
@@ -2213,6 +2221,20 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
 		      (regval | XEMACPS_NWCTRL_STARTTX_MASK));
 
+#ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
+
+	if ((XEMACPS_SEND_BD_TPT > lp->tx_bd_freecnt) &&
+	    !work_pending(&lp->tx_task)) {
+		/* disable TX interrupt */
+		xemacps_write(lp->baseaddr,
+			XEMACPS_IDR_OFFSET,
+			(XEMACPS_IXR_TXCOMPL_MASK|
+			 XEMACPS_IXR_TX_ERR_MASK));
+
+		/* Schedule our Tx task. */
+		schedule_work(&lp->tx_task);
+	}
+#endif
 	spin_unlock_irq(&lp->lock);
 
 	return 0;
