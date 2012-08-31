@@ -982,6 +982,8 @@ struct macb_queue {
 #endif
 };
 
+struct gpio_desc;
+
 struct macb {
 	void __iomem		*regs;
 	bool			native_io;
@@ -1027,6 +1029,8 @@ struct macb {
 	int 			link;
 	int 			speed;
 	int 			duplex;
+	struct gpio_desc	*gpiospeed_1000;
+	struct gpio_desc	*gpiospeed_100;
 
 	u32			caps;
 	unsigned int		dma_burst_length;
