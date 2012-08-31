@@ -45,6 +45,7 @@
 #include <linux/of_mdio.h>
 #include <linux/timer.h>
 #include <linux/ptp_clock_kernel.h>
+#include <linux/gpio.h>
 
 /************************** Constant Definitions *****************************/
 
@@ -545,6 +546,8 @@ struct net_local {
 	unsigned ip_summed;
 	unsigned int enetnum;
 	unsigned int lastrxfrmscntr;
+	int gpiospeed_1000;
+	int gpiospeed_100;
 #ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
 	struct hwtstamp_config hwtstamp_config;
 	struct ptp_clock *ptp_clock;
@@ -739,13 +742,43 @@ static void xemacps_adjust_link(struct net_device *ndev)
 	}
 
 	if (status_change) {
-		if (phydev->link)
+		if (phydev->link) {
 			dev_info(&lp->pdev->dev, "link up (%d/%s)\n",
 				phydev->speed,
 				DUPLEX_FULL == phydev->duplex ?
 				"FULL" : "HALF");
-		else
+
+			/* Update the link speed indicator GPIOs. */
+			switch (phydev->speed) {
+			case SPEED_1000:
+				if (0 <= lp->gpiospeed_1000)
+					gpio_set_value(lp->gpiospeed_1000, 0);
+				if (0 <= lp->gpiospeed_100)
+					gpio_set_value(lp->gpiospeed_100, 1);
+				break;
+			case SPEED_100:
+				if (0 <= lp->gpiospeed_1000)
+					gpio_set_value(lp->gpiospeed_1000, 1);
+				if (0 <= lp->gpiospeed_100)
+					gpio_set_value(lp->gpiospeed_100, 1);
+				break;
+			case SPEED_10:
+				if (0 <= lp->gpiospeed_1000)
+					gpio_set_value(lp->gpiospeed_1000, 1);
+				if (0 <= lp->gpiospeed_100)
+					gpio_set_value(lp->gpiospeed_100, 0);
+				break;
+			}
+		} else {
 			dev_info(&lp->pdev->dev, "link down\n");
+
+			/* The link is down, so indicate this by setting both
+			 * speed GPIOs to 0. */
+			if (0 <= lp->gpiospeed_1000)
+				gpio_set_value(lp->gpiospeed_1000, 0);
+			if (0 <= lp->gpiospeed_100)
+				gpio_set_value(lp->gpiospeed_100, 0);
+		}
 	}
 }
 
@@ -2797,6 +2830,7 @@ static int xemacps_probe(struct platform_device *pdev)
 	u32 regval = 0;
 	int rc = -ENXIO;
 	int create_mdio_bus = 1;
+	void *prop;
 
 	r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
@@ -2895,6 +2929,22 @@ static int xemacps_probe(struct platform_device *pdev)
 	regval = (MDC_DIV_224 << XEMACPS_NWCFG_MDC_SHIFT_MASK);
 	xemacps_write(lp->baseaddr, XEMACPS_NWCFG_OFFSET, regval);
 
+
+	/* Look for a GPIO to indicate link speed to the PL as 10/100 (high)
+	 * or 1000 (low). */
+	prop = of_get_property(lp->pdev->dev.of_node, "xlnx,emio-gpio-speed-1000", NULL);
+	if (prop)
+		lp->gpiospeed_1000 = be32_to_cpup(prop);
+	else
+		lp->gpiospeed_1000 = -1;
+
+	/* Look for a GPIO to indicate link speed to the PL as 100 (high)
+	 * or 10 (low). */
+	prop = of_get_property(lp->pdev->dev.of_node, "xlnx,emio-gpio-speed-100", NULL);
+	if (prop)
+		lp->gpiospeed_100 = be32_to_cpup(prop);
+	else
+		lp->gpiospeed_100 = -1;
 
 	regval = XEMACPS_NWCTRL_MDEN_MASK;
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, regval);
