@@ -59,8 +59,13 @@
 #define DRIVER_DESCRIPTION	"Xilinx Tri-Mode Ethernet MAC driver"
 #define DRIVER_VERSION		"1.00a"
 
+#ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
+/* Transmission timeout is 1 second. */
+#define TX_TIMEOUT		(1*HZ)
+#else
 /* Transmission timeout is 3 seconds. */
 #define TX_TIMEOUT		(3*HZ)
+#endif
 
 /* for RX skb IP header word-aligned */
 #define RX_IP_ALIGN_OFFSET	2
