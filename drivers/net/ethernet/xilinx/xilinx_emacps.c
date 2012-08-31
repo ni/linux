@@ -650,6 +650,7 @@ struct net_local {
 	unsigned int 	       slcr_div1_100Mbps;
 	unsigned int 	       slcr_div0_10Mbps;
 	unsigned int 	       slcr_div1_10Mbps;
+	int                    gpiospeed;
 #ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
 	unsigned int 	       ptpenetclk;
 #endif
@@ -812,8 +813,13 @@ static void xemacps_adjust_link(struct net_device *ndev)
 				regval1 |= ((lp->slcr_div1_1000Mbps) << 20);
 				regval1 |= ((lp->slcr_div0_1000Mbps) << 8);
 				xslcr_write(lp->slcr_div_reg, regval1);
-			} else
+				if (0 <= lp->gpiospeed)
+					gpio_set_value(lp->gpiospeed, 0);
+			} else {
 				regval &= ~XEMACPS_NWCFG_1000_MASK;
+				if (0 <= lp->gpiospeed)
+					gpio_set_value(lp->gpiospeed, 1);
+			}
 
 			if (phydev->speed == SPEED_100) {
 				regval |= XEMACPS_NWCFG_100_MASK;
@@ -3241,6 +3247,15 @@ static int __init xemacps_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "Invalid EMIO FPGA clock configuration %d\n", fpga_clk);
 		}
 	}
+
+	/* Look for a GPIO to indicate link speed to the PL as 10/100 (high)
+	   or 1000 (low). */
+	prop = of_get_property(lp->pdev->dev.of_node, "xlnx,emio-gpio-speed", NULL);
+
+	if (prop)
+		lp->gpiospeed = be32_to_cpup(prop);
+	else
+		lp->gpiospeed = -1;
 #endif
 
 	regval = XEMACPS_NWCTRL_MDEN_MASK;

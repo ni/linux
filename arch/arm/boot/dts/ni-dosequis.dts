@@ -131,7 +131,8 @@
 			xlnx,slcr-div1-100Mbps = <5>;
 			xlnx,slcr-div1-10Mbps = <50>;
 			xlnx,no_mdio_bus;
-			xlnx,emio-fpga-clk = <1>;
+			xlnx,emio-fpga-clk = <0>;
+			xlnx,emio-gpio-speed = <54>;
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
 		};
@@ -196,6 +197,11 @@
 			gpio1-label     = "phy_interupt";
 			gpio1-direction = "input";
 			gpio1-settings  = "level-low";
+
+			/* GPIO54 (EMIO0) */
+			gpio54-label     = "eth1_link_speed";
+			gpio54-direction = "output";
+			gpio54-settings  = "low";
 		};
 
 		i2c0: i2c@e0004000 {
