@@ -1283,6 +1283,8 @@ struct ethtool_rx_fs_list {
 	unsigned int count;
 };
 
+struct gpio_desc;
+
 struct macb {
 	void __iomem		*regs;
 	bool			native_io;
@@ -1329,6 +1331,8 @@ struct macb {
 	struct phylink_config	phylink_config;
 	struct phylink_pcs	phylink_usx_pcs;
 	struct phylink_pcs	phylink_sgmii_pcs;
+	struct gpio_desc	*gpiospeed_1000;
+	struct gpio_desc	*gpiospeed_100;
 
 	u32			caps;
 	unsigned int		dma_burst_length;

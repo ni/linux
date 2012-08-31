@@ -13,6 +13,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/etherdevice.h>
 #include <linux/firmware/xlnx-zynqmp.h>
+#include <linux/gpio/consumer.h>
 #include <linux/inetdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/init.h>
@@ -711,6 +712,12 @@ static void macb_mac_link_down(struct phylink_config *config, unsigned int mode,
 	macb_writel(bp, NCR, ctrl);
 
 	netif_tx_stop_all_queues(ndev);
+
+	/* The link is down, so indicate this by setting both
+	 * speed GPIOs to 0.
+	 */
+	gpiod_set_value(bp->gpiospeed_1000, 0);
+	gpiod_set_value(bp->gpiospeed_100, 0);
 }
 
 /* Use juggling algorithm to left rotate tx ring and tx skb array */
@@ -868,6 +875,22 @@ static void macb_mac_link_up(struct phylink_config *config,
 	macb_writel(bp, NCR, ctrl | MACB_BIT(RE) | MACB_BIT(TE));
 
 	netif_tx_wake_all_queues(ndev);
+
+	/* Update the link speed indicator GPIOs. */
+	switch (speed) {
+	case SPEED_1000:
+		gpiod_set_value(bp->gpiospeed_1000, 0);
+		gpiod_set_value(bp->gpiospeed_100, 1);
+		break;
+	case SPEED_100:
+		gpiod_set_value(bp->gpiospeed_1000, 1);
+		gpiod_set_value(bp->gpiospeed_100, 1);
+		break;
+	case SPEED_10:
+		gpiod_set_value(bp->gpiospeed_1000, 1);
+		gpiod_set_value(bp->gpiospeed_100, 0);
+		break;
+	}
 }
 
 static struct phylink_pcs *macb_mac_select_pcs(struct phylink_config *config,
@@ -5801,6 +5824,47 @@ static int macb_probe(struct platform_device *pdev)
 		goto err_out_phy_exit;
 
 	netif_carrier_off(dev);
+
+	/* Look for a GPIO to indicate link speed to the PL as 10/100 (high)
+	 * or 1000 (low).
+	 */
+	bp->gpiospeed_100 = devm_gpiod_get_index_optional(&pdev->dev,
+							  "emio-speed", 0,
+							  GPIOD_ASIS);
+	if (IS_ERR(bp->gpiospeed_100)) {
+		dev_err(&pdev->dev,
+			"Error retrieving handle to EMIO gpiospeed_100\n");
+		err = PTR_ERR(bp->gpiospeed_100);
+		goto err_out_unregister_mdio;
+	}
+
+	if (bp->gpiospeed_100) {
+		err = gpiod_direction_output(bp->gpiospeed_100, 0);
+		if (err) {
+			dev_err(&pdev->dev,
+				"Unable to set EMIO gpiospeed_100 as output\n");
+			goto err_out_unregister_mdio;
+		}
+	}
+
+	bp->gpiospeed_1000 = devm_gpiod_get_index_optional(&pdev->dev,
+							   "emio-speed", 1,
+							   GPIOD_ASIS);
+	if (IS_ERR(bp->gpiospeed_1000)) {
+		dev_err(&pdev->dev,
+			"Error retrieving handle to EMIO gpiospeed_1000\n");
+		err = PTR_ERR(bp->gpiospeed_1000);
+		goto err_out_unregister_mdio;
+	}
+
+	if (bp->gpiospeed_1000) {
+		err = gpiod_direction_output(bp->gpiospeed_1000, 0);
+		if (err) {
+			dev_err(&pdev->dev,
+				"Unable to set EMIO gpiospeed_1000 as output\n");
+			goto err_out_unregister_mdio;
+		}
+	}
 
 	err = register_netdev(dev);
 	if (err) {
