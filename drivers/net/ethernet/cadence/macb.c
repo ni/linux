@@ -305,9 +305,39 @@ static void macb_handle_link_change(struct net_device *dev)
 				    phydev->speed,
 				    phydev->duplex == DUPLEX_FULL ?
 				    "Full" : "Half");
+
+			/* Update the link speed indicator GPIOs. */
+			switch (phydev->speed) {
+			case SPEED_1000:
+				if (bp->gpiospeed_1000 >= 0)
+					gpio_set_value(bp->gpiospeed_1000, 0);
+				if (bp->gpiospeed_100 >= 0)
+					gpio_set_value(bp->gpiospeed_100, 1);
+				break;
+			case SPEED_100:
+				if (bp->gpiospeed_1000 >= 0)
+					gpio_set_value(bp->gpiospeed_1000, 1);
+				if (bp->gpiospeed_100 >= 0)
+					gpio_set_value(bp->gpiospeed_100, 1);
+				break;
+			case SPEED_10:
+				if (bp->gpiospeed_1000 >= 0)
+					gpio_set_value(bp->gpiospeed_1000, 1);
+				if (bp->gpiospeed_100 >= 0)
+					gpio_set_value(bp->gpiospeed_100, 0);
+				break;
+			}
 		} else {
 			netif_carrier_off(dev);
 			netdev_info(dev, "link down\n");
+
+			/* The link is down, so indicate this by setting both
+			 * speed GPIOs to 0.
+			 */
+			if (bp->gpiospeed_1000 >= 0)
+				gpio_set_value(bp->gpiospeed_1000, 0);
+			if (bp->gpiospeed_100 >= 0)
+				gpio_set_value(bp->gpiospeed_100, 0);
 		}
 	}
 }
@@ -1902,6 +1932,7 @@ static int __init macb_probe(struct platform_device *pdev)
 	u32 config;
 	int err = -ENXIO;
 	const char *mac;
+	const void *prop;
 
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!regs) {
@@ -2028,6 +2059,26 @@ static int __init macb_probe(struct platform_device *pdev)
 #else
 		macb_or_gem_writel(bp, USRIO, MACB_BIT(MII));
 #endif
+
+	/* Look for a GPIO to indicate link speed to the PL as 10/100 (high)
+	* or 1000 (low).
+	*/
+	prop = of_get_property(pdev->dev.of_node, "cdns,emio-gpio-speed-1000",
+			       NULL);
+	if (prop)
+		bp->gpiospeed_1000 = be32_to_cpup(prop);
+	else
+		bp->gpiospeed_1000 = -1;
+
+	/* Look for a GPIO to indicate link speed to the PL as 100 (high)
+	* or 10 (low).
+	*/
+	prop = of_get_property(pdev->dev.of_node, "cdns,emio-gpio-speed-100",
+			       NULL);
+	if (prop)
+		bp->gpiospeed_100 = be32_to_cpup(prop);
+	else
+		bp->gpiospeed_100 = -1;
 
 	err = register_netdev(dev);
 	if (err) {

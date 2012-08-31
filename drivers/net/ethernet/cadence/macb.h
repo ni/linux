@@ -601,6 +601,8 @@ struct macb {
 	unsigned int 		link;
 	unsigned int 		speed;
 	unsigned int 		duplex;
+	int			gpiospeed_1000;
+	int			gpiospeed_100;
 
 	u32			caps;
 
