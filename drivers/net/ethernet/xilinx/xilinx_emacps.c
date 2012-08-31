@@ -3094,8 +3094,8 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		goto err_out_sysfs_remove_file1;
 	}
 
-	/* Default to priority 40. */
-	lp->ni_polling_priority = 40;
+	/* Default to priority 10. */
+	lp->ni_polling_priority = 10;
 
 	if (0 != sysfs_create_file(&ndev->dev.kobj,
 				   &dev_attr_ni_polling_priority.attr)) {
