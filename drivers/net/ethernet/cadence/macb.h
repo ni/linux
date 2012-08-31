@@ -777,6 +777,8 @@ struct macb_queue {
 	struct work_struct	tx_error_task;
 };
 
+struct gpio_desc;
+
 struct macb {
 	void __iomem		*regs;
 
@@ -814,6 +816,8 @@ struct macb {
 	unsigned int 		link;
 	unsigned int 		speed;
 	unsigned int 		duplex;
+	struct gpio_desc	*gpiospeed_1000;
+	struct gpio_desc	*gpiospeed_100;
 
 	u32			caps;
 	unsigned int		dma_burst_length;

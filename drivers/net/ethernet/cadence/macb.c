@@ -19,6 +19,7 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -305,9 +306,31 @@ static void macb_handle_link_change(struct net_device *dev)
 				    phydev->speed,
 				    phydev->duplex == DUPLEX_FULL ?
 				    "Full" : "Half");
+
+			/* Update the link speed indicator GPIOs. */
+			switch (phydev->speed) {
+			case SPEED_1000:
+				gpiod_set_value(bp->gpiospeed_1000, 0);
+				gpiod_set_value(bp->gpiospeed_100, 1);
+				break;
+			case SPEED_100:
+				gpiod_set_value(bp->gpiospeed_1000, 1);
+				gpiod_set_value(bp->gpiospeed_100, 1);
+				break;
+			case SPEED_10:
+				gpiod_set_value(bp->gpiospeed_1000, 1);
+				gpiod_set_value(bp->gpiospeed_100, 0);
+				break;
+			}
 		} else {
 			netif_carrier_off(dev);
 			netdev_info(dev, "link down\n");
+
+			/* The link is down, so indicate this by setting both
+			 * speed GPIOs to 0.
+			 */
+			gpiod_set_value(bp->gpiospeed_1000, 0);
+			gpiod_set_value(bp->gpiospeed_100, 0);
 		}
 	}
 }
@@ -2823,6 +2846,41 @@ static int macb_probe(struct platform_device *pdev)
 	err = init(pdev);
 	if (err)
 		goto err_out_free_netdev;
+
+	/* Look for a GPIO to indicate link speed to the PL as 10/100 (high)
+	* or 1000 (low).
+	*/
+	bp->gpiospeed_100 = devm_gpiod_get_index_optional(&pdev->dev,
+							  "emio-speed", 0);
+	if (IS_ERR(bp->gpiospeed_100)) {
+		dev_err(&pdev->dev, "Error retreiving handle to EMIO gpiospeed_100\n");
+		err = PTR_ERR(bp->gpiospeed_100);
+		goto err_disable_clocks;
+	}
+
+	if (bp->gpiospeed_100) {
+		err = gpiod_direction_output(bp->gpiospeed_100, 0);
+		if (err) {
+			dev_err(&pdev->dev, "Unable to set EMIO gpiospeed_100 as output\n");
+			goto err_disable_clocks;
+		}
+	}
+
+	bp->gpiospeed_1000 = devm_gpiod_get_index_optional(&pdev->dev,
+							  "emio-speed", 1);
+	if (IS_ERR(bp->gpiospeed_1000)) {
+		dev_err(&pdev->dev, "Error retreiving handle to EMIO gpiospeed_1000\n");
+		err = PTR_ERR(bp->gpiospeed_1000);
+		goto err_disable_clocks;
+	}
+
+	if (bp->gpiospeed_1000) {
+		err = gpiod_direction_output(bp->gpiospeed_1000, 0);
+		if (err) {
+			dev_err(&pdev->dev, "Unable to set EMIO gpiospeed_1000 as output\n");
+			goto err_disable_clocks;
+		}
+	}
 
 	err = register_netdev(dev);
 	if (err) {
