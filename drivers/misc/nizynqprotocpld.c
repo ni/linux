@@ -79,14 +79,14 @@ static void nizynqprotocpld_set_brightness_work(struct work_struct *work)
 
 	err = nizynqprotocpld_read(led->addr, &tmp);
 	if (err)
-		return;
+		goto unlock_out;
 
 	tmp &= ~led->bit;
 	if (led->on)
 		tmp |= led->bit;
 
 	nizynqprotocpld_write(led->addr, tmp);
-
+unlock_out:
 	nizynqprotocpld_unlock();
 }
 
