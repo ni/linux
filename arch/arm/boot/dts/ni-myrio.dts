@@ -1,20 +1,18 @@
 /dts-v1/;
 
 / {
-	model = "NI Xilinx Zynq prototype";
+	model = "NI myRIO";
 	compatible = "xlnx,zynq-zc770-xm010";
 	#address-cells = <0x1>;
 	#size-cells = <0x1>;
 	interrupt-parent = <&gic>;
 
-	memory {
+	/* Populated by the bootloader */
+	memory { 
 		device_type = "memory";
-		reg = <0x00000000 0x20000000>;
+		reg = <0 0>;
 	};
-	chosen {
-		bootargs = "console=ttyPS0,115200 ramdisk_size=65536 root=/dev/ram rw ip=:::::eth0:dhcp";
-		linux,stdout-path = "/amba@0/uart@E0001000";
-	};
+	chosen { };
 
 	amba@0 {
 		compatible = "simple-bus";
@@ -55,65 +53,6 @@
 			reg = < 0xf8001000 0x1000 >;
 		};
 
-		eth@e000b000 {
-			compatible = "xlnx,ps7-ethernet-1.00.a";
-			reg = <0xe000b000 0x1000>;
-			interrupts = <0 22 0>;
-			phy-handle = <&phy0>;
-			xlnx,slcr-div0-1000Mbps = <8>;
-			xlnx,slcr-div0-100Mbps = <8>;
-			xlnx,slcr-div0-10Mbps = <8>;
-			xlnx,slcr-div1-1000Mbps = <1>;
-			xlnx,slcr-div1-100Mbps = <5>;
-			xlnx,slcr-div1-10Mbps = <50>;
-			xlnx,mdc-clk-div = <3>;
-			#address-cells = <0x1>;
-			#size-cells = <0x0>;
-
-			phy0: phy@0 {
-				compatible = "marvell,88e1512";
-				device_type = "ethernet-phy";
-				reg = <0x0>;
-				/* Interrupt on GPIO1, shared with phy1. */
-				interrupts = <1 0>;
-				interrupt-parent = <&gpio>;
-				/* Page 3, Register 16, LED[2:0] Function
-				   Control Register */
-				leds = <0x1881>;
-			};
-
-			phy1: phy@1 {
-				compatible = "lsi,et1011c";
-				device_type = "ethernet-phy";
-				reg = <0x1>;
-				/* Interrupt on GPIO1, shared with phy0. */
-				interrupts = <1 0>;
-				interrupt-parent = <&gpio>;
-				/* LED Control 1 values for Off, 10Mb, 100Mb,
-				   and 1Gb, followed by LED Control 2 values
-				   for Off, 10Mb, 100Mb, and 1Gb, followed by
-				   LED Control 3 value. */
-				leds = <0x0001 0x0001 0x0001 0x8001 0xFAFE 0xFAFE 0xFAFF 0xFAEF 0x0A55>;
-			};
-		};
-
-		eth@e000c000 {
-			compatible = "xlnx,ps7-ethernet-1.00.a";
-			reg = <0xe000c000 0x1000>;
-			interrupts = <0 45 0>;
-			phy-handle = <&phy1>;
-			xlnx,slcr-div0-1000Mbps = <8>;
-			xlnx,slcr-div0-100Mbps = <8>;
-			xlnx,slcr-div0-10Mbps = <8>;
-			xlnx,slcr-div1-1000Mbps = <1>;
-			xlnx,slcr-div1-100Mbps = <5>;
-			xlnx,slcr-div1-10Mbps = <50>;
-			xlnx,no_mdio_bus;
-			xlnx,emio-fpga-clk = <1>;
-			#address-cells = <0x1>;
-			#size-cells = <0x0>;
-		};
-
 		nand@e1000000 {
 			compatible = "xlnx,ps7-nand-1.00.a";
 			reg = <0xE1000000 0x1000000 0xE000E000 0x1000>;
@@ -146,6 +85,14 @@
 			reg = <0xe0002000 0x1000>;
 			interrupts = <0 21 0>;
 			dr_mode = "host";
+			phy_type = "ulpi";
+		};
+
+		usb@e0003000 {
+			compatible = "xlnx,ps7-usb-1.00.a";
+			reg = <0xe0003000 0x1000>;
+			interrupts = <0 44 0>;
+			dr_mode = "peripheral";
 			phy_type = "ulpi";
 		};
 
