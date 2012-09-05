@@ -24,6 +24,8 @@
 
 #include <linux/usb/xilinx_usbps_otg.h>
 
+#define XILINX_UDC_BUG_WORKAROUND
+
 /* ### define USB registers here
  */
 #define USB_MAX_CTRL_PAYLOAD		64
@@ -416,6 +418,9 @@ struct xusbps_req {
 	struct ep_td_struct *head, *tail;	/* For dTD List
 						   cpu endian Virtual addr */
 	unsigned int dtd_count;
+#ifdef XILINX_UDC_BUG_WORKAROUND
+	struct timer_list err_timer;
+#endif
 };
 
 #define REQ_UNCOMPLETE			1

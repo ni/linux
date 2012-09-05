@@ -7,7 +7,7 @@
  * to support Xilinx PS USB controller.
  *
  * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published bydrive
+ * under the terms of the GNU General Public License version 2 as published by
  * the Free Software Foundation; either version 2 of the License, or (at your
  * option) any later version.
  *
@@ -564,6 +564,55 @@ static int xusbps_ep_disable(struct usb_ep *_ep)
 	return 0;
 }
 
+#ifdef XILINX_UDC_BUG_WORKAROUND
+static void dtd_watchdog(unsigned long param)
+{
+	struct xusbps_req *req = (struct xusbps_req *)param;
+	struct xusbps_ep *ep = req->ep;
+	struct xusbps_udc *udc;
+	struct ep_queue_head *dQH;
+	u32 temp, bitmask, ep_prime, ep_status;
+	int i;
+
+	udc = ep->udc;
+
+	bitmask = ep_is_in(ep)
+		? (1 << (ep_index(ep) + 16))
+		: (1 << (ep_index(ep)));
+
+	ep_prime = xusbps_readl(&dr_regs->endpointprime) & bitmask;
+	ep_status = xusbps_readl(&dr_regs->endptstatus) & bitmask;
+
+	/* Check if Prime bit and Status bits are zero */
+	if (ep_prime || ep_status) {
+		return;
+	}
+
+	i = ep_index(ep) * 2 + ep_is_in(ep);
+	dQH = &ep->udc->ep_qh[i];
+
+	/* Write dQH next pointer and terminate bit to 0 */
+	temp = req->head->td_dma & EP_QUEUE_HEAD_NEXT_POINTER_MASK;
+	dQH->next_dtd_ptr = cpu_to_le32(temp);
+
+	/* Clear active and halt bit */
+	temp = cpu_to_le32(~(EP_QUEUE_HEAD_STATUS_ACTIVE
+			| EP_QUEUE_HEAD_STATUS_HALT));
+	dQH->size_ioc_int_sts &= temp;
+
+	/* Ensure that updates to the QH will occure before priming. */
+	wmb();
+
+	/* Prime endpoint by writing 1 to ENDPTPRIME */
+	temp = ep_is_in(ep)
+		? (1 << (ep_index(ep) + 16))
+		: (1 << (ep_index(ep)));
+	xusbps_writel(temp, &dr_regs->endpointprime);
+
+	req->err_timer.expires = 0;
+}
+#endif
+
 /*---------------------------------------------------------------------
  * allocate a request object used by this endpoint
  * the main operation is to insert the req->queue to the eq->queue
@@ -580,6 +629,13 @@ xusbps_alloc_request(struct usb_ep *_ep, gfp_t gfp_flags)
 
 	req->req.dma = DMA_ADDR_INVALID;
 	INIT_LIST_HEAD(&req->queue);
+
+#ifdef XILINX_UDC_BUG_WORKAROUND
+	/* DTD timeout timer */
+	init_timer(&req->err_timer);
+	req->err_timer.function = dtd_watchdog;
+	req->err_timer.data = (unsigned long)req;
+#endif
 
 	return &req->req;
 }
@@ -635,8 +691,12 @@ static void xusbps_queue_td(struct xusbps_ep *ep, struct xusbps_req *req)
 		temp = xusbps_readl(&dr_regs->usbcmd);
 		xusbps_writel(temp & ~USB_CMD_ATDTW, &dr_regs->usbcmd);
 
-		if (tmp_stat)
+		if (tmp_stat) {
+#ifdef XILINX_UDC_BUG_WORKAROUND
+			mod_timer(&req->err_timer, jiffies + msecs_to_jiffies(20));
+#endif
 			goto out;
+	}
 	}
 
 	/* Write dQH next pointer and terminate bit to 0 */
@@ -1516,6 +1576,9 @@ static void dtd_complete_irq(struct xusbps_udc *udc)
 	int i, ep_num, direction, bit_mask, status;
 	struct xusbps_ep *curr_ep;
 	struct xusbps_req *curr_req, *temp_req;
+#ifdef XILINX_UDC_BUG_WORKAROUND 
+	int ret;
+#endif
 
 	/* Clear the bits in the register */
 	bit_pos = xusbps_readl(&dr_regs->endptcomplete);
@@ -1552,7 +1615,15 @@ static void dtd_complete_irq(struct xusbps_udc *udc)
 				break;
 			/* write back status to req */
 			curr_req->req.status = status;
-
+#ifdef XILINX_UDC_BUG_WORKAROUND
+			if (timer_pending(&curr_req->err_timer)) {
+				ret = del_timer(&curr_req->err_timer);
+				if (ret)
+					curr_req->err_timer.expires = 0;
+				else
+					printk(KERN_ERR "Failed to delete timer\n");
+			}
+#endif
 			if (ep_num == 0) {
 				ep0_req_complete(udc, curr_ep, curr_req);
 				break;
@@ -2027,8 +2098,10 @@ static int xusbps_proc_read(char *page, char **start, off_t off, int count,
 		return 0;
 
 	spin_lock_irqsave(&udc->lock, flags);
-
-	/* ------basic driver information ---- */
+/*	t = scnprintf(next, size,"dr_regs: %x, udc: %x, sizeof: %x, hci: %x, cmd: %x, sts: %x\n", dr_regs, udc, sizeof(struct usb_dr_device), dr_regs->hciversion, dr_regs->usbcmd, dr_regs->usbsts);
+		size -= t;
+			next += t;
+*/	/* ------basic driver information ---- */
 	t = scnprintf(next, size,
 			DRIVER_DESC "\n"
 			"%s version: %s\n"
