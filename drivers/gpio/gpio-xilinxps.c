@@ -632,6 +632,8 @@ static int __init xgpiops_probe(struct platform_device *pdev)
 		goto err_release_region;
 	}
 
+	spin_lock_init(&gpio->gpio_lock);
+
 	irq_num = platform_get_irq(pdev, 0);
 
 	/* configure the gpio chip */
