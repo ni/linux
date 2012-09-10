@@ -131,7 +131,7 @@ static void __uart_start(struct tty_struct *tty)
 	struct uart_state *state = tty->driver_data;
 	struct uart_port *port = state->uart_port;
 
-	if (port && !uart_tx_stopped(port))
+	if (port && !uart_tx_stopped(port) && !port->suspended)
 		port->ops->start_tx(port);
 }
 
@@ -196,6 +196,14 @@ static int uart_port_startup(struct tty_struct *tty, struct uart_state *state,
 		uart_circ_clear(&state->xmit);
 	}
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
+		return -ENODEV;
+	}
+#endif
+
 	retval = uport->ops->startup(uport);
 	if (retval == 0) {
 		if (uart_console(uport) && uport->cons->cflag) {
@@ -218,6 +226,10 @@ static int uart_port_startup(struct tty_struct *tty, struct uart_state *state,
 		if (init_hw && C_BAUD(tty))
 			uart_set_mctrl(uport, TIOCM_RTS | TIOCM_DTR);
 	}
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 
 	/*
 	 * This is to allow setserial on this port. People may want to set
@@ -1039,12 +1051,25 @@ static int uart_tiocmget(struct tty_struct *tty)
 	if (!uport)
 		goto out;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP) {
+		result = -ENODEV;
+		goto out_up;
+	}
+#endif
+
 	if (!tty_io_error(tty)) {
 		result = uport->mctrl;
 		spin_lock_irq(&uport->lock);
 		result |= uport->ops->get_mctrl(uport);
 		spin_unlock_irq(&uport->lock);
 	}
+
+out_up:
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 out:
 	mutex_unlock(&port->mutex);
 	return result;
@@ -1063,10 +1088,23 @@ uart_tiocmset(struct tty_struct *tty, unsigned int set, unsigned int clear)
 	if (!uport)
 		goto out;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP) {
+		ret = -ENODEV;
+		goto out_up;
+	}
+#endif
+
 	if (!tty_io_error(tty)) {
 		uart_update_mctrl(uport, set, clear);
 		ret = 0;
 	}
+
+out_up:
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 out:
 	mutex_unlock(&port->mutex);
 	return ret;
@@ -1342,6 +1380,18 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
 	/*
 	 * The following should only be used when hardware is present.
 	 */
+	mutex_lock(&port->mutex);
+	uport = uart_port_check(state);
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
+		ret = -ENODEV;
+		goto out_up;
+	}
+#endif
+
 	switch (cmd) {
 	case TIOCMIWAIT:
 		ret = uart_wait_modem_status(state, arg);
@@ -1349,10 +1399,7 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
 	}
 
 	if (ret != -ENOIOCTLCMD)
-		goto out;
-
-	mutex_lock(&port->mutex);
-	uport = uart_port_check(state);
+		goto out_up;
 
 	if (!uport || tty_io_error(tty)) {
 		ret = -EIO;
@@ -1382,6 +1429,9 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
 		break;
 	}
 out_up:
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 	mutex_unlock(&port->mutex);
 out:
 	return ret;
@@ -1438,6 +1488,18 @@ static void uart_set_termios(struct tty_struct *tty,
 		goto out;
 	}
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	/*
+	 * If the FPGA state is not FPGA_UP (the re-programming failed),
+	 * we cannot return an error code from this function.
+	 */
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
+		goto out;
+	}
+#endif
+
 	uart_change_speed(tty, state, old_termios);
 	/* reload cflag from termios; port driver may have overriden flags */
 	cflag = tty->termios.c_cflag;
@@ -1452,6 +1514,11 @@ static void uart_set_termios(struct tty_struct *tty,
 			mask |= TIOCM_RTS;
 		uart_set_mctrl(uport, mask);
 	}
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
+
 out:
 	mutex_unlock(&state->port.mutex);
 }
@@ -1561,7 +1628,7 @@ static void uart_wait_until_sent(struct tty_struct *tty, int timeout)
 	 * 'timeout' / 'expire' give us the maximum amount of time
 	 * we wait.
 	 */
-	while (!port->ops->tx_empty(port)) {
+	while (port->suspended || !port->ops->tx_empty(port)) {
 		msleep_interruptible(jiffies_to_msecs(char_time));
 		if (signal_pending(current))
 			break;
