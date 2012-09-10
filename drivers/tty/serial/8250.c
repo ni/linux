@@ -43,6 +43,10 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 
+#if CONFIG_FPGA_PERIPHERAL
+#include <misc/fpgaperipheral.h>
+#endif
+
 #include "8250.h"
 
 #ifdef CONFIG_SPARC
@@ -3207,6 +3211,39 @@ static struct uart_8250_port *serial8250_find_match_or_unused(struct uart_port *
 	return NULL;
 }
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+static int serial8250_fpga_notification(struct notifier_block *nb,
+					unsigned long val, void *v)
+{
+	int ret = -EINVAL;
+	struct uart_port *port = container_of(nb, struct uart_port, nb);
+	pr_debug("ttyS%d - serial8250_fpga_notification, val=%lu\n",
+		 serial_index(port), val);
+
+	switch (val) {
+	case FPGA_PERIPHERAL_DOWN:
+		ret = uart_suspend_port(&serial8250_reg, port);
+		break;
+	case FPGA_PERIPHERAL_UP:
+		ret = uart_resume_port(&serial8250_reg, port);
+		break;
+	default:
+		pr_err("ttyS%d - Unknown FPGA notification value"
+		       " encountered\n", serial_index(port));
+	}
+
+	if (ret < 0) {
+		pr_err("ttyS%d - FPGA notification error %d\n",
+		       serial_index(port), ret);
+	}
+
+	/* We ignore all errors encountered in this function in order to ensure
+	 * that the fpgaperipheral blocking chain notifier notifies all
+	 * clients. (See documentation in include/misc/fpgaperipheral.h) */
+	return notifier_from_errno(0);
+}
+#endif
+
 /**
  *	serial8250_register_port - register a serial port
  *	@port: serial port template
@@ -3272,10 +3309,24 @@ int serial8250_register_port(struct uart_port *port)
 			serial8250_isa_config(0, &uart->port,
 					&uart->capabilities);
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+		uart->port.nb.notifier_call = serial8250_fpga_notification;
+		ret = blocking_notifier_chain_register(
+			&fpgaperipheral_notifier_list, &uart->port.nb);
+		if (ret < 0) {
+			dev_err(uart->port.dev,
+				"notify register failed; err=%i\n", ret);
+			goto unlock;
+		}
+#endif
+
 		ret = uart_add_one_port(&serial8250_reg, &uart->port);
 		if (ret == 0)
 			ret = uart->port.line;
 	}
+#ifdef CONFIG_FPGA_PERIPHERAL
+unlock:
+#endif
 	mutex_unlock(&serial_mutex);
 
 	return ret;
@@ -3304,6 +3355,12 @@ void serial8250_unregister_port(int line)
 	} else {
 		uart->port.dev = NULL;
 	}
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	blocking_notifier_chain_unregister(
+		&fpgaperipheral_notifier_list, &uart->port.nb);
+#endif
+
 	mutex_unlock(&serial_mutex);
 }
 EXPORT_SYMBOL(serial8250_unregister_port);

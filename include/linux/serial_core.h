@@ -22,6 +22,10 @@
 
 #include <linux/serial.h>
 
+#if CONFIG_FPGA_PERIPHERAL
+#include <linux/notifier.h>
+#endif
+
 /*
  * The type definitions.  These are from Ted Ts'o's serial.h
  */
@@ -325,6 +329,10 @@ struct uart_port {
 	unsigned char		regshift;		/* reg offset shift */
 	unsigned char		iotype;			/* io access style */
 	unsigned char		unused1;
+
+#if CONFIG_FPGA_PERIPHERAL
+	struct notifier_block nb;
+#endif
 
 #define UPIO_PORT		(0)
 #define UPIO_HUB6		(1)
