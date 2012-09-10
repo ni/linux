@@ -526,20 +526,20 @@ struct xemacps_bd {
 struct net_local {
 	void   __iomem         *baseaddr;
 #ifdef CONFIG_OF
-	struct device_node *phy_node;
+	struct device_node     *phy_node;
 #endif
-	struct ring_info       *tx_skb;
-	struct ring_info       *rx_skb;
+	struct ring_info       tx_skb[XEMACPS_SEND_BD_CNT];
+	struct ring_info       rx_skb[XEMACPS_RECV_BD_CNT];
 
-	struct xemacps_bd       *rx_bd;        /* virtual address */
-	struct xemacps_bd       *tx_bd;        /* virtual address */
+	struct xemacps_bd      *rx_bd;        /* virtual address */
+	struct xemacps_bd      *tx_bd;        /* virtual address */
 
 	dma_addr_t             rx_bd_dma;     /* physical address */
 	dma_addr_t             tx_bd_dma;     /* physical address */
 
-	u32                     tx_bd_ci;
-	u32                     tx_bd_tail;
-	u32                     rx_bd_ci;
+	u32                    tx_bd_ci;
+	u32                    tx_bd_tail;
+	u32                    rx_bd_ci;
 
 	atomic_t               tx_bd_freecnt;
 
@@ -554,7 +554,7 @@ struct net_local {
 	struct work_struct     tx_task;
 	struct work_struct     reset_task;
 
-	struct timer_list watchdog_timer;
+	struct timer_list      watchdog_timer;
 
 	int                    ni_polling_interval;
 	int                    ni_polling_policy;
@@ -1232,9 +1232,6 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 	int work_done = 0;
 	u32 regval;
 
-	//regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
-	//xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, regval);
-
 	while (work_done < budget) {
 
 		regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
@@ -1257,9 +1254,6 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 		}
 
 		work_done += xemacps_rx(lp, budget - work_done);
-
-		//regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
-		//xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, regval);
 	}
 
 	return work_done;
@@ -1663,7 +1657,7 @@ static void xemacps_clean_rings(struct net_local *lp)
 	int i;
 
 	for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
-		if (lp->rx_skb && lp->rx_skb[i].skb) {
+		if (lp->rx_skb[i].skb) {
 			dma_unmap_single(lp->ndev->dev.parent,
 					 lp->rx_skb[i].mapping,
 					 XEMACPS_RX_BUF_SIZE,
@@ -1676,7 +1670,7 @@ static void xemacps_clean_rings(struct net_local *lp)
 	}
 
 	for (i = 0; i < XEMACPS_SEND_BD_CNT; i++) {
-		if (lp->tx_skb && lp->tx_skb[i].skb) {
+		if (lp->tx_skb[i].skb) {
 			dma_unmap_single(lp->ndev->dev.parent,
 					 lp->tx_skb[i].mapping,
 					 lp->tx_skb[i].skb->len,
@@ -1698,12 +1692,6 @@ static void xemacps_descriptor_free(struct net_local *lp)
 	int size;
 
 	xemacps_clean_rings(lp);
-
-	/* kfree(NULL) is safe, no need to check here */
-	kfree(lp->tx_skb);
-	lp->tx_skb = NULL;
-	kfree(lp->rx_skb);
-	lp->rx_skb = NULL;
 
 	size = XEMACPS_RECV_BD_CNT * sizeof(struct xemacps_bd);
 	if (lp->rx_bd) {
@@ -1739,15 +1727,6 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	lp->tx_bd_tail = 0;
 	lp->rx_bd_ci = 0;
 
-	size = XEMACPS_SEND_BD_CNT * sizeof(struct ring_info);
-	lp->tx_skb = kzalloc(size, GFP_KERNEL);
-	if (!lp->tx_skb)
-		goto err_out;
-	size = XEMACPS_RECV_BD_CNT * sizeof(struct ring_info);
-	lp->rx_skb = kzalloc(size, GFP_KERNEL);
-	if (!lp->rx_skb)
-		goto err_out;
-
 	size = XEMACPS_RECV_BD_CNT * sizeof(struct xemacps_bd);
 	lp->rx_bd = dma_alloc_coherent(&lp->pdev->dev, size,
 			&lp->rx_bd_dma, GFP_KERNEL);
@@ -1776,7 +1755,6 @@ static int xemacps_descriptor_init(struct net_local *lp)
 		lp->rx_skb[i].mapping = new_skb_baddr;
 		wmb();
 	}
-	cur_p = &lp->rx_bd[XEMACPS_RECV_BD_CNT - 1];
 	/* wrap bit set for last BD, bdptr is moved to last here */
 	cur_p->ctrl = 0;
 	cur_p->addr |= XEMACPS_RXBUF_WRAP_MASK;
@@ -1790,23 +1768,22 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	dev_dbg(&lp->pdev->dev, "TX ring %d bytes at 0x%x mapped %p\n",
 			size, lp->tx_bd_dma, lp->tx_bd);
 
-       memset(lp->tx_bd, 0, sizeof(*lp->tx_bd) * XEMACPS_SEND_BD_CNT);
-       for (i = 0; i < XEMACPS_SEND_BD_CNT; i++) {
-               cur_p = &lp->tx_bd[i];
-               cur_p->ctrl = XEMACPS_TXBUF_USED_MASK;
-       }
-       cur_p = &lp->tx_bd[XEMACPS_SEND_BD_CNT - 1];
-       /* wrap bit set for last BD, bdptr is moved to last here */
-       cur_p->ctrl = (XEMACPS_TXBUF_WRAP_MASK | XEMACPS_TXBUF_USED_MASK);
-       atomic_set(&lp->tx_bd_freecnt, XEMACPS_SEND_BD_CNT);
+	memset(lp->tx_bd, 0, sizeof(*lp->tx_bd) * XEMACPS_SEND_BD_CNT);
+	for (i = 0; i < XEMACPS_SEND_BD_CNT; i++) {
+		cur_p = &lp->tx_bd[i];
+		cur_p->ctrl = XEMACPS_TXBUF_USED_MASK;
+	}
+	/* wrap bit set for last BD, bdptr is moved to last here */
+	cur_p->ctrl = (XEMACPS_TXBUF_WRAP_MASK | XEMACPS_TXBUF_USED_MASK);
+	atomic_set(&lp->tx_bd_freecnt, XEMACPS_SEND_BD_CNT);
 
-       for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
-               cur_p = &lp->rx_bd[i];
-               cur_p->ctrl = 0;
-               /* Assign ownership back to hardware */
-               cur_p->addr &= (~XEMACPS_RXBUF_NEW_MASK);
-       }
-       wmb();
+	for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
+		cur_p = &lp->rx_bd[i];
+		cur_p->ctrl = 0;
+		/* Assign ownership back to hardware */
+		cur_p->addr &= (~XEMACPS_RXBUF_NEW_MASK);
+	}
+	wmb();
 
 #ifdef DEBUG
 	printk(KERN_INFO "GEM: lp->tx_bd %p lp->tx_bd_dma %p lp->tx_skb %p\n",
@@ -2575,13 +2552,13 @@ xemacps_get_wol(struct net_device *ndev, struct ethtool_wolinfo *ewol)
 
 	ewol->supported = WAKE_MAGIC | WAKE_ARP | WAKE_UCAST | WAKE_MCAST;
 	regval = xemacps_read(lp->baseaddr, XEMACPS_WOL_OFFSET);
-	if (regval | XEMACPS_WOL_MCAST_MASK)
+	if (regval & XEMACPS_WOL_MCAST_MASK)
 		ewol->wolopts |= WAKE_MCAST;
-	if (regval | XEMACPS_WOL_ARP_MASK)
+	if (regval & XEMACPS_WOL_ARP_MASK)
 		ewol->wolopts |= WAKE_ARP;
-	if (regval | XEMACPS_WOL_SPEREG1_MASK)
+	if (regval & XEMACPS_WOL_SPEREG1_MASK)
 		ewol->wolopts |= WAKE_UCAST;
-	if (regval | XEMACPS_WOL_MAGIC_MASK)
+	if (regval & XEMACPS_WOL_MAGIC_MASK)
 		ewol->wolopts |= WAKE_MAGIC;
 }
 
