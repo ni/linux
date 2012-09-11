@@ -53,6 +53,10 @@
 #include <linux/of_mdio.h>
 #endif
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+#include <misc/fpgaperipheral.h>
+#endif
+
 /************************** Constant Definitions *****************************/
 
 /* Must be shorter than length of ethtool_drvinfo.driver field to fit */
@@ -494,6 +498,9 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 /* State bits that can be set in net_local flags member. */
 #define XEMACPS_STATE_DOWN	0
 #define XEMACPS_STATE_RESET	1
+#ifdef CONFIG_FPGA_PERIPHERAL
+#define XEMACPS_STATE_FPGA_DOWN	2
+#endif
 
 #ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
 #define NS_PER_SEC 	1000000000ULL	/* Nanoseconds per second */
@@ -556,6 +563,9 @@ struct net_local {
 
 	struct timer_list      watchdog_timer;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct notifier_block  fpga_notifier;
+#endif
 	int                    ni_polling_interval;
 	int                    ni_polling_policy;
 	int                    ni_polling_priority;
@@ -2041,6 +2051,13 @@ static int xemacps_open(struct net_device *ndev)
 	if (!is_valid_ether_addr(ndev->dev_addr))
 		return  -EADDRNOTAVAIL;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	/* If we're being opened while the FPGA is being reprogrammed, we can
+	   just return. The interface will be brought up when the FPGA is back
+	   up. */
+	if (test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags))
+		return 0;
+#endif
 	return xemacps_up(ndev);
 }
 
@@ -2056,6 +2073,17 @@ static int xemacps_open(struct net_device *ndev)
  **/
 static int xemacps_close(struct net_device *ndev)
 {
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct net_local *lp = netdev_priv(ndev);
+
+	/* If we're being closed while the FPGA is being reprogrammed, the
+	   interface is already mostly down. We only need to turn off carrier
+	   and return. */
+	if (test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags)) {
+		netif_carrier_off(ndev);
+		return 0;
+	}
+#endif
 	/* Shut down the interface and turn off carrier. */
 	return xemacps_down(ndev, true);
 }
@@ -2100,6 +2128,9 @@ static void xemacps_reset_task(struct work_struct *work)
 	/* Synchronize with xemacps_open/close. */
 	rtnl_lock();
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	BUG_ON(test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags));
+#endif
 	set_bit(XEMACPS_STATE_RESET, &lp->flags);
 
 	if (!(test_bit(XEMACPS_STATE_DOWN, &lp->flags))) {
@@ -2820,6 +2851,59 @@ static int xemacps_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 
 }
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+
+int xemacps_fpga_notifier(struct notifier_block *nb, unsigned long val, void *data)
+{
+	struct net_local *lp =
+		container_of(nb, struct net_local, fpga_notifier);
+
+	switch(val) {
+		case FPGA_PERIPHERAL_DOWN:
+			dev_dbg(&lp->pdev->dev, "xemacps_fpga_notifier: going down\n");
+
+			BUG_ON(test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags));
+
+			/* Synchronize with xemacps_open/close. */
+			rtnl_lock();
+
+			/* If the interface has been opened. */
+			if (netif_running(lp->ndev))
+				/* Shut down the interface but don't turn off
+				   carrier. This speeds up the recovery. */
+				xemacps_down(lp->ndev, false);
+
+			set_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags);
+
+			rtnl_unlock();
+			break;
+
+		case FPGA_PERIPHERAL_UP:
+			dev_dbg(&lp->pdev->dev, "xemacps_fpga_notifier: coming up\n");
+
+			BUG_ON(!test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags));
+
+			/* Synchronize with xemacps_open/close. */
+			rtnl_lock();
+
+			clear_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags);
+
+			/* If the interface has been opened. */
+			if (netif_running(lp->ndev))
+				xemacps_up(lp->ndev);
+
+			rtnl_unlock();
+			break;
+		default:
+			dev_err(&lp->pdev->dev, "unsupported FPGA notifier value %lu\n", val);
+			break;
+	}
+
+	return notifier_from_errno(0);
+}
+
+#endif
+
 /**
  * xemacps_probe - Platform driver probe
  * @pdev: Pointer to platform device structure
@@ -3032,6 +3116,15 @@ static int __init xemacps_probe(struct platform_device *pdev)
 			/* Set the Rx and Tx clock source to be the PL. */
 			xslcr_write(rx_clk_ctrl, 0x00000011);
 			xslcr_write(tx_clk_ctrl, 0x00000041);
+#ifdef CONFIG_FPGA_PERIPHERAL
+			/* Register a blocking notifier for FPGA reprogramming
+			   notifications. */
+			lp->fpga_notifier.notifier_call = xemacps_fpga_notifier;
+
+			blocking_notifier_chain_register(
+				&fpgaperipheral_notifier_list,
+				&lp->fpga_notifier);
+#endif
 		} else {
 			dev_err(&pdev->dev, "Invalid EMIO FPGA clock configuration %d\n", fpga_clk);
 		}
@@ -3143,6 +3236,11 @@ static int __exit xemacps_remove(struct platform_device *pdev)
 
 	if (ndev) {
 		lp = netdev_priv(ndev);
+#ifdef CONFIG_FPGA_PERIPHERAL
+		blocking_notifier_chain_unregister(
+			&fpgaperipheral_notifier_list,
+			&lp->fpga_notifier);
+#endif
 		if (lp->phy_dev)
 			phy_disconnect(lp->phy_dev);
 
