@@ -41,6 +41,7 @@
 #include <linux/version.h>
 #include <linux/of.h>
 #include <linux/kthread.h>
+#include <linux/rtnetlink.h>
 #include <mach/board.h>
 #include <mach/slcr.h>
 
@@ -490,6 +491,10 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 #define XEMACPS_DFLT_SLCR_DIV1_10	50
 #define XEMACPS_SLCR_DIV_MASK		0xFC0FC0FF
 
+/* State bits that can be set in net_local flags member. */
+#define XEMACPS_STATE_DOWN	0
+#define XEMACPS_STATE_RESET	1
+
 #ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
 #define NS_PER_SEC 	1000000000ULL	/* Nanoseconds per second */
 #define PEEP_TSU_CLK  	50000000ULL	/* PTP TSU CLOCK */
@@ -536,9 +541,9 @@ struct net_local {
 	u32                     tx_bd_tail;
 	u32                     rx_bd_ci;
 
-	u32                     tx_bd_freecnt;
+	atomic_t               tx_bd_freecnt;
 
-	spinlock_t             lock;
+	unsigned long          flags;
 
 	struct platform_device *pdev;
 	struct net_device      *ndev;   /* this device */
@@ -719,14 +724,15 @@ static void xemacps_adjust_link(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 	struct phy_device *phydev = lp->phy_dev;
-	unsigned long flags;
 #ifdef DEBUG
 	int status_change = 0;
 #endif
 	u32 regval;
 	u32 regval1;
 
-	spin_lock_irqsave(&lp->lock, flags);
+	if (test_bit(XEMACPS_STATE_DOWN, &lp->flags))
+		return;
+
 	regval1 = xslcr_read(lp->slcr_div_reg);
 	regval1 &= XEMACPS_SLCR_DIV_MASK;
 
@@ -776,7 +782,10 @@ static void xemacps_adjust_link(struct net_device *ndev)
 			status_change = 1;
 #endif
 		}
-	}
+
+		netif_carrier_on(ndev);
+	} else
+		netif_carrier_off(ndev);
 
 	if (phydev->link != lp->link) {
 		lp->link = phydev->link;
@@ -784,8 +793,6 @@ static void xemacps_adjust_link(struct net_device *ndev)
 		status_change = 1;
 #endif
 	}
-
-	spin_unlock_irqrestore(&lp->lock, flags);
 
 #ifdef DEBUG
 	if (status_change) {
@@ -1325,7 +1332,6 @@ static void xemacps_tx_poll(struct net_device *ndev)
 		cur_p = &lp->tx_bd[cur_i];
 	}
 	numbdstofree = bdcount - bdpartialcount;
-	lp->tx_bd_freecnt += numbdstofree;
 	cur_p = &lp->tx_bd[lp->tx_bd_ci];
 	while (numbdstofree) {
 		rp = &lp->tx_skb[lp->tx_bd_ci];
@@ -1382,6 +1388,8 @@ static void xemacps_tx_poll(struct net_device *ndev)
 	}
 	wmb();
 
+	atomic_add(bdcount - bdpartialcount, &lp->tx_bd_freecnt);
+
 #ifndef CONFIG_XILINX_PS_EMAC_BROKEN_TX
 tx_poll_out:
 	if (netif_queue_stopped(ndev))
@@ -1396,11 +1404,10 @@ static void xemacps_tx_task(struct work_struct *work)
 	struct net_local *lp =
 		container_of(work, struct net_local, tx_task);
 
-	spin_lock_bh(&lp->lock);
+	if (test_bit(XEMACPS_STATE_DOWN, &lp->flags))
+		return;
 
 	xemacps_tx_poll(lp->ndev);
-
-	spin_unlock_bh(&lp->lock);
 
 	/* We disable TX interrupts in interrupt service
 	 * routine, now it is time to enable it back.
@@ -1426,23 +1433,13 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 	if (unlikely(!regisr))
 		return IRQ_NONE;
 
-	/* In polling mode, we get several "NOHZ: local_softirq_pending"
-	   messages if we don't use spin_lock_bh and spin_unlock_bh. We
-	   don't understand why this is the case, and need to look into
-	   it further. */
-	if (lp->ni_polling_task)
-		spin_lock_bh(&lp->lock);
-	else
-		spin_lock(&lp->lock);
-
 	while (regisr) {
 		/* acknowledge interrupt and clear it */
 		xemacps_write(lp->baseaddr, XEMACPS_ISR_OFFSET, regisr);
 
 		/* RX interrupts */
 		if (regisr &
-		(XEMACPS_IXR_FRAMERX_MASK | XEMACPS_IXR_RX_ERR_MASK)) {
-
+		    (XEMACPS_IXR_FRAMERX_MASK | XEMACPS_IXR_RX_ERR_MASK))
 			if (napi_schedule_prep(&lp->napi)) {
 				/* disable RX interrupt, napi will be the
 				 * one processing it.  */
@@ -1454,28 +1451,22 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 					"schedule RX softirq\n");
 				__napi_schedule(&lp->napi);
 			}
-		}
 
 		/* TX interrupts */
 		if (regisr &
-		(XEMACPS_IXR_TXCOMPL_MASK | XEMACPS_IXR_TX_ERR_MASK)) {
+		    (XEMACPS_IXR_TXCOMPL_MASK | XEMACPS_IXR_TX_ERR_MASK)) {
 			/* disable TX interrupt */
 			xemacps_write(lp->baseaddr,
 				XEMACPS_IDR_OFFSET,
 				(XEMACPS_IXR_TXCOMPL_MASK|
 				 XEMACPS_IXR_TX_ERR_MASK));
-
-			/* Schedule our Tx task. */
-			schedule_work(&lp->tx_task);
+			dev_dbg(&lp->pdev->dev, "schedule TX tasklet\n");
+			/* Schedule our Tx task non-reentrantly. */
+			queue_work(system_nrt_wq, &lp->tx_task);
 		}
 
 		regisr = xemacps_read(lp->baseaddr, XEMACPS_ISR_OFFSET);
 	}
-
-	if (lp->ni_polling_task)
-		spin_unlock_bh(&lp->lock);
-	else
-		spin_unlock(&lp->lock);
 
 	return IRQ_HANDLED;
 }
@@ -1484,20 +1475,15 @@ static int xemacps_polling_thread(void *info)
 {
 	struct net_device *ndev = info;
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	int ni_polling_interval;
 	int ni_polling_interval_us;
 	struct sched_param param;
-
-	spin_lock_irqsave(&lp->lock, flags);
 
 	ni_polling_interval = lp->ni_polling_interval;
 	ni_polling_interval_us = ni_polling_interval * 1000;
 	param.sched_priority = lp->ni_polling_priority;
 
 	sched_setscheduler(current, lp->ni_polling_policy, &param);
-
-	spin_unlock_irqrestore(&lp->lock, flags);
 
 	/* If we got changed to interrupt mode before the polling thread
 	   started. */
@@ -1508,7 +1494,9 @@ static int xemacps_polling_thread(void *info)
 	}
 
 	while (!kthread_should_stop()) {
+		local_bh_disable();
 		xemacps_interrupt(ndev->irq, ndev);
+		local_bh_enable();
 
 		if (0 == ni_polling_interval)
 			cpu_relax();
@@ -1538,21 +1526,14 @@ static ssize_t xemacps_set_ni_polling_interval(struct device *dev,
 {
 	struct net_device *ndev = to_net_dev(dev);
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	int val;
 	int rc = kstrtoint(buf, 0, &val);
 
 	if (0 <= rc) {
-		spin_lock_irqsave(&lp->lock, flags);
-
 		if (lp->ni_polling_interval != val) {
 			lp->ni_polling_interval = val;
-			/* If the interface is open, schedule a reset. */
-			if (netif_carrier_ok(ndev))
-				schedule_work(&lp->reset_task);
+			schedule_work(&lp->reset_task);
 		}
-
-		spin_unlock_irqrestore(&lp->lock, flags);
 	}
 
 	return count;
@@ -1591,7 +1572,6 @@ static ssize_t xemacps_set_ni_polling_policy(struct device *dev,
 {
 	struct net_device *ndev = to_net_dev(dev);
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	char policy_str [16] = { 0, };
 	int policy;
 
@@ -1610,9 +1590,10 @@ static ssize_t xemacps_set_ni_polling_policy(struct device *dev,
 		else
 			return count;
 
-		spin_lock_irqsave(&lp->lock, flags);
-
 		lp->ni_polling_policy = policy;
+
+		/* Synchronize with xemacps_open/close. */
+		rtnl_lock();
 
 		if (lp->ni_polling_task) {
 			const struct sched_param param = {
@@ -1622,7 +1603,7 @@ static ssize_t xemacps_set_ni_polling_policy(struct device *dev,
 					   lp->ni_polling_policy, &param);
 		}
 
-		spin_unlock_irqrestore(&lp->lock, flags);
+		rtnl_unlock();
 	}
 
 	return count;
@@ -1648,13 +1629,13 @@ static ssize_t xemacps_set_ni_polling_priority(struct device *dev,
 {
 	struct net_device *ndev = to_net_dev(dev);
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	int priority;
 
 	if (1 == sscanf(buf, "%d", &priority)) {
-		spin_lock_irqsave(&lp->lock, flags);
-
 		lp->ni_polling_priority = priority;
+
+		/* Synchronize with xemacps_open/close. */
+		rtnl_lock();
 
 		if (lp->ni_polling_task) {
 			const struct sched_param param = {
@@ -1664,7 +1645,7 @@ static ssize_t xemacps_set_ni_polling_priority(struct device *dev,
 					   lp->ni_polling_policy, &param);
 		}
 
-		spin_unlock_irqrestore(&lp->lock, flags);
+		rtnl_unlock();
 	}
 
 	return count;
@@ -1817,8 +1798,7 @@ static int xemacps_descriptor_init(struct net_local *lp)
        cur_p = &lp->tx_bd[XEMACPS_SEND_BD_CNT - 1];
        /* wrap bit set for last BD, bdptr is moved to last here */
        cur_p->ctrl = (XEMACPS_TXBUF_WRAP_MASK | XEMACPS_TXBUF_USED_MASK);
-       lp->tx_bd_freecnt = XEMACPS_SEND_BD_CNT;
-
+       atomic_set(&lp->tx_bd_freecnt, XEMACPS_SEND_BD_CNT);
 
        for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
                cur_p = &lp->rx_bd[i];
@@ -1957,28 +1937,10 @@ static void xemacps_init_hw(struct net_local *lp)
 		wake_up_process(lp->ni_polling_task);
 }
 
-/**
- * xemacps_open - Called when a network device is made active
- * @ndev: network interface device structure
- * return 0 on success, negative value if error
- *
- * The open entry point is called when a network interface is made active
- * by the system (IFF_UP). At this point all resources needed for transmit
- * and receive operations are allocated, the interrupt handler is
- * registered with OS, the watchdog timer is started, and the stack is
- * notified that the interface is ready.
- *
- * note: if error(s), allocated resources before error require to be
- * released or system issues (such as memory) leak might happen.
- **/
-static int xemacps_open(struct net_device *ndev)
+static int xemacps_up(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 	int rc;
-
-	dev_dbg(&lp->pdev->dev, "open\n");
-	if (!is_valid_ether_addr(ndev->dev_addr))
-		return  -EADDRNOTAVAIL;
 
 	if (0 <= lp->ni_polling_interval) {
 		lp->ni_polling_task =
@@ -2027,11 +1989,82 @@ static int xemacps_open(struct net_device *ndev)
 	lp->watchdog_timer.expires = jiffies + TX_TIMEOUT;
 	add_timer(&lp->watchdog_timer);
 
-	netif_carrier_on(ndev);
+	clear_bit(XEMACPS_STATE_DOWN, &lp->flags);
 
 	netif_start_queue(ndev);
 
 	return 0;
+}
+
+static int xemacps_down(struct net_device *ndev, bool carrier_off)
+{
+	struct net_local *lp = netdev_priv(ndev);
+
+	set_bit(XEMACPS_STATE_DOWN, &lp->flags);
+
+	/* Disable further calls to xemacps_start_xmit. */
+	netif_stop_queue(ndev);
+
+	/* Prevent our Rx and Tx polling loops from being scheduled. */
+	if (lp->ni_polling_task) {
+		kthread_stop(lp->ni_polling_task);
+		lp->ni_polling_task = NULL;
+	} else
+		free_irq(ndev->irq, ndev);
+
+	/* Disable Rx polling and wait for outstanding Rx polling
+	   to complete. */
+	napi_disable(&lp->napi);
+
+	/* Make sure any calls to xemacps_start_xmit have completed. */
+	netif_tx_lock(ndev);
+	netif_tx_unlock(ndev);
+
+	/* If we're not resetting, cancel the reset task. */
+	if (!test_bit(XEMACPS_STATE_RESET, &lp->flags))
+		cancel_work_sync(&lp->reset_task);
+
+	/* Wait for any outstanding Tx polling to complete. */
+	cancel_work_sync(&lp->tx_task);
+
+	/* Wait for any outstanding watchdog timer calls to complete. */
+	del_timer_sync(&lp->watchdog_timer);
+
+	/* Turn off carrier if specified. */
+	if (carrier_off)
+		netif_carrier_off(ndev);
+
+	phy_disconnect(lp->phy_dev);
+
+	xemacps_descriptor_free(lp);
+	xemacps_reset_hw(lp);
+
+	return 0;
+}
+
+/**
+ * xemacps_open - Called when a network device is made active
+ * @ndev: network interface device structure
+ * return 0 on success, negative value if error
+ *
+ * The open entry point is called when a network interface is made active
+ * by the system (IFF_UP). At this point all resources needed for transmit
+ * and receive operations are allocated, the interrupt handler is
+ * registered with OS, the watchdog timer is started, and the stack is
+ * notified that the interface is ready.
+ *
+ * note: if error(s), allocated resources before error require to be
+ * released or system issues (such as memory) leak might happen.
+ **/
+static int xemacps_open(struct net_device *ndev)
+{
+	struct net_local *lp = netdev_priv(ndev);
+
+	dev_dbg(&lp->pdev->dev, "open\n");
+	if (!is_valid_ether_addr(ndev->dev_addr))
+		return  -EADDRNOTAVAIL;
+
+	return xemacps_up(ndev);
 }
 
 /**
@@ -2046,26 +2079,8 @@ static int xemacps_open(struct net_device *ndev)
  **/
 static int xemacps_close(struct net_device *ndev)
 {
-	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
-
-	del_timer_sync(&lp->watchdog_timer);
-	netif_stop_queue(ndev);
-	napi_disable(&lp->napi);
-	spin_lock_irqsave(&lp->lock, flags);
-	xemacps_reset_hw(lp);
-	netif_carrier_off(ndev);
-	spin_unlock_irqrestore(&lp->lock, flags);
-	if (lp->phy_dev)
-		phy_disconnect(lp->phy_dev);
-	xemacps_descriptor_free(lp);
-	if (lp->ni_polling_task) {
-		kthread_stop(lp->ni_polling_task);
-		lp->ni_polling_task = NULL;
-	} else
-		free_irq(ndev->irq, ndev);
-
-	return 0;
+	/* Shut down the interface and turn off carrier. */
+	return xemacps_down(ndev, true);
 }
 
 /*
@@ -2079,10 +2094,11 @@ static void xemacps_watchdog_timer(unsigned long arg)
 	struct net_local *lp = (struct net_local *)arg;
 	int reset = 0;
 
-	spin_lock_bh(&lp->lock);
+	if (test_bit(XEMACPS_STATE_DOWN, &lp->flags))
+		return;
 
 	/* If Tx packets have been sent */
-	if (XEMACPS_SEND_BD_CNT > lp->tx_bd_freecnt) {
+	if (XEMACPS_SEND_BD_CNT > atomic_read(&lp->tx_bd_freecnt)) {
 		/* Check if the earliest Tx packet was sent longer ago than
 		   out timeout, and schedule a reset if so. */
 		if (time_after(jiffies, (lp->tx_skb[lp->tx_bd_ci].start_jiffies +
@@ -2090,13 +2106,11 @@ static void xemacps_watchdog_timer(unsigned long arg)
 			reset = 1;
 	}
 
-	spin_unlock_bh(&lp->lock);
-
 	if (reset) {
 		dev_info(&lp->pdev->dev,
 			 "Tx stall detected, resetting interface\n");
 		schedule_work(&lp->reset_task);
-	} else
+	} else if (!test_bit(XEMACPS_STATE_DOWN, &lp->flags))
 		/* rearm timer */
 		mod_timer(&lp->watchdog_timer, jiffies + TX_TIMEOUT);
 }
@@ -2106,12 +2120,21 @@ static void xemacps_reset_task(struct work_struct *work)
 	struct net_local *lp =
 		container_of(work, struct net_local, reset_task);
 
-	/* Shut it down and bring it back up, synchronizing with
-	   other softirqs. */
-	local_bh_disable();
-	xemacps_close(lp->ndev);
-	xemacps_open(lp->ndev);
-	local_bh_enable();
+	/* Synchronize with xemacps_open/close. */
+	rtnl_lock();
+
+	set_bit(XEMACPS_STATE_RESET, &lp->flags);
+
+	if (!(test_bit(XEMACPS_STATE_DOWN, &lp->flags))) {
+		/* Shut down the interface but don't turn off carrier. This
+		   speeds up the recovery. */
+		xemacps_down(lp->ndev, false);
+		xemacps_up(lp->ndev);
+	}
+
+	clear_bit(XEMACPS_STATE_RESET, &lp->flags);
+
+	rtnl_unlock();
 }
 
 /**
@@ -2159,15 +2182,13 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	struct xemacps_bd *cur_p;
 
 	nr_frags = skb_shinfo(skb)->nr_frags + 1;
-	spin_lock_irq(&lp->lock);
 
 	cur_p = &(lp->tx_bd[lp->tx_bd_tail]);
-	if (nr_frags >= lp->tx_bd_freecnt) {
+	if (nr_frags >= atomic_read(&lp->tx_bd_freecnt)) {
 		netif_stop_queue(ndev); /* stop send queue */
-		spin_unlock_irq(&lp->lock);
 		return NETDEV_TX_BUSY;
 	}
-	lp->tx_bd_freecnt -= nr_frags;
+	atomic_sub(nr_frags, &lp->tx_bd_freecnt);
 	frag = &skb_shinfo(skb)->frags[0];
 
 	for (i = 0; i < nr_frags; i++) {
@@ -2216,20 +2237,17 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 #ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
 
-	if ((XEMACPS_SEND_BD_TPT > lp->tx_bd_freecnt) &&
-	    !work_pending(&lp->tx_task)) {
+	if (XEMACPS_SEND_BD_TPT > atomic_read(&lp->tx_bd_freecnt)) {
 		/* disable TX interrupt */
 		xemacps_write(lp->baseaddr,
 			XEMACPS_IDR_OFFSET,
 			(XEMACPS_IXR_TXCOMPL_MASK|
 			 XEMACPS_IXR_TX_ERR_MASK));
 
-		/* Schedule our Tx task. */
-		schedule_work(&lp->tx_task);
+		/* Schedule our Tx task non-reentrantly. */
+		queue_work(system_nrt_wq, &lp->tx_task);
 	}
 #endif
-	spin_unlock_irq(&lp->lock);
-
 	return 0;
 }
 
@@ -2553,11 +2571,9 @@ static void
 xemacps_get_wol(struct net_device *ndev, struct ethtool_wolinfo *ewol)
 {
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	u32 regval;
 
 	ewol->supported = WAKE_MAGIC | WAKE_ARP | WAKE_UCAST | WAKE_MCAST;
-	spin_lock_irqsave(&lp->lock, flags);
 	regval = xemacps_read(lp->baseaddr, XEMACPS_WOL_OFFSET);
 	if (regval | XEMACPS_WOL_MCAST_MASK)
 		ewol->wolopts |= WAKE_MCAST;
@@ -2567,7 +2583,6 @@ xemacps_get_wol(struct net_device *ndev, struct ethtool_wolinfo *ewol)
 		ewol->wolopts |= WAKE_UCAST;
 	if (regval | XEMACPS_WOL_MAGIC_MASK)
 		ewol->wolopts |= WAKE_MAGIC;
-	spin_unlock_irqrestore(&lp->lock, flags);
 }
 
 /**
@@ -2584,13 +2599,11 @@ static int
 xemacps_set_wol(struct net_device *ndev, struct ethtool_wolinfo *ewol)
 {
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	u32 regval;
 
 	if (ewol->wolopts & ~(WAKE_MAGIC | WAKE_ARP | WAKE_UCAST | WAKE_MCAST))
 		return -EOPNOTSUPP;
 
-	spin_lock_irqsave(&lp->lock, flags);
 	regval  = xemacps_read(lp->baseaddr, XEMACPS_WOL_OFFSET);
 	regval &= ~(XEMACPS_WOL_MCAST_MASK | XEMACPS_WOL_ARP_MASK |
 		XEMACPS_WOL_SPEREG1_MASK | XEMACPS_WOL_MAGIC_MASK);
@@ -2605,7 +2618,6 @@ xemacps_set_wol(struct net_device *ndev, struct ethtool_wolinfo *ewol)
 		regval |= XEMACPS_WOL_MCAST_MASK;
 
 	xemacps_write(lp->baseaddr, XEMACPS_WOL_OFFSET, regval);
-	spin_unlock_irqrestore(&lp->lock, flags);
 
 	return 0;
 }
@@ -2623,16 +2635,13 @@ xemacps_get_pauseparam(struct net_device *ndev,
 		struct ethtool_pauseparam *epauseparm)
 {
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	u32 regval;
 
 	epauseparm->autoneg  = 0;
 	epauseparm->rx_pause = 0;
 
-	spin_lock_irqsave(&lp->lock, flags);
 	regval = xemacps_read(lp->baseaddr, XEMACPS_NWCFG_OFFSET);
 	epauseparm->tx_pause = regval & XEMACPS_NWCFG_PAUSEEN_MASK;
-	spin_unlock_irqrestore(&lp->lock, flags);
 }
 
 /**
@@ -2649,7 +2658,6 @@ xemacps_set_pauseparam(struct net_device *ndev,
 		struct ethtool_pauseparam *epauseparm)
 {
 	struct net_local *lp = netdev_priv(ndev);
-	unsigned long flags;
 	u32 regval;
 
 	if (netif_running(ndev)) {
@@ -2659,7 +2667,6 @@ xemacps_set_pauseparam(struct net_device *ndev,
 		return -EFAULT;
 	}
 
-	spin_lock_irqsave(&lp->lock, flags);
 	regval = xemacps_read(lp->baseaddr, XEMACPS_NWCFG_OFFSET);
 
 	if (epauseparm->tx_pause)
@@ -2668,7 +2675,6 @@ xemacps_set_pauseparam(struct net_device *ndev,
 		regval &= ~XEMACPS_NWCFG_PAUSEEN_MASK;
 
 	xemacps_write(lp->baseaddr, XEMACPS_NWCFG_OFFSET, regval);
-	spin_unlock_irqrestore(&lp->lock, flags);
 
 	return 0;
 }
@@ -2878,8 +2884,6 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	lp = netdev_priv(ndev);
 	lp->pdev = pdev;
 	lp->ndev = ndev;
-
-	spin_lock_init(&lp->lock);
 
 	lp->baseaddr = ioremap(r_mem->start, (r_mem->end - r_mem->start + 1));
 	if (!lp->baseaddr) {
@@ -3112,9 +3116,10 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	xemacps_update_hwaddr(lp);
 
-	/* We use this to keep track of whether the interface is opened
-	   or closed. It defaults to on for some reason. */
+	/* Carrier off reporting is important to ethtool even BEFORE open. */
 	netif_carrier_off(ndev);
+
+	set_bit(XEMACPS_STATE_DOWN, &lp->flags);
 
 	platform_set_drvdata(pdev, ndev);
 
