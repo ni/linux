@@ -1971,28 +1971,10 @@ static void xemacps_gen_purpose_timerhandler(unsigned long data)
 		jiffies + msecs_to_jiffies(XEAMCPS_GEN_PURPOSE_TIMER_LOAD));
 }
 
-/**
- * xemacps_open - Called when a network device is made active
- * @ndev: network interface device structure
- * Return: 0 on success, negative value if error
- *
- * The open entry point is called when a network interface is made active
- * by the system (IFF_UP). At this point all resources needed for transmit
- * and receive operations are allocated, the interrupt handler is
- * registered with OS, the watchdog timer is started, and the stack is
- * notified that the interface is ready.
- *
- * note: if error(s), allocated resources before error require to be
- * released or system issues (such as memory) leak might happen.
- */
-static int xemacps_open(struct net_device *ndev)
+static int xemacps_up(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 	int rc;
-
-	dev_dbg(&lp->pdev->dev, "open\n");
-	if (!is_valid_ether_addr(ndev->dev_addr))
-		return  -EADDRNOTAVAIL;
 
 	rc = xemacps_descriptor_init(lp);
 	if (rc) {
@@ -2044,17 +2026,7 @@ err_free_rings:
 	return rc;
 }
 
-/**
- * xemacps_close - disable a network interface
- * @ndev: network interface device structure
- * Return: 0
- *
- * The close entry point is called when a network interface is de-activated
- * by OS. The hardware is still under the driver control, but needs to be
- * disabled. A global MAC reset is issued to stop the hardware, and all
- * transmit and receive resources are freed.
- */
-static int xemacps_close(struct net_device *ndev)
+static int xemacps_down(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 
@@ -2080,6 +2052,47 @@ static int xemacps_close(struct net_device *ndev)
 	pm_runtime_put(&lp->pdev->dev);
 
 	return 0;
+}
+
+/**
+ * xemacps_open - Called when a network device is made active
+ * @ndev: network interface device structure
+ * return 0 on success, negative value if error
+ *
+ * The open entry point is called when a network interface is made active
+ * by the system (IFF_UP). At this point all resources needed for transmit
+ * and receive operations are allocated, the interrupt handler is
+ * registered with OS, the watchdog timer is started, and the stack is
+ * notified that the interface is ready.
+ *
+ * note: if error(s), allocated resources before error require to be
+ * released or system issues (such as memory) leak might happen.
+ **/
+static int xemacps_open(struct net_device *ndev)
+{
+	struct net_local *lp = netdev_priv(ndev);
+
+	dev_dbg(&lp->pdev->dev, "open\n");
+	if (!is_valid_ether_addr(ndev->dev_addr))
+		return  -EADDRNOTAVAIL;
+
+	return xemacps_up(ndev);
+}
+
+/**
+ * xemacps_close - disable a network interface
+ * @ndev: network interface device structure
+ * return 0
+ *
+ * The close entry point is called when a network interface is de-activated
+ * by OS. The hardware is still under the driver control, but needs to be
+ * disabled. A global MAC reset is issued to stop the hardware, and all
+ * transmit and receive resources are freed.
+ **/
+static int xemacps_close(struct net_device *ndev)
+{
+	/* Shut down the interface and turn off carrier. */
+	return xemacps_down(ndev);
 }
 
 /**
