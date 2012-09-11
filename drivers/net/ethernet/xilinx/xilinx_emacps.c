@@ -2059,7 +2059,10 @@ static int xemacps_close(struct net_device *ndev)
 	struct net_local *lp = netdev_priv(ndev);
 
 	del_timer_sync(&(lp->gen_purpose_timer));
+
+	/* Disable further calls to xemacps_start_xmit. */
 	netif_stop_queue(ndev);
+
 	napi_disable(&lp->napi);
 	tasklet_disable(&lp->tx_bdreclaim_tasklet);
 	netif_carrier_off(ndev);
