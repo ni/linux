@@ -289,7 +289,6 @@ static void xi2cps_mrecv(struct xi2cps *id)
 
 	/*
 	 * Set the controller in master receive mode and clear the FIFO.
-	 * Set the slave address in address register.
 	 * Check for the message size against FIFO depth and set the
 	 * HOLD bus bit if it is more than FIFO depth.
 	 * Clear the interrupts in interrupt status register.
@@ -305,8 +304,6 @@ static void xi2cps_mrecv(struct xi2cps *id)
 	isr_status = xi2cps_readreg(XI2CPS_ISR_OFFSET);
 	xi2cps_writereg(isr_status, XI2CPS_ISR_OFFSET);
 
-	xi2cps_writereg((id->p_msg->addr & XI2CPS_ADDR_MASK),
-						XI2CPS_ADDR_OFFSET);
 	/*
 	 * The no. of bytes to receive is checked against the limit of
 	 * FIFO depth. Set transfer size register with no. of bytes to
@@ -333,6 +330,13 @@ static void xi2cps_mrecv(struct xi2cps *id)
 		}
 	}
 	xi2cps_writereg(XI2CPS_ENABLED_INTR, XI2CPS_IER_OFFSET);
+
+	/*
+	 * Set the slave address in address register.
+	 * This initiates the I2C transfer.
+	 */
+	xi2cps_writereg((id->p_msg->addr & XI2CPS_ADDR_MASK),
+						XI2CPS_ADDR_OFFSET);
 }
 
 /**
