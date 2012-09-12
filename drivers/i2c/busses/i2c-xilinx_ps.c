@@ -90,6 +90,7 @@
 
 #define XI2CPS_FIFO_DEPTH	16		/* FIFO Depth */
 #define XI2CPS_TIMEOUT		(50 * HZ)	/* Timeout for bus busy check */
+#define XI2CPS_IRQ_TIMEOUT	(HZ)            /* Transfer completion timeout*/
 #define XI2CPS_ENABLED_INTR	0x2EF		/* Enabled Interrupts */
 
 #define XI2CPS_DATA_INTR_DEPTH (XI2CPS_FIFO_DEPTH - 2)/* FIFO depth at which
@@ -406,6 +407,7 @@ static int xi2cps_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	struct xi2cps *id = adap->algo_data;
 	unsigned int count, retries;
 	unsigned long timeout;
+	int ret;
 
 	/* Waiting for bus-ready. If bus not ready, it returns after timeout */
 	timeout = jiffies + XI2CPS_TIMEOUT;
@@ -467,8 +469,23 @@ retry:
 			xi2cps_msend(id);
 
 		/* Wait for the signal of completion */
-		wait_for_completion_interruptible(&id->xfer_done);
+		ret = wait_for_completion_timeout(&id->xfer_done,
+						XI2CPS_IRQ_TIMEOUT);
 		xi2cps_writereg(XI2CPS_IXR_ALL_INTR_MASK, XI2CPS_IDR_OFFSET);
+
+		if (ret == 0) {
+			dev_err(id->adap.dev.parent, "i2c transfer timed out\n");
+
+			/*
+			 * Clear the hold bus bit. This will generate a STOP
+			 * condition if the HOLD bit was previously set.
+			 * All the other register will get initialized on the
+			 * next transfer.
+			 */
+			xi2cps_clr_hold(id);
+
+			return -ETIMEDOUT;
+		}
 
 		/* If it is bus arbitration error, try again */
 		if (id->err_status & 0x00000200) {
