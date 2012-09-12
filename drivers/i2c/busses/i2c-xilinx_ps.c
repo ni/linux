@@ -135,6 +135,20 @@ struct xi2cps {
 };
 
 /**
+ * xi2cps_clr_hold - clears the bus HOLD bit
+ */
+static inline void xi2cps_clr_hold(struct xi2cps *id)
+{
+	unsigned int cr;
+
+	cr = xi2cps_readreg(XI2CPS_CR_OFFSET);
+
+	if (cr & XI2CPS_CR_HOLD_BUS_MASK)
+		xi2cps_writereg((cr & (~XI2CPS_CR_HOLD_BUS_MASK)),
+				XI2CPS_CR_OFFSET);
+}
+
+/**
  * xi2cps_isr - Interrupt handler for the I2C device
  * @irq:	irq number for the I2C device
  * @ptr:	void pointer to xi2cps structure
@@ -148,7 +162,6 @@ static irqreturn_t xi2cps_isr(int irq, void *ptr)
 {
 	unsigned int isr_status, avail_bytes;
 	unsigned int bytes_to_recv, bytes_to_send;
-	unsigned int ctrl_reg = 0;
 	struct xi2cps *id = ptr;
 
 	isr_status = xi2cps_readreg(XI2CPS_ISR_OFFSET);
@@ -184,11 +197,7 @@ static irqreturn_t xi2cps_isr(int irq, void *ptr)
 				xi2cps_writereg(id->recv_count,
 						XI2CPS_XFER_SIZE_OFFSET);
 				if (id->bus_hold_flag == 0)
-					/* Clear the hold bus bit */
-					xi2cps_writereg(
-					(xi2cps_readreg(XI2CPS_CR_OFFSET) &
-					(~XI2CPS_CR_HOLD_BUS_MASK)),
-					XI2CPS_CR_OFFSET);
+					xi2cps_clr_hold(id);
 			}
 			/* Process the data received */
 			while (bytes_to_recv) {
@@ -228,31 +237,12 @@ static irqreturn_t xi2cps_isr(int irq, void *ptr)
 		 */
 				complete(&id->xfer_done);
 			}
-			if (id->send_count == 0) {
-				if (id->bus_hold_flag == 0) {
-					/* Clear the hold bus bit */
-					ctrl_reg =
-					xi2cps_readreg(XI2CPS_CR_OFFSET);
-					if ((ctrl_reg & XI2CPS_CR_HOLD_BUS_MASK)
-						== XI2CPS_CR_HOLD_BUS_MASK)
-						xi2cps_writereg(
-						(ctrl_reg &
-						(~XI2CPS_CR_HOLD_BUS_MASK)),
-						XI2CPS_CR_OFFSET);
-				}
-			}
+
+			if ((id->send_count == 0) && (id->bus_hold_flag == 0))
+					xi2cps_clr_hold(id);
 		} else {
-			if (id->bus_hold_flag == 0) {
-				/* Clear the hold bus bit */
-				ctrl_reg =
-				xi2cps_readreg(XI2CPS_CR_OFFSET);
-				if ((ctrl_reg & XI2CPS_CR_HOLD_BUS_MASK)
-					== XI2CPS_CR_HOLD_BUS_MASK)
-					xi2cps_writereg(
-					(ctrl_reg &
-					(~XI2CPS_CR_HOLD_BUS_MASK)),
-					XI2CPS_CR_OFFSET);
-			}
+			if (id->bus_hold_flag == 0)
+				xi2cps_clr_hold(id);
 		/*
 		 * If the device is receiving data, then signal the completion
 		 * of transaction and read the data present in the FIFO.
@@ -316,18 +306,12 @@ static void xi2cps_mrecv(struct xi2cps *id)
 	else {
 		xi2cps_writereg(id->recv_count, XI2CPS_XFER_SIZE_OFFSET);
 
-	/*
-	 * Clear the bus hold flag if bytes to receive is less than FIFO size.
-	 */
-		if (id->bus_hold_flag == 0) {
-			/* Clear the hold bus bit */
-			ctrl_reg = xi2cps_readreg(XI2CPS_CR_OFFSET);
-			if ((ctrl_reg & XI2CPS_CR_HOLD_BUS_MASK)
-				== XI2CPS_CR_HOLD_BUS_MASK)
-				xi2cps_writereg(
-				(ctrl_reg & (~XI2CPS_CR_HOLD_BUS_MASK)),
-				XI2CPS_CR_OFFSET);
-		}
+		/*
+		 * Clear the bus hold flag if bytes to receive is less than
+		 * FIFO size.
+		 */
+		if (id->bus_hold_flag == 0)
+			xi2cps_clr_hold(id);
 	}
 	xi2cps_writereg(XI2CPS_ENABLED_INTR, XI2CPS_IER_OFFSET);
 
@@ -398,15 +382,9 @@ static void xi2cps_msend(struct xi2cps *id)
 	 * Clear the bus hold flag if there is no more data
 	 * and if it is the last message.
 	 */
-	if (id->bus_hold_flag == 0 && id->send_count == 0) {
-		/* Clear the hold bus bit */
-		ctrl_reg = xi2cps_readreg(XI2CPS_CR_OFFSET);
-		if ((ctrl_reg & XI2CPS_CR_HOLD_BUS_MASK)
-			== XI2CPS_CR_HOLD_BUS_MASK)
-			xi2cps_writereg(
-			(ctrl_reg & (~XI2CPS_CR_HOLD_BUS_MASK)),
-			XI2CPS_CR_OFFSET);
-	}
+	if (id->bus_hold_flag == 0 && id->send_count == 0)
+		xi2cps_clr_hold(id);
+
 	xi2cps_writereg(XI2CPS_ENABLED_INTR, XI2CPS_IER_OFFSET);
 }
 
