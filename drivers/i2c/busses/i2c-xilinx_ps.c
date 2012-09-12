@@ -88,6 +88,16 @@
  */
 #define XI2CPS_IXR_ALL_INTR_MASK 0x000002FF /* All ISR Mask */
 
+#define XI2CPS_IXR_COMP         (1<<0)	/* Transfer complete */
+#define XI2CPS_IXR_DATA         (1<<1)	/* More data */
+#define XI2CPS_IXR_NACK         (1<<2)	/* Transfer not acknowledged */
+#define XI2CPS_IXR_TO           (1<<3)	/* Transfer time out */
+#define XI2CPS_IXR_SLV_RDY      (1<<4)	/* Monitored slave ready */
+#define XI2CPS_IXR_RX_OVF       (1<<5)	/* Receive overflow */
+#define XI2CPS_IXR_TX_OVF       (1<<6)	/* FIFO transmit overflow */
+#define XI2CPS_IXR_RX_UNF       (1<<7)	/* FIFO receive underflow */
+#define XI2CPS_IXR_ARB_LOST     (1<<9)	/* Arbitration lost */
+
 #define XI2CPS_FIFO_DEPTH	16		/* FIFO Depth */
 #define XI2CPS_TIMEOUT		(50 * HZ)	/* Timeout for bus busy check */
 #define XI2CPS_IRQ_TIMEOUT	(HZ)            /* Transfer completion timeout*/
@@ -168,15 +178,27 @@ static irqreturn_t xi2cps_isr(int irq, void *ptr)
 	isr_status = xi2cps_readreg(XI2CPS_ISR_OFFSET);
 
 	/* Handling Nack interrupt */
-	if (isr_status & 0x00000004)
+	if (isr_status & XI2CPS_IXR_NACK)
 		complete(&id->xfer_done);
 
 	/* Handling Arbitration lost interrupt */
-	if (isr_status & 0x00000200)
+	if (isr_status & XI2CPS_IXR_ARB_LOST)
 		complete(&id->xfer_done);
 
+	/*
+	 * RX fifo overflow. We are treating it as incomplete transfer
+	 * because we are not sure what data got dropped (similar to
+	 * a NACK from slave). Clearing the HOLD bit if set - this will
+	 * generate the necessary STOP condition.
+	 * The fifo will be cleared on the next transfer.
+	 */
+	if (isr_status & XI2CPS_IXR_RX_OVF) {
+		xi2cps_clr_hold(id);
+		complete(&id->xfer_done);
+	}
+
 	/* Handling Data interrupt */
-	if (isr_status & 0x00000002) {
+	if (isr_status & XI2CPS_IXR_DATA) {
 		/*
 		 * In master mode, if the device has more data to receive.
 		 * Calculate received bytes and update the receive count.
@@ -210,7 +232,7 @@ static irqreturn_t xi2cps_isr(int irq, void *ptr)
 	}
 
 	/* Handling Transfer Complete interrupt */
-	if (isr_status & 0x00000001) {
+	if (isr_status & XI2CPS_IXR_COMP) {
 		if ((id->p_recv_buf) == NULL) {
 			/*
 			 * If the device is sending data If there is further
