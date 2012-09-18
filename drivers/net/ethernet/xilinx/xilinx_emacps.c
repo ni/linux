@@ -1989,9 +1989,6 @@ static int xemacps_down(struct net_device *ndev, bool carrier_off)
 
 	set_bit(XEMACPS_STATE_DOWN, &lp->flags);
 
-	/* Disable further calls to xemacps_start_xmit. */
-	netif_stop_queue(ndev);
-
 	/* Prevent our Rx and Tx polling loops from being scheduled. */
 	if (lp->ni_polling_task) {
 		kthread_stop(lp->ni_polling_task);
@@ -2003,6 +2000,12 @@ static int xemacps_down(struct net_device *ndev, bool carrier_off)
 	   to complete. */
 	napi_disable(&lp->napi);
 
+	/* Wait for any outstanding Tx polling to complete. */
+	cancel_work_sync(&lp->tx_task);
+
+	/* Disable further calls to xemacps_start_xmit. */
+	netif_stop_queue(ndev);
+
 	/* Make sure any calls to xemacps_start_xmit have completed. */
 	netif_tx_lock(ndev);
 	netif_tx_unlock(ndev);
@@ -2010,9 +2013,6 @@ static int xemacps_down(struct net_device *ndev, bool carrier_off)
 	/* If we're not resetting, cancel the reset task. */
 	if (!test_bit(XEMACPS_STATE_RESET, &lp->flags))
 		cancel_work_sync(&lp->reset_task);
-
-	/* Wait for any outstanding Tx polling to complete. */
-	cancel_work_sync(&lp->tx_task);
 
 	/* Wait for any outstanding watchdog timer calls to complete. */
 	del_timer_sync(&lp->watchdog_timer);
