@@ -2075,6 +2075,10 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
 				if (tty)
 					uart_change_speed(tty, state, NULL);
 				spin_lock_irq(&uport->lock);
+				if (uport->txvr_ops &&
+						uport->txvr_ops->config_rs485)
+					uport->txvr_ops->config_rs485(uport,
+								&uport->rs485);
 				ops->set_mctrl(uport, uport->mctrl);
 				ops->start_tx(uport);
 				spin_unlock_irq(&uport->lock);
