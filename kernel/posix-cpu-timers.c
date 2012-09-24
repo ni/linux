@@ -1377,6 +1377,7 @@ static void __run_posix_cpu_timers(struct task_struct *tsk)
 #include <linux/cpu.h>
 DEFINE_PER_CPU(struct task_struct *, posix_timer_task);
 DEFINE_PER_CPU(struct task_struct *, posix_timer_tasklist);
+static int posixcputmr_pri = MAX_RT_PRIO-1;
 
 static int posix_cpu_timers_thread(void *data)
 {
@@ -1500,7 +1501,7 @@ static int posix_cpu_thread_call(struct notifier_block *nfb,
 		p->flags |= PF_NOFREEZE;
 		kthread_bind(p, cpu);
 		/* Must be high prio to avoid getting starved */
-		param.sched_priority = MAX_RT_PRIO-1;
+		param.sched_priority = posixcputmr_pri;
 		sched_setscheduler(p, SCHED_FIFO, &param);
 		per_cpu(posix_timer_task,cpu) = p;
 		break;
@@ -1524,6 +1525,18 @@ static int posix_cpu_thread_call(struct notifier_block *nfb,
 	}
 	return NOTIFY_OK;
 }
+
+static __init int set_posixcputmr_pri(char *str)
+{
+	int pri;
+
+	get_option(&str, &pri);
+	if (rt_prio(pri))
+		posixcputmr_pri = pri;
+	return 0;
+}
+
+early_param("posixcputmr_pri", set_posixcputmr_pri);
 
 /* Register at highest priority so that task migration (migrate_all_tasks)
  * happens before everything else.

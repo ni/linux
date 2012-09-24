@@ -30,6 +30,7 @@ early_param("threadirqs", setup_forced_irqthreads);
 # endif
 #endif
 
+static int irqthread_pri = MAX_USER_RT_PRIO/2;
 /**
  *	synchronize_irq - wait for pending IRQ handlers (on other CPUs)
  *	@irq: interrupt number to wait for
@@ -774,15 +775,14 @@ static irqreturn_t irq_thread_fn(struct irq_desc *desc,
  */
 static int irq_thread(void *data)
 {
-	static const struct sched_param param = {
-		.sched_priority = MAX_USER_RT_PRIO/2,
-	};
+	struct sched_param param;
 	struct irqaction *action = data;
 	struct irq_desc *desc = irq_to_desc(action->irq);
 	irqreturn_t (*handler_fn)(struct irq_desc *desc,
 			struct irqaction *action);
 	int wake;
 
+	param.sched_priority = irqthread_pri;
 	if (force_irqthreads && test_bit(IRQTF_FORCED_THREAD,
 					&action->thread_flags))
 		handler_fn = irq_forced_thread_fn;
@@ -843,6 +843,18 @@ static int irq_thread(void *data)
 	current->irqaction = NULL;
 	return 0;
 }
+
+static __init int set_irqthread_pri(char *str)
+{
+	int pri;
+
+	get_option(&str, &pri);
+	if (rt_prio(pri))
+		irqthread_pri = pri;
+	return 0;
+}
+
+early_param("irqthread_pri", set_irqthread_pri);
 
 /*
  * Called from do_exit()

@@ -1,4 +1,4 @@
-/*
+ /*
  *	linux/kernel/softirq.c
  *
  *	Copyright (C) 1992 Linus Torvalds
@@ -384,6 +384,7 @@ static inline void ksoftirqd_clr_sched_params(void) { }
  */
 static DEFINE_LOCAL_IRQ_LOCK(local_softirq_lock);
 static DEFINE_PER_CPU(struct task_struct *, local_softirq_runner);
+static int ksoftirqd_pri = 1;
 
 static void __do_softirq_common(int need_rcu_bh_qs);
 
@@ -544,7 +545,9 @@ static inline void _local_bh_enable_nort(void) { }
 
 static inline void ksoftirqd_set_sched_params(void)
 {
-	struct sched_param param = { .sched_priority = 1 };
+	struct sched_param param;
+
+	param.sched_priority = ksoftirqd_pri;
 
 	sched_setscheduler(current, SCHED_FIFO, &param);
 }
@@ -555,6 +558,18 @@ static inline void ksoftirqd_clr_sched_params(void)
 
 	sched_setscheduler(current, SCHED_NORMAL, &param);
 }
+
+static __init int set_ksoftirqd_pri(char *str)
+{
+	int pri;
+
+	get_option(&str, &pri);
+	if (rt_prio(pri))
+		ksoftirqd_pri = pri;
+	return 0;
+}
+
+early_param("ksoftirqd_pri", set_ksoftirqd_pri);
 
 #endif /* PREEMPT_RT_FULL */
 /*

@@ -21,6 +21,7 @@
 static DEFINE_SPINLOCK(kthread_create_lock);
 static LIST_HEAD(kthread_create_list);
 struct task_struct *kthreadd_task;
+static int kthreadd_pri = -1;
 
 struct kthread_create_info
 {
@@ -256,7 +257,12 @@ int kthreadd(void *unused)
 	ignore_signals(tsk);
 	set_cpus_allowed_ptr(tsk, cpu_all_mask);
 	set_mems_allowed(node_states[N_HIGH_MEMORY]);
+	if (kthreadd_pri != -1) {
+		struct sched_param param;
 
+		param.sched_priority = kthreadd_pri;
+		sched_setscheduler_nocheck(tsk, SCHED_FIFO, &param);
+	}
 	current->flags |= PF_NOFREEZE | PF_FREEZER_NOSIG;
 
 	for (;;) {
@@ -283,6 +289,18 @@ int kthreadd(void *unused)
 
 	return 0;
 }
+
+static __init int set_kthreadd_pri(char *str)
+{
+	int pri;
+
+	get_option(&str, &pri);
+	if (rt_prio(pri))
+		kthreadd_pri = pri;
+	return 0;
+}
+
+early_param("kthreadd_pri", set_kthreadd_pri);
 
 void __init_kthread_worker(struct kthread_worker *worker,
 				const char *name,
