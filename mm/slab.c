@@ -747,18 +747,12 @@ slab_on_each_cpu(void (*func)(void *arg, int this_cpu), void *arg)
 
 static void lock_slab_on(unsigned int cpu)
 {
-	if (cpu == smp_processor_id())
-		local_lock_irq(slab_lock);
-	else
-		local_spin_lock_irq(slab_lock, &per_cpu(slab_lock, cpu).lock);
+	local_lock_irq_on(slab_lock, cpu);
 }
 
 static void unlock_slab_on(unsigned int cpu)
 {
-	if (cpu == smp_processor_id())
-		local_unlock_irq(slab_lock);
-	else
-		local_spin_unlock_irq(slab_lock, &per_cpu(slab_lock, cpu).lock);
+	local_unlock_irq_on(slab_lock, cpu);
 }
 #endif
 

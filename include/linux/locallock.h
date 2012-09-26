@@ -96,6 +96,9 @@ static inline void __local_lock_irq(struct local_irq_lock *lv)
 #define local_lock_irq(lvar)						\
 	do { __local_lock_irq(&get_local_var(lvar)); } while (0)
 
+#define local_lock_irq_on(lvar, cpu)					\
+	do { __local_lock_irq(&per_cpu(lvar, cpu)); } while (0)
+
 static inline void __local_unlock_irq(struct local_irq_lock *lv)
 {
 	LL_WARN(!lv->nestcnt);
@@ -109,6 +112,11 @@ static inline void __local_unlock_irq(struct local_irq_lock *lv)
 	do {								\
 		__local_unlock_irq(&__get_cpu_var(lvar));		\
 		put_local_var(lvar);					\
+	} while (0)
+
+#define local_unlock_irq_on(lvar, cpu)					\
+	do {								\
+		__local_unlock_irq(&per_cpu(lvar, cpu));		\
 	} while (0)
 
 static inline int __local_lock_irqsave(struct local_irq_lock *lv)
