@@ -32,8 +32,6 @@
 
 #define DRIVER_NAME "sdhci"
 
-#define XILINX_HACK_CARD_INS
-
 #define DBG(f, x...) \
 	pr_debug(DRIVER_NAME " [%s()]: " f, __func__,## x)
 
@@ -147,6 +145,13 @@ static void sdhci_mask_irqs(struct sdhci_host *host, u32 irqs)
 static void sdhci_set_card_detection(struct sdhci_host *host, bool enable)
 {
 	u32 present, irqs;
+	u32 presentReg;
+	u8  ctrl;
+
+	/* Put the card in test mode, with card inserted */
+	ctrl = sdhci_readl(host, SDHCI_HOST_CONTROL);
+	ctrl |= SDHCI_CTRL_CD_TEST_INSERTED | SDHCI_CTRL_CD_TEST_ENABLE;
+	sdhci_writeb(host, ctrl, SDHCI_HOST_CONTROL);
 
 	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION)
 		return;
@@ -157,6 +162,10 @@ static void sdhci_set_card_detection(struct sdhci_host *host, bool enable)
 	present = sdhci_readl(host, SDHCI_PRESENT_STATE) &
 			      SDHCI_CARD_PRESENT;
 	irqs = present ? SDHCI_INT_CARD_REMOVE : SDHCI_INT_CARD_INSERT;
+
+	presentReg = sdhci_readl(host, SDHCI_PRESENT_STATE);
+
+	pr_info("sdhci reports card is present=%d, 0x%x\n", present, presentReg);
 
 	if (enable)
 		sdhci_unmask_irqs(host, irqs);
@@ -179,13 +188,12 @@ static void sdhci_reset(struct sdhci_host *host, u8 mask)
 	unsigned long timeout;
 	u32 uninitialized_var(ier);
 
-#ifndef XILINX_HACK_CARD_INS
 	if (host->quirks & SDHCI_QUIRK_NO_CARD_NO_RESET) {
 		if (!(sdhci_readl(host, SDHCI_PRESENT_STATE) &
 			SDHCI_CARD_PRESENT))
 			return;
 	}
-#endif
+
 	if (host->quirks & SDHCI_QUIRK_RESTORE_IRQS_AFTER_RESET)
 		ier = sdhci_readl(host, SDHCI_INT_ENABLE);
 
@@ -1262,12 +1270,8 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION)
 		present = true;
 	else
-#ifdef XILINX_HACK_CARD_INS
-		present = true;
-#else
 		present = sdhci_readl(host, SDHCI_PRESENT_STATE) &
 				SDHCI_CARD_PRESENT;
-#endif
 
 	if (!present || host->flags & SDHCI_DEVICE_DEAD) {
 		host->mrq->cmd->error = -ENOMEDIUM;
@@ -1907,7 +1911,6 @@ static void sdhci_tasklet_card(unsigned long param)
 {
 	struct sdhci_host *host;
 	unsigned long flags;
-	bool present = true;
 
 	host = (struct sdhci_host*)param;
 
@@ -1943,10 +1946,10 @@ static void sdhci_tasklet_finish(unsigned long param)
 
 	spin_lock_irqsave(&host->lock, flags);
 
-        /*
-         * If this tasklet gets rescheduled while running, it will
-         * be run again afterwards but without any active request.
-         */
+	/*
+	 * If this tasklet gets rescheduled while running, it will
+	 * be run again afterwards but without any active request.
+	 */
 	if (!host->mrq) {
 		spin_unlock_irqrestore(&host->lock, flags);
 		return;
@@ -2926,8 +2929,10 @@ int sdhci_add_host(struct sdhci_host *host)
 
 	ret = request_irq(host->irq, sdhci_irq, IRQF_SHARED,
 		mmc_hostname(mmc), host);
-	if (ret)
+	if (ret) {
+		pr_info("%s: Unable to register interrupt\n", mmc_hostname(mmc));
 		goto untasklet;
+	}
 
 	host->vmmc = regulator_get(mmc_dev(mmc), "vmmc");
 	if (IS_ERR(host->vmmc)) {
