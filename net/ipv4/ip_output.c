@@ -1516,7 +1516,8 @@ void ip_send_unicast_reply(struct net *net, struct sk_buff *skb, __be32 daddr,
 	if (IS_ERR(rt))
 		return;
 
-	inet = &get_cpu_var(unicast_sock);
+	get_cpu_light();
+	inet = &__get_cpu_var(unicast_sock);
 
 	inet->tos = arg->tos;
 	sk = &inet->sk;
@@ -1540,7 +1541,7 @@ void ip_send_unicast_reply(struct net *net, struct sk_buff *skb, __be32 daddr,
 		ip_push_pending_frames(sk, &fl4);
 	}
 
-	put_cpu_var(unicast_sock);
+	put_cpu_light();
 
 	ip_rt_put(rt);
 }
