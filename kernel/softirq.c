@@ -142,31 +142,34 @@ static void wakeup_softirqd(void)
 		wake_up_process(tsk);
 }
 
-static void handle_pending_softirqs(u32 pending, int cpu, int need_rcu_bh_qs)
+static void handle_softirq(unsigned int vec_nr, int cpu, int need_rcu_bh_qs)
 {
-	struct softirq_action *h = softirq_vec;
+	struct softirq_action *h = softirq_vec + vec_nr;
 	unsigned int prev_count = preempt_count();
 
+	kstat_incr_softirqs_this_cpu(vec_nr);
+	trace_softirq_entry(vec_nr);
+	h->action(h);
+	trace_softirq_exit(vec_nr);
+
+	if (unlikely(prev_count != preempt_count())) {
+		pr_err("softirq %u %s %p preempt count leak: %08x -> %08x\n",
+		       vec_nr, softirq_to_name[vec_nr], h->action,
+		       prev_count, (unsigned int) preempt_count());
+		preempt_count() = prev_count;
+	}
+	if (need_rcu_bh_qs)
+		rcu_bh_qs(cpu);
+}
+
+static void handle_pending_softirqs(u32 pending, int cpu, int need_rcu_bh_qs)
+{
+	unsigned int vec_nr;
+
 	local_irq_enable();
-	for ( ; pending; h++, pending >>= 1) {
-		unsigned int vec_nr = h - softirq_vec;
-
-		if (!(pending & 1))
-			continue;
-
-		kstat_incr_softirqs_this_cpu(vec_nr);
-		trace_softirq_entry(vec_nr);
-		h->action(h);
-		trace_softirq_exit(vec_nr);
-		if (unlikely(prev_count != preempt_count())) {
-			printk(KERN_ERR
- "huh, entered softirq %u %s %p with preempt_count %08x exited with %08x?\n",
-			       vec_nr, softirq_to_name[vec_nr], h->action,
-			       prev_count, (unsigned int) preempt_count());
-			preempt_count() = prev_count;
-		}
-		if (need_rcu_bh_qs)
-			rcu_bh_qs(cpu);
+	for (vec_nr = 0; pending; vec_nr++, pending >>= 1) {
+		if (pending & 1)
+			handle_softirq(vec_nr, cpu, need_rcu_bh_qs);
 	}
 	local_irq_disable();
 }
