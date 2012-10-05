@@ -30,6 +30,11 @@
 			gpio15-label     = "wake_interrupt";
 			gpio15-direction = "input";
 			gpio15-settings  = "level-low";
+
+			/* GPIO24 (MIO24) */
+			gpio24-label     = "wdt_interrupt";
+			gpio24-direction = "input";
+			gpio24-settings  = "edge-falling";
 		};
 
 		i2c0: i2c@e0004000 {
