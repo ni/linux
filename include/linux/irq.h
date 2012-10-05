@@ -179,6 +179,7 @@ struct irq_data {
 	struct irq_data		*parent_data;
 #endif
 	void			*chip_data;
+	int			priority;
 };
 
 /*
