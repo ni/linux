@@ -226,6 +226,9 @@ extern void irq_wake_thread(unsigned int irq, void *dev_id);
 extern void suspend_device_irqs(void);
 extern void resume_device_irqs(void);
 
+extern void init_irq_default_prio(struct irq_desc *desc);
+extern int irq_set_priority(unsigned int irq, int priority);
+
 /**
  * struct irq_affinity_notify - context for notification of IRQ affinity changes
  * @irq:		Interrupt to which notification applies
