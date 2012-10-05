@@ -202,9 +202,14 @@
 			 */
 
 			/* GPIO1 (MIO1) */
-			gpio1-label     = "phy_interupt";
+			gpio1-label     = "phy_interrupt";
 			gpio1-direction = "input";
 			gpio1-settings  = "level-low";
+
+			/* GPIO46 (MIO46) */
+			gpio46-label     = "wdt_interrupt";
+			gpio46-direction = "input";
+			gpio46-settings  = "edge-falling";
 
 			/* GPIO54 (EMIO0) */
 			gpio54-label     = "eth1_link_speed";
@@ -225,6 +230,8 @@
 			nidosequiscpld@40 {
 				compatible = "nidosequiscpld";
 				reg = <0x40>;
+				interrupts = <46 0>;
+				interrupt-parent = <&gpio>;
 			};
 
 			ds3231_rtc@68 {
