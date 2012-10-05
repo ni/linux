@@ -240,6 +240,9 @@ struct irq_affinity_notify {
 	void (*release)(struct kref *ref);
 };
 
+extern void init_irq_default_prio(struct irq_desc *desc);
+extern int irq_set_priority(unsigned int irq, int priority);
+
 #if defined(CONFIG_SMP)
 
 extern cpumask_var_t irq_default_affinity;

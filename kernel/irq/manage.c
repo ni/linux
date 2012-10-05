@@ -36,6 +36,11 @@ early_param("threadirqs", setup_forced_irqthreads);
 
 static int irqthread_pri = MAX_USER_RT_PRIO/2;
 
+void init_irq_default_prio(struct irq_desc *desc)
+{
+	desc->irq_data.priority = irqthread_pri;
+}
+
 static void __synchronize_hardirq(struct irq_desc *desc)
 {
 	bool inprogress;
@@ -115,6 +120,45 @@ void synchronize_irq(unsigned int irq)
 	}
 }
 EXPORT_SYMBOL(synchronize_irq);
+
+static void
+irq_thread_check_priority(struct irq_desc *desc, struct irqaction *action)
+{
+	struct sched_param param;
+
+	if (!test_and_clear_bit(IRQTF_PRIORITY, &action->thread_flags))
+		return;
+
+	param.sched_priority = desc->irq_data.priority;
+	sched_setscheduler(current, SCHED_FIFO, &param);
+}
+
+void irq_set_thread_priority(struct irq_desc *desc)
+{
+	struct irqaction *action = desc->action;
+
+	while (action) {
+		if (action->thread)
+			set_bit(IRQTF_PRIORITY, &action->thread_flags);
+		action = action->next;
+	}
+}
+
+int irq_set_priority(unsigned int irq, int priority)
+{
+	unsigned long flags;
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	if (!desc)
+		return -EINVAL;
+	if (!(priority > 0 && priority < MAX_USER_RT_PRIO))
+		return -EINVAL;
+	raw_spin_lock_irqsave(&desc->lock, flags);
+	desc->irq_data.priority = priority;
+	irq_set_thread_priority(desc);
+	raw_spin_unlock_irqrestore(&desc->lock, flags);
+	return 0;
+}
 
 #ifdef CONFIG_SMP
 cpumask_var_t irq_default_affinity;
@@ -1012,12 +1056,17 @@ static int irq_thread(void *data)
 	init_task_work(&on_exit_work, irq_thread_dtor);
 	task_work_add(current, &on_exit_work, false);
 
+	/* optimize jitter for the irq threads that don't change affinity or
+	 * priority dynamically
+	 */
 	irq_thread_check_affinity(desc, action);
+	irq_thread_check_priority(desc, action);
 
 	while (!irq_wait_for_interrupt(action)) {
 		irqreturn_t action_ret;
 
 		irq_thread_check_affinity(desc, action);
+		irq_thread_check_priority(desc, action);
 
 		action_ret = handler_fn(desc, action);
 		if (action_ret == IRQ_HANDLED)
@@ -1139,8 +1188,9 @@ static int
 setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 {
 	struct task_struct *t;
-	struct sched_param param;
-	param.sched_priority = irqthread_pri;
+	struct sched_param param = {
+		.sched_priority = irqthread_pri,
+	};
 
 	if (!secondary) {
 		t = kthread_create(irq_thread, new, "irq/%d-%s", irq,
@@ -1173,6 +1223,7 @@ setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 	 * on which the requesting code placed the interrupt.
 	 */
 	set_bit(IRQTF_AFFINITY, &new->thread_flags);
+	set_bit(IRQTF_PRIORITY, &new->thread_flags);
 	return 0;
 }
 
@@ -1421,6 +1472,18 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	}
 
 	*old_ptr = new;
+
+	/* Set default affinity mask once everything is setup.
+	 * We have to do this after the desc->action is assigned the new action
+	 * just above. If setup_affinity is called before, then the IRQ thread
+	 * associated with the new action does not inherit the core affinity
+	 * specified in /proc/irq/<irq_num>/smp_affinity file whereas the IRQ
+	 * threads of the existing action handlers do inherit.
+	 */
+	if (!shared) {
+		setup_affinity(desc, mask);
+		irq_set_thread_priority(desc);
+	}
 
 	irq_pm_install_action(desc, new);
 
