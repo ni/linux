@@ -165,6 +165,7 @@ struct irq_data {
 	void			*chip_data;
 	struct msi_desc		*msi_desc;
 	cpumask_var_t		affinity;
+	int			priority;
 };
 
 /*

@@ -81,6 +81,7 @@ static void desc_set_defaults(unsigned int irq, struct irq_desc *desc, int node,
 	desc->irq_data.chip_data = NULL;
 	desc->irq_data.handler_data = NULL;
 	desc->irq_data.msi_desc = NULL;
+	init_irq_default_prio(desc);
 	irq_settings_clr_and_set(desc, ~0, _IRQ_DEFAULT_INIT_FLAGS);
 	irqd_set(&desc->irq_data, IRQD_IRQ_DISABLED);
 	desc->handle_irq = handle_bad_irq;
