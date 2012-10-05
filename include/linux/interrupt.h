@@ -252,6 +252,8 @@ extern cpumask_var_t irq_default_affinity;
 extern int irq_set_affinity(unsigned int irq, const struct cpumask *cpumask);
 extern int irq_can_set_affinity(unsigned int irq);
 extern int irq_select_affinity(unsigned int irq);
+extern void init_irq_default_prio(struct irq_desc *desc);
+extern int irq_set_priority(unsigned int irq, int priority);
 
 extern int irq_set_affinity_hint(unsigned int irq, const struct cpumask *m);
 

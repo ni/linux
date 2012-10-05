@@ -149,6 +149,7 @@ struct irq_data {
 #ifdef CONFIG_SMP
 	cpumask_var_t		affinity;
 #endif
+	int					priority;
 };
 
 /*
