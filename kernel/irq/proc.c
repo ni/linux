@@ -5,6 +5,8 @@
  * This file contains the /proc/irq/ handling code.
  */
 
+#include <linux/uaccess.h>
+
 #include <linux/irq.h>
 #include <linux/gfp.h>
 #include <linux/proc_fs.h>
@@ -295,6 +297,57 @@ static int irq_spurious_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+static ssize_t irq_priority_proc_write(struct file *file,
+		const char __user *user_buf, size_t count, loff_t *pos)
+{
+	int priority;
+	int err = 0;
+	unsigned int irq;
+	char buffer[20];
+
+	memset(buffer, 0, sizeof(buffer));
+	if (count > sizeof(buffer) - 1)
+		count = sizeof(buffer) - 1;
+	if (copy_from_user(buffer, user_buf, count)) {
+		err = -EFAULT;
+		goto out;
+	}
+	err = kstrtoint(strstrip(buffer), 0, &priority);
+	if (err)
+		goto out;
+	irq = (int)(long)pde_data(file_inode(file));
+	err = irq_set_priority(irq, priority);
+out:
+	return err < 0 ? err : count;
+}
+
+static int show_irq_priority(int type, struct seq_file *m, void *v)
+{
+	struct irq_desc *desc = irq_to_desc((long)m->private);
+	int prio = desc->irq_data.priority;
+
+	seq_printf(m, "%d\n", prio);
+	return 0;
+}
+
+static int irq_priority_proc_show(struct seq_file *m, void *v)
+{
+	return show_irq_priority(0, m, v);
+}
+
+static int irq_priority_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, irq_priority_proc_show, pde_data(inode));
+}
+
+static const struct proc_ops irq_priority_proc_ops = {
+	.proc_open	= irq_priority_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+	.proc_write	= irq_priority_proc_write,
+};
+
 #define MAX_NAMELEN 128
 
 static int name_unique(unsigned int irq, struct irqaction *new_action)
@@ -386,6 +439,8 @@ void register_irq_proc(unsigned int irq, struct irq_desc *desc)
 	proc_create_single_data("spurious", 0444, desc->dir,
 			irq_spurious_proc_show, (void *)(long)irq);
 
+	proc_create_data("priority", 0600, desc->dir,
+			 &irq_priority_proc_ops, irqp);
 out_unlock:
 	mutex_unlock(&register_lock);
 }
@@ -407,6 +462,7 @@ void unregister_irq_proc(unsigned int irq, struct irq_desc *desc)
 # endif
 #endif
 	remove_proc_entry("spurious", desc->dir);
+	remove_proc_entry("priority", desc->dir);
 
 	sprintf(name, "%u", irq);
 	remove_proc_entry(name, root_irq_dir);
