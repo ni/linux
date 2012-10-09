@@ -278,6 +278,7 @@ header-y += nfs_fs.h
 header-y += nfs_idmap.h
 header-y += nfs_mount.h
 header-y += nfsacl.h
+header-y += niwatchdog.h
 header-y += nl80211.h
 header-y += nubus.h
 header-y += nvram.h
