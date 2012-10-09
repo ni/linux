@@ -11,12 +11,18 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+#include <linux/fs.h>
 #include <linux/i2c.h>
+#include <linux/interrupt.h>
 #include <linux/leds.h>
+#include <linux/miscdevice.h>
 #include <linux/module.h>
+#include <linux/niwatchdog.h>
 #include <linux/of.h>
 #include <linux/platform_data/ni-zynq.h>
+#include <linux/poll.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 #include <linux/workqueue.h>
 
 #define NIZYNQCPLD_VERSION		0x00
@@ -34,8 +40,27 @@
 #define DOSX_LED			0x07
 #define DOSX_ETHERNETLED		0x08
 #define DOSX_DEBUGSWITCH		0x09
+#define DOSX_WATCHDOGCONTROL		0x13
+#define DOSX_WATCHDOGCOUNTER2		0x14
+#define DOSX_WATCHDOGCOUNTER1		0x15
+#define DOSX_WATCHDOGCOUNTER0		0x16
+#define DOSX_WATCHDOGSEED2		0x17
+#define DOSX_WATCHDOGSEED1		0x18
+#define DOSX_WATCHDOGSEED0		0x19
 #define DOSX_SCRATCHPADSR		0x1E
 #define DOSX_SCRATCHPADHR		0x1F
+
+#define DOSX_WATCHDOGCONTROL_PROC_INTERRUPT	0x40
+#define DOSX_WATCHDOGCONTROL_PROC_RESET		0x20
+#define DOSX_WATCHDOGCONTROL_ENTER_USER_MODE	0x80
+#define DOSX_WATCHDOGCONTROL_PET		0x10
+#define DOSX_WATCHDOGCONTROL_RUNNING		0x08
+#define DOSX_WATCHDOGCONTROL_CAPTURECOUNTER	0x04
+#define DOSX_WATCHDOGCONTROL_RESET		0x02
+#define DOSX_WATCHDOGCONTROL_ALARM		0x01
+
+#define DOSX_WATCHDOG_MAX_COUNTER	0x00FFFFFF
+#define DOSX_WATCHDOG_COUNTER_BYTES	3
 
 struct nizynqcpld_led_desc {
 	const char *name;
@@ -61,22 +86,37 @@ struct nizynqcpld_led {
 #define to_nizynqcpld_led(x) \
 		container_of(x, struct nizynqcpld_led, cdev)
 
+struct nizynqcpld_watchdog_desc {
+	u32 watchdog_period_ns;
+};
+
+struct nizynqcpld_watchdog {
+	struct miscdevice misc_dev;
+	struct nizynqcpld_watchdog_desc *desc;
+	atomic_t available;
+	wait_queue_head_t irq_event;
+	bool expired;
+};
+
 struct nizynqcpld_desc {
 	const struct attribute **attrs;
 	u8 supported_version;
 	u8 supported_product;
 	struct nizynqcpld_led_desc *led_descs;
 	unsigned num_led_descs;
+	struct nizynqcpld_watchdog_desc *watchdog_desc;
 	u8 reboot_addr;
 	u8 scratch_hr_addr;
 	u8 scratch_sr_addr;
 	u8 switch_addr;
+	u8 watchdog_addr;
 };
 
 struct nizynqcpld {
 	struct device *dev;
 	struct nizynqcpld_desc *desc;
 	struct nizynqcpld_led *leds;
+	struct nizynqcpld_watchdog watchdog;
 	struct i2c_client *client;
 	struct mutex lock;
 	struct ni_zynq_board_reset reset;
@@ -454,6 +494,51 @@ static const struct attribute *nizynqcpld_attrs[] = {
 	NULL
 };
 
+static ssize_t dosequiscpld_wdmode_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	int err;
+	u8 tmp;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, desc->watchdog_addr, &tmp);
+	nizynqcpld_unlock(cpld);
+
+	if (err)
+		return err;
+
+	/* you write a 1 to the bit to enter user mode, but it reads as a
+	   0 in user mode for backwards compatibility */
+	tmp &= DOSX_WATCHDOGCONTROL_ENTER_USER_MODE;
+	return sprintf(buf, "%s\n", tmp ? "boot" : "user");
+}
+
+static ssize_t dosequiscpld_wdmode_store(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	int err;
+
+	/* you can only switch boot->user */
+	if (strcmp(buf, "user"))
+		return -EINVAL;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_write(cpld, desc->watchdog_addr,
+		DOSX_WATCHDOGCONTROL_ENTER_USER_MODE);
+	nizynqcpld_unlock(cpld);
+
+	return err ?: count;
+}
+
+static DEVICE_ATTR(watchdog_mode, S_IRUSR|S_IWUSR, dosequiscpld_wdmode_show,
+	dosequiscpld_wdmode_store);
+
 static const struct attribute *dosequis6_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
@@ -461,7 +546,384 @@ static const struct attribute *dosequis6_attrs[] = {
 	&dev_attr_console_out.dev_attr.attr,
 	&dev_attr_ip_reset.dev_attr.attr,
 	&dev_attr_safe_mode.dev_attr.attr,
+	&dev_attr_watchdog_mode.attr,
 	NULL
+};
+
+/*
+ * CPLD Watchdog (only for dosequis)
+ */
+static int nizynqcpld_watchdog_counter_set(struct nizynqcpld *cpld, u32 counter)
+{
+	int err;
+	u8 data[DOSX_WATCHDOG_COUNTER_BYTES];
+
+	data[0] = ((0x00FF0000 & counter) >> 16);
+	data[1] = ((0x0000FF00 & counter) >> 8);
+	data[2] =  (0x000000FF & counter);
+
+	nizynqcpld_lock(cpld);
+
+	err = i2c_smbus_write_i2c_block_data(cpld->client,
+					     DOSX_WATCHDOGSEED2,
+					     DOSX_WATCHDOG_COUNTER_BYTES,
+					     data);
+	nizynqcpld_unlock(cpld);
+	if (err)
+		dev_err(cpld->dev,
+			"Error %d writing watchdog counter.\n", err);
+	return err;
+}
+
+static int nizynqcpld_watchdog_check_action(u32 action)
+{
+	int err = 0;
+
+	switch (action) {
+	case DOSX_WATCHDOGCONTROL_PROC_INTERRUPT:
+	case DOSX_WATCHDOGCONTROL_PROC_RESET:
+		break;
+	default:
+		err = -ENOTSUPP;
+	}
+
+	return err;
+}
+
+static int nizynqcpld_watchdog_add_action(struct nizynqcpld *cpld, u32 action)
+{
+	int err;
+	u8 action_mask;
+	u8 control;
+
+	if (NIWATCHDOG_ACTION_INTERRUPT == action)
+		action_mask = DOSX_WATCHDOGCONTROL_PROC_INTERRUPT;
+	else if (NIWATCHDOG_ACTION_RESET == action)
+		action_mask = DOSX_WATCHDOGCONTROL_PROC_RESET;
+	else
+		return -ENOTSUPP;
+
+	nizynqcpld_lock(cpld);
+
+	err = nizynqcpld_read(cpld, DOSX_WATCHDOGCONTROL, &control);
+
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	}
+	control |= action_mask;
+
+	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL, control);
+
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d writing watchdog control.\n", err);
+		goto out_unlock;
+	}
+out_unlock:
+	nizynqcpld_unlock(cpld);
+	return err;
+}
+
+static int nizynqcpld_watchdog_start(struct nizynqcpld *cpld)
+{
+	int err;
+	u8 control;
+
+	nizynqcpld_lock(cpld);
+
+	cpld->watchdog.expired = false;
+
+	err = nizynqcpld_read(cpld, DOSX_WATCHDOGCONTROL, &control);
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	}
+
+	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL,
+			       control | DOSX_WATCHDOGCONTROL_RESET);
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d writing watchdog control.\n", err);
+		goto out_unlock;
+	}
+
+	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL,
+			       control | DOSX_WATCHDOGCONTROL_PET);
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d writing watchdog control.\n", err);
+		goto out_unlock;
+	}
+out_unlock:
+	nizynqcpld_unlock(cpld);
+	return err;
+}
+
+static int nizynqcpld_watchdog_pet(struct nizynqcpld *cpld, u32 *state)
+{
+	int err;
+	u8 control;
+
+	nizynqcpld_lock(cpld);
+
+	if (cpld->watchdog.expired) {
+		err = 0;
+		*state = NIWATCHDOG_STATE_EXPIRED;
+	} else {
+		err = nizynqcpld_read(cpld, DOSX_WATCHDOGCONTROL, &control);
+		if (err) {
+			dev_err(cpld->dev,
+				"Error %d reading watchdog control.\n", err);
+			goto out_unlock;
+		}
+
+		control |= DOSX_WATCHDOGCONTROL_PET;
+
+		err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL, control);
+		if (err) {
+			dev_err(cpld->dev,
+				"Error %d writing watchdog control.\n", err);
+			goto out_unlock;
+		}
+
+		*state = NIWATCHDOG_STATE_RUNNING;
+	}
+
+out_unlock:
+	nizynqcpld_unlock(cpld);
+	return err;
+}
+
+static int nizynqcpld_watchdog_reset(struct nizynqcpld *cpld)
+{
+	int err;
+
+	nizynqcpld_lock(cpld);
+
+	cpld->watchdog.expired = false;
+
+	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL,
+			       DOSX_WATCHDOGCONTROL_RESET);
+
+	nizynqcpld_unlock(cpld);
+
+	if (err)
+		dev_err(cpld->dev,
+			"Error %d writing watchdog control.\n", err);
+	return err;
+}
+
+static int nizynqcpld_watchdog_counter_get(struct nizynqcpld *cpld,
+					   u32 *counter)
+{
+	int err;
+	u8 control;
+	u8 data[DOSX_WATCHDOG_COUNTER_BYTES];
+
+	nizynqcpld_lock(cpld);
+
+	err = nizynqcpld_read(cpld, DOSX_WATCHDOGCONTROL, &control);
+
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	}
+
+	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL,
+			       control | DOSX_WATCHDOGCONTROL_CAPTURECOUNTER);
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d capturing watchdog counter.\n", err);
+		goto out_unlock;
+	}
+
+	/* Returns the number of read bytes */
+	err = i2c_smbus_read_i2c_block_data(cpld->client,
+					    DOSX_WATCHDOGCOUNTER2,
+					    DOSX_WATCHDOG_COUNTER_BYTES,
+					    data);
+	if (DOSX_WATCHDOG_COUNTER_BYTES == err)
+		err = 0;
+	else {
+		dev_err(cpld->dev,
+			"Error %d reading watchdog counter.\n", err);
+		goto out_unlock;
+	}
+
+	*counter = (data[0] << 16) | (data[1] << 8) | data[2];
+
+out_unlock:
+	nizynqcpld_unlock(cpld);
+	return err;
+}
+
+static irqreturn_t nizynqcpld_watchdog_irq(int irq, void *data)
+{
+	struct nizynqcpld *cpld = data;
+	irqreturn_t ret = IRQ_NONE;
+	u8 control;
+	int err;
+
+	nizynqcpld_lock(cpld);
+
+	err = nizynqcpld_read(cpld, DOSX_WATCHDOGCONTROL, &control);
+
+	if (err) {
+		dev_err(cpld->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	} else if (!(DOSX_WATCHDOGCONTROL_ALARM & control)) {
+		dev_err(cpld->dev,
+			"Spurious watchdog interrupt, 0x%02X\n", control);
+		goto out_unlock;
+	}
+
+	cpld->watchdog.expired = true;
+
+	/* Acknowledge the interrupt. */
+	control |= DOSX_WATCHDOGCONTROL_RESET;
+	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL, control);
+
+	/* Signal the watchdog event. */
+	wake_up_all(&cpld->watchdog.irq_event);
+
+	ret = IRQ_HANDLED;
+
+out_unlock:
+	nizynqcpld_unlock(cpld);
+	return ret;
+}
+
+static int nizynqcpld_watchdog_misc_open(struct inode *inode,
+					 struct file *file)
+{
+	struct miscdevice *misc_dev = file->private_data;
+	struct nizynqcpld *cpld = container_of(misc_dev, struct nizynqcpld,
+					       watchdog.misc_dev);
+	file->private_data = cpld;
+
+	if (!atomic_dec_and_test(&cpld->watchdog.available)) {
+		atomic_inc(&cpld->watchdog.available);
+		return -EBUSY;
+	}
+
+	return request_threaded_irq(cpld->client->irq,
+				    NULL, nizynqcpld_watchdog_irq,
+				    0, NIWATCHDOG_NAME, cpld);
+}
+
+static int nizynqcpld_watchdog_misc_release(struct inode *inode,
+					    struct file *file)
+{
+	struct nizynqcpld *cpld = file->private_data;
+	free_irq(cpld->client->irq, cpld);
+	atomic_inc(&cpld->watchdog.available);
+	return 0;
+}
+
+long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
+				    unsigned long arg)
+{
+	struct nizynqcpld *cpld = file->private_data;
+	struct nizynqcpld_watchdog_desc *desc;
+	int err;
+
+	desc = cpld->watchdog.desc;
+
+	switch (cmd) {
+	case NIWATCHDOG_IOCTL_PERIOD_NS: {
+		__u32 period = desc->watchdog_period_ns;
+		err = copy_to_user((__u32 *)arg, &period,
+				   sizeof(__u32));
+		break;
+	}
+	case NIWATCHDOG_IOCTL_MAX_COUNTER: {
+		__u32 counter = DOSX_WATCHDOG_MAX_COUNTER;
+		err = copy_to_user((__u32 *)arg, &counter,
+				   sizeof(__u32));
+		break;
+	}
+	case NIWATCHDOG_IOCTL_COUNTER_SET: {
+		__u32 counter;
+		err = copy_from_user(&counter, (__u32 *)arg,
+				     sizeof(__u32));
+		if (!err)
+			err = nizynqcpld_watchdog_counter_set(cpld, counter);
+		break;
+	}
+	case NIWATCHDOG_IOCTL_CHECK_ACTION: {
+		__u32 action;
+		err = copy_from_user(&action, (__u32 *)arg,
+				     sizeof(__u32));
+		if (!err)
+			err = nizynqcpld_watchdog_check_action(action);
+		break;
+	}
+	case NIWATCHDOG_IOCTL_ADD_ACTION: {
+		__u32 action;
+		err = copy_from_user(&action, (__u32 *)arg,
+				     sizeof(__u32));
+		if (!err)
+			err = nizynqcpld_watchdog_add_action(cpld, action);
+		break;
+	}
+	case NIWATCHDOG_IOCTL_START: {
+		err = nizynqcpld_watchdog_start(cpld);
+		break;
+	}
+	case NIWATCHDOG_IOCTL_PET: {
+		__u32 state;
+		err = nizynqcpld_watchdog_pet(cpld, &state);
+		if (!err)
+			err = copy_to_user((__u32 *)arg, &state,
+					   sizeof(__u32));
+		break;
+	}
+	case NIWATCHDOG_IOCTL_RESET: {
+		err = nizynqcpld_watchdog_reset(cpld);
+		break;
+	}
+	case NIWATCHDOG_IOCTL_COUNTER_GET: {
+		__u32 counter;
+		err = nizynqcpld_watchdog_counter_get(cpld, &counter);
+		if (!err) {
+			err = copy_to_user((__u32 *)arg, &counter,
+					   sizeof(__u32));
+		}
+		break;
+	}
+	default:
+		err = -EINVAL;
+		break;
+	};
+
+	return err;
+}
+
+unsigned int nizynqcpld_watchdog_misc_poll(struct file *file,
+					   struct poll_table_struct *wait)
+{
+	struct nizynqcpld *cpld = file->private_data;
+	unsigned int mask = 0;
+
+	poll_wait(file, &cpld->watchdog.irq_event, wait);
+	nizynqcpld_lock(cpld);
+	if (cpld->watchdog.expired)
+		mask = POLLIN;
+	nizynqcpld_unlock(cpld);
+	return mask;
+}
+
+static const struct file_operations nizynqcpld_watchdog_misc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nizynqcpld_watchdog_misc_open,
+	.release	= nizynqcpld_watchdog_misc_release,
+	.unlocked_ioctl	= nizynqcpld_watchdog_misc_ioctl,
+	.poll		= nizynqcpld_watchdog_misc_poll,
 };
 
 static struct nizynqcpld_led_desc proto_leds[] = {
@@ -554,6 +1016,14 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 	},
 };
 
+static struct nizynqcpld_watchdog_desc dosxv4_watchdog_desc = {
+	.watchdog_period_ns	= 24000,
+};
+
+static struct nizynqcpld_watchdog_desc dosxv5_watchdog_desc = {
+	.watchdog_period_ns	= 30720,
+};
+
 static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	/* DosEquis and myRIO development CPLD */
 	{
@@ -572,6 +1042,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 4,
 		.supported_product	= 0,
+		.watchdog_desc		= &dosxv4_watchdog_desc,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.reboot_addr		= DOSX_PROCESSORRESET,
@@ -584,6 +1055,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 5,
 		.supported_product	= 0,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.reboot_addr		= DOSX_PROCESSORRESET,
@@ -596,24 +1068,28 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.attrs			= dosequis6_attrs,
 		.supported_version	= 6,
 		.supported_product	= 0,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 		.switch_addr		= DOSX_DEBUGSWITCH,
+		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 	/* myRIO CPLD */
 	{
 		.attrs			= dosequis6_attrs,
 		.supported_version	= 6,
 		.supported_product	= 1,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
 		.led_descs		= dosx_leds,
 		.num_led_descs		= ARRAY_SIZE(dosx_leds),
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 		.switch_addr		= DOSX_DEBUGSWITCH,
+		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 };
 
@@ -690,6 +1166,25 @@ static int nizynqcpld_probe(struct i2c_client *client,
 		goto err_sysfs_create_files;
 	}
 
+	if (desc->watchdog_desc) {
+		struct nizynqcpld_watchdog *watchdog = &cpld->watchdog;
+
+		watchdog->desc = desc->watchdog_desc;
+		atomic_set(&watchdog->available, 1);
+		init_waitqueue_head(&watchdog->irq_event);
+		watchdog->expired = false;
+
+		watchdog->misc_dev.minor = MISC_DYNAMIC_MINOR;
+		watchdog->misc_dev.name  = NIWATCHDOG_NAME;
+		watchdog->misc_dev.fops  = &nizynqcpld_watchdog_misc_fops;
+		err = misc_register(&watchdog->misc_dev);
+		if (err) {
+			dev_err(cpld->dev,
+				"Couldn't register misc device\n");
+			goto err_watchdog_register;
+		}
+	}
+
 	cpld->reset.reset = nizynqcpld_reset;
 	ni_zynq_board_reset = &cpld->reset;
 
@@ -701,6 +1196,7 @@ static int nizynqcpld_probe(struct i2c_client *client,
 
 	return 0;
 
+err_watchdog_register:
 	sysfs_remove_files(&client->dev.kobj, desc->attrs);
 err_sysfs_create_files:
 err_led:
@@ -722,6 +1218,9 @@ static int nizynqcpld_remove(struct i2c_client *client)
 	int i;
 
 	ni_zynq_board_reset = NULL;
+
+	if (desc->watchdog_desc)
+		misc_deregister(&cpld->watchdog.misc_dev);
 
 	sysfs_remove_files(&cpld->dev->kobj, desc->attrs);
 	for (i = desc->num_led_descs - 1; i; --i)
