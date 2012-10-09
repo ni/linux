@@ -15,6 +15,12 @@
 #include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/workqueue.h>
+#include <linux/fs.h>
+#include <linux/miscdevice.h>
+#include <linux/uaccess.h>
+#include <linux/interrupt.h>
+#include <linux/poll.h>
+#include <linux/niwatchdog.h>
 
 #define NICPLD_CPLDINFOREGS		0x00
 #define NICPLD_PROCESSORSTATE		0x01
@@ -24,8 +30,31 @@
 #define NICPLD_LED			0x07
 #define NICPLD_ETHERNETLED		0x08
 #define NICPLD_DEBUGSWITCH		0x09
+#define NICPLD_WATCHDOGCONTROL		0x13
+#define NICPLD_WATCHDOGCOUNTER2		0x14
+#define NICPLD_WATCHDOGCOUNTER1		0x15
+#define NICPLD_WATCHDOGCOUNTER0		0x16
+#define NICPLD_WATCHDOGSEED2		0x17
+#define NICPLD_WATCHDOGSEED1		0x18
+#define NICPLD_WATCHDOGSEED0		0x19
 #define NICPLD_SCRATCHPADSR		0x1E
 #define NICPLD_SCRATCHPADHR		0x1F
+
+#define NICPLD_WATCHDOGCONTROL_PROC_INTERRUPT	0x40
+#define NICPLD_WATCHDOGCONTROL_PROC_RESET	0x20
+#define NICPLD_WATCHDOGCONTROL_PET		0x10
+#define NICPLD_WATCHDOGCONTROL_RUNNING		0x08
+#define NICPLD_WATCHDOGCONTROL_CAPTURECOUNTER	0x04
+#define NICPLD_WATCHDOGCONTROL_RESET		0x02
+#define NICPLD_WATCHDOGCONTROL_ALARM		0x01
+
+#define NICPLD_WATCHDOG_MIN_VERSION	4
+
+/* !!!Version 5 of the CPLD will have a different, as yet undetermined
+   watchdog clock period. The max counter value may also be different. */
+#define NICPLD_WATCHDOG_V4_PERIOD_NS	24000
+#define NICPLD_WATCHDOG_MAX_COUNTER	0x00FFFFFF
+#define NICPLD_WATCHDOG_COUNTER_BYTES	3
 
 struct nidosequiscpld_led {
 	u8 addr;
@@ -53,10 +82,18 @@ enum nidosequiscpld_leds {
 	MAX_NUM_LEDS
 };
 
+struct nidosequiscpld_watchdog {
+	u8 version;
+	atomic_t available;
+	wait_queue_head_t irq_event;
+	bool expired;
+};
+
 struct nidosequiscpld {
 	struct i2c_client *client;
 	struct mutex lock;
 	struct nidosequiscpld_led leds[MAX_NUM_LEDS];
+	struct nidosequiscpld_watchdog watchdog;
 };
 
 static struct nidosequiscpld nidosequiscpld;
@@ -482,6 +519,379 @@ static const struct attribute_group nidosequiscpld_attr_group = {
 	.attrs = nidosequiscpld_attrs,
 };
 
+
+/*
+ * CPLD Watchdog
+ */
+
+static int nidosequiscpld_watchdog_counter_set(u32 counter)
+{
+	int err;
+	u8 data[NICPLD_WATCHDOG_COUNTER_BYTES];
+
+	data [0] = ((0x00FF0000 & counter) >> 16);
+	data [1] = ((0x0000FF00 & counter) >> 8);
+	data [2] =  (0x000000FF & counter);
+
+	nidosequiscpld_lock();
+
+	err = i2c_smbus_write_i2c_block_data(nidosequiscpld.client,
+					     NICPLD_WATCHDOGSEED2,
+					     NICPLD_WATCHDOG_COUNTER_BYTES,
+					     data);
+	nidosequiscpld_unlock();
+	if (err)
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d writing watchdog counter.\n", err);
+	return err;
+}
+
+static int nidosequiscpld_watchdog_check_action(u32 action)
+{
+	int err = 0;
+
+	switch (action) {
+		case NICPLD_WATCHDOGCONTROL_PROC_INTERRUPT:
+		case NICPLD_WATCHDOGCONTROL_PROC_RESET:
+			break;
+		default:
+			err = -ENOTSUPP;
+	}
+
+	return err;
+}
+
+static int nidosequiscpld_watchdog_add_action(u32 action)
+{
+	int err;
+	u8 action_mask;
+	u8 control;
+
+	if (NIWATCHDOG_ACTION_INTERRUPT == action)
+		action_mask = NICPLD_WATCHDOGCONTROL_PROC_INTERRUPT;
+	else if (NIWATCHDOG_ACTION_RESET == action)
+		action_mask = NICPLD_WATCHDOGCONTROL_PROC_RESET;
+	else
+		return -ENOTSUPP;
+
+	nidosequiscpld_lock();
+
+	err = nidosequiscpld_read(NICPLD_WATCHDOGCONTROL, &control);
+
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	}
+	control |= action_mask;
+
+	err = nidosequiscpld_write(NICPLD_WATCHDOGCONTROL, control);
+
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d writing watchdog control.\n", err);
+		goto out_unlock;
+	}
+out_unlock:
+	nidosequiscpld_unlock();
+	return err;
+}
+
+static int nidosequiscpld_watchdog_start(void)
+{
+	int err;
+	u8 control;
+
+	nidosequiscpld_lock();
+
+	nidosequiscpld.watchdog.expired = false;
+
+	err = nidosequiscpld_read(NICPLD_WATCHDOGCONTROL, &control);
+
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	}
+	err = nidosequiscpld_write(NICPLD_WATCHDOGCONTROL,
+				   control | NICPLD_WATCHDOGCONTROL_RESET);
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d writing watchdog control.\n", err);
+		goto out_unlock;
+	}
+	err = nidosequiscpld_write(NICPLD_WATCHDOGCONTROL,
+				   control | NICPLD_WATCHDOGCONTROL_PET);
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d writing watchdog control.\n", err);
+		goto out_unlock;
+	}
+out_unlock:
+	nidosequiscpld_unlock();
+	return err;
+}
+
+static int nidosequiscpld_watchdog_pet(u32 *state)
+{
+	int err;
+	u8 control;
+
+	nidosequiscpld_lock();
+
+	if (nidosequiscpld.watchdog.expired) {
+		err = 0;
+		*state = NIWATCHDOG_STATE_EXPIRED;
+	} else {
+		err = nidosequiscpld_read(NICPLD_WATCHDOGCONTROL, &control);
+
+		if (err) {
+			dev_err(&nidosequiscpld.client->dev,
+				"Error %d reading watchdog control.\n", err);
+			goto out_unlock;
+		}
+		control |= NICPLD_WATCHDOGCONTROL_PET;
+
+		err = nidosequiscpld_write(NICPLD_WATCHDOGCONTROL, control);
+
+		if (err) {
+			dev_err(&nidosequiscpld.client->dev,
+				"Error %d writing watchdog control.\n", err);
+			goto out_unlock;
+		}
+
+		*state = NIWATCHDOG_STATE_RUNNING;
+	}
+
+out_unlock:
+	nidosequiscpld_unlock();
+	return err;
+}
+
+static int nidosequiscpld_watchdog_reset(void)
+{
+	int err;
+
+	nidosequiscpld_lock();
+
+	nidosequiscpld.watchdog.expired = false;
+
+	err = nidosequiscpld_write(NICPLD_WATCHDOGCONTROL,
+				   NICPLD_WATCHDOGCONTROL_RESET);
+	nidosequiscpld_unlock();
+	if (err)
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d writing watchdog control.\n", err);
+	return err;
+}
+
+static int nidosequiscpld_watchdog_counter_get(u32 *counter)
+{
+	int err;
+	u8 control;
+	u8 data[NICPLD_WATCHDOG_COUNTER_BYTES];
+
+	nidosequiscpld_lock();
+
+	err = nidosequiscpld_read(NICPLD_WATCHDOGCONTROL, &control);
+
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	}
+
+	err = nidosequiscpld_write(NICPLD_WATCHDOGCONTROL,
+			control | NICPLD_WATCHDOGCONTROL_CAPTURECOUNTER);
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d capturing watchdog counter.\n", err);
+		goto out_unlock;
+	}
+
+	/* Returns the number of read bytes */
+	err = i2c_smbus_read_i2c_block_data(nidosequiscpld.client,
+					    NICPLD_WATCHDOGCOUNTER2,
+					    NICPLD_WATCHDOG_COUNTER_BYTES,
+					    data);
+	if (NICPLD_WATCHDOG_COUNTER_BYTES == err)
+		err = 0;
+	else {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d reading watchdog counter.\n", err);
+		goto out_unlock;
+	}
+
+	*counter = (data[0] << 16) | (data[1] << 8) | data[2];
+
+out_unlock:
+	nidosequiscpld_unlock();
+	return err;
+}
+
+static irqreturn_t nidosequiscpld_watchdog_irq(int irq, void *unused)
+{
+	irqreturn_t ret = IRQ_NONE;
+	u8 control;
+	int err;
+
+	nidosequiscpld_lock();
+
+	err = nidosequiscpld_read(NICPLD_WATCHDOGCONTROL, &control);
+
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d reading watchdog control.\n", err);
+		goto out_unlock;
+	} else if (!(NICPLD_WATCHDOGCONTROL_ALARM & control)) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Spurious watchdog interrupt, 0x%02X\n", control);
+		goto out_unlock;
+	}
+
+	nidosequiscpld.watchdog.expired = true;
+
+	/* Acknowledge the interrupt. */
+	control |= NICPLD_WATCHDOGCONTROL_RESET;
+	err = nidosequiscpld_write(NICPLD_WATCHDOGCONTROL, control);
+
+	/* Signal the watchdog event. */
+	wake_up_all(&nidosequiscpld.watchdog.irq_event);
+
+	ret = IRQ_HANDLED;
+
+out_unlock:
+	nidosequiscpld_unlock();
+	return ret;
+}
+
+static int nidosequiscpld_watchdog_misc_open(struct inode *inode,
+					     struct file *file)
+{
+	if (!atomic_dec_and_test(&nidosequiscpld.watchdog.available)) {
+		atomic_inc(&nidosequiscpld.watchdog.available);
+		return -EBUSY;
+	}
+
+	return request_threaded_irq(nidosequiscpld.client->irq,
+				    NULL, nidosequiscpld_watchdog_irq,
+				    0, NIWATCHDOG_NAME, NULL);
+}
+
+static int nidosequiscpld_watchdog_misc_release(struct inode *inode,
+						struct file *file)
+{
+	free_irq(nidosequiscpld.client->irq, NULL);
+	atomic_inc(&nidosequiscpld.watchdog.available);
+	return 0;
+}
+
+long nidosequiscpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
+					unsigned long arg)
+{
+	int err;
+
+	switch(cmd) {
+		case NIWATCHDOG_IOCTL_PERIOD_NS: {
+			/* !!!Support v5 and newer when available. */
+			__u32 period = NICPLD_WATCHDOG_V4_PERIOD_NS;
+			err = copy_to_user((__u32 *)arg, &period,
+					   sizeof(__u32));
+			break;
+		}
+		case NIWATCHDOG_IOCTL_MAX_COUNTER: {
+			__u32 counter = NICPLD_WATCHDOG_MAX_COUNTER;
+			err = copy_to_user((__u32 *)arg, &counter,
+					   sizeof(__u32));
+			break;
+		}
+		case NIWATCHDOG_IOCTL_COUNTER_SET: {
+			__u32 counter;
+			err = copy_from_user(&counter, (__u32 *)arg,
+					     sizeof(__u32));
+			if (!err)
+				err = nidosequiscpld_watchdog_counter_set(
+					counter);
+			break;
+		}
+		case NIWATCHDOG_IOCTL_CHECK_ACTION: {
+			__u32 action;
+			err = copy_from_user(&action, (__u32 *)arg,
+					     sizeof(__u32));
+			if (!err)
+				err = nidosequiscpld_watchdog_check_action (
+					action);
+			break;
+		}
+		case NIWATCHDOG_IOCTL_ADD_ACTION: {
+			__u32 action;
+			err = copy_from_user(&action, (__u32 *)arg,
+					     sizeof(__u32));
+			if (!err)
+				err = nidosequiscpld_watchdog_add_action (
+					action);
+			break;
+		}
+		case NIWATCHDOG_IOCTL_START: {
+			err = nidosequiscpld_watchdog_start();
+			break;
+		}
+		case NIWATCHDOG_IOCTL_PET: {
+			__u32 state;
+			err = nidosequiscpld_watchdog_pet(&state);
+			if (!err)
+				err = copy_to_user((__u32 *)arg, &state,
+						   sizeof(__u32));
+			break;
+		}
+		case NIWATCHDOG_IOCTL_RESET: {
+			err = nidosequiscpld_watchdog_reset();
+			break;
+		}
+		case NIWATCHDOG_IOCTL_COUNTER_GET: {
+			__u32 counter;
+			err = nidosequiscpld_watchdog_counter_get(&counter);
+			if (!err) {
+				err = copy_to_user((__u32 *)arg, &counter,
+						   sizeof(__u32));
+			}
+			break;
+		}
+		default:
+			err = -EINVAL;
+			break;
+	};
+
+	return err;
+}
+
+unsigned int nidosequiscpld_watchdog_misc_poll (struct file *file,
+						struct poll_table_struct *wait)
+{
+	unsigned int mask = 0;
+
+	poll_wait(file, &nidosequiscpld.watchdog.irq_event, wait);
+	nidosequiscpld_lock();
+	if (nidosequiscpld.watchdog.expired)
+		mask = POLLIN;
+	nidosequiscpld_unlock();
+	return mask;
+}
+
+static const struct file_operations nidosequiscpld_watchdog_misc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nidosequiscpld_watchdog_misc_open,
+	.release	= nidosequiscpld_watchdog_misc_release,
+	.unlocked_ioctl	= nidosequiscpld_watchdog_misc_ioctl,
+	.poll		= nidosequiscpld_watchdog_misc_poll,
+};
+
+static struct miscdevice nidosequiscpld_watchdog_misc_dev = {
+	.minor		= MISC_DYNAMIC_MINOR,
+	.name		= NIWATCHDOG_NAME,
+	.fops		= &nidosequiscpld_watchdog_misc_fops,
+};
+
 static int nidosequiscpld_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int err;
@@ -504,6 +914,27 @@ static int nidosequiscpld_probe(struct i2c_client *client, const struct i2c_devi
 		if (err)
 			goto err_led;
 	}
+	err = nidosequiscpld_read(NICPLD_CPLDINFOREGS,
+				  &nidosequiscpld.watchdog.version);
+	if (err) {
+		dev_err(&nidosequiscpld.client->dev,
+			"Error %d reading watchdog version.\n", err);
+		goto err_led;
+	}
+
+	/* !!!Don't support version 5 or newer until we know how to do so. */
+	if (NICPLD_WATCHDOG_MIN_VERSION == nidosequiscpld.watchdog.version) {
+		atomic_set(&nidosequiscpld.watchdog.available, 1);
+		init_waitqueue_head(&nidosequiscpld.watchdog.irq_event);
+		nidosequiscpld.watchdog.expired = false;
+
+		err = misc_register(&nidosequiscpld_watchdog_misc_dev);
+		if (err) {
+			dev_err(&client->dev,
+				"Couldn't register misc device\n");
+			goto err_led;
+		}
+	}
 
 	dev_info(&client->dev, "%s National Instruments Dos Equis CPLD found.\n",
 							client->name);
@@ -524,6 +955,9 @@ static int __devexit nidosequiscpld_remove(struct i2c_client *client)
 	for (i = ARRAY_SIZE(nidosequiscpld.leds) - 1; i; --i)
 		led_classdev_unregister(&nidosequiscpld.leds[i].cdev);
 	sysfs_remove_group(&client->dev.kobj, &nidosequiscpld_attr_group);
+	/* !!!Don't support version 5 or newer until we know how to do so. */
+	if (NICPLD_WATCHDOG_MIN_VERSION == nidosequiscpld.watchdog.version)
+		misc_deregister(&nidosequiscpld_watchdog_misc_dev);
 	nidosequiscpld.client = NULL;
 	return 0;
 }
