@@ -69,44 +69,13 @@
 				compatible = "marvell,88e1512";
 				device_type = "ethernet-phy";
 				reg = <0x0>;
-				/* Interrupt on GPIO1, shared with phy1. */
+				/* Interrupt on GPIO1 */
 				interrupts = <1 0>;
 				interrupt-parent = <&gpio>;
 				/* Page 3, Register 16, LED[2:0] Function
 				   Control Register */
 				leds = <0x1881>;
 			};
-
-			phy1: phy@1 {
-				compatible = "lsi,et1011c";
-				device_type = "ethernet-phy";
-				reg = <0x1>;
-				/* Interrupt on GPIO1, shared with phy0. */
-				interrupts = <1 0>;
-				interrupt-parent = <&gpio>;
-				/* LED Control 1 values for Off, 10Mb, 100Mb,
-				   and 1Gb, followed by LED Control 2 values
-				   for Off, 10Mb, 100Mb, and 1Gb, followed by
-				   LED Control 3 value. */
-				leds = <0x0001 0x0001 0x0001 0x8001 0xFAFE 0xFAFE 0xFAFF 0xFAEF 0x0A55>;
-			};
-		};
-
-		eth@e000c000 {
-			compatible = "xlnx,ps7-ethernet-1.00.a";
-			reg = <0xe000c000 0x1000>;
-			interrupts = <0 45 0>;
-			phy-handle = <&phy1>;
-			xlnx,slcr-div0-1000Mbps = <8>;
-			xlnx,slcr-div0-100Mbps = <8>;
-			xlnx,slcr-div0-10Mbps = <8>;
-			xlnx,slcr-div1-1000Mbps = <1>;
-			xlnx,slcr-div1-100Mbps = <5>;
-			xlnx,slcr-div1-10Mbps = <50>;
-			xlnx,no_mdio_bus;
-			xlnx,emio-fpga-clk = <1>;
-			#address-cells = <0x1>;
-			#size-cells = <0x0>;
 		};
 
 		nand@e1000000 {
@@ -171,25 +140,15 @@
 			gpio1-settings  = "level-low";
 		};
 
-		i2c0: i2c@e0004000 {
+		i2c0: i2c@e0005000 {
 			compatible = "xlnx,ps7-i2c-1.00.a";
-			reg = <0xE0004000 0x1000>;
-			interrupts = <0 25 0>;
+			reg = <0xE0005000 0x1000>;
+			interrupts = <0 48 0>;
 			bus-id = <0>;
 			input-clk = <133000000>;
 			i2c-clk = <400000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-
-			nizynqcpld@40 {
-				compatible = "nizynqcpld";
-				reg = <0x40>;
-			};
-
-			ds3231_rtc@68 {
-				compatible = "ds3232";
-				reg = <0x68>;
-			};
 		};
 
 		devcfg@f8007000 {
