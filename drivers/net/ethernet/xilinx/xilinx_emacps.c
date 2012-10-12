@@ -2860,26 +2860,27 @@ int xemacps_fpga_notifier(struct notifier_block *nb, unsigned long val, void *da
 
 	switch(val) {
 		case FPGA_PERIPHERAL_DOWN:
-			dev_dbg(&lp->pdev->dev, "xemacps_fpga_notifier: going down\n");
-
-			BUG_ON(test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags));
+			dev_dbg(&lp->pdev->dev,
+				"xemacps_fpga_notifier: going down\n");
 
 			/* Synchronize with xemacps_open/close. */
 			rtnl_lock();
+			if (!test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags)) {
+				/* If the interface has been opened. */
+				if (netif_running(lp->ndev))
+					/* Shut down the interface but don't
+					   turn off carrier. This speeds up
+					   the recovery. */
+					xemacps_down(lp->ndev, false);
 
-			/* If the interface has been opened. */
-			if (netif_running(lp->ndev))
-				/* Shut down the interface but don't turn off
-				   carrier. This speeds up the recovery. */
-				xemacps_down(lp->ndev, false);
-
-			set_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags);
-
+				set_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags);
+			}
 			rtnl_unlock();
 			break;
 
 		case FPGA_PERIPHERAL_UP:
-			dev_dbg(&lp->pdev->dev, "xemacps_fpga_notifier: coming up\n");
+			dev_dbg(&lp->pdev->dev,
+				"xemacps_fpga_notifier: coming up\n");
 
 			BUG_ON(!test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags));
 
