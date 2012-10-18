@@ -16,6 +16,7 @@
 #define __MACH_SYSTEM_H__
 
 #include <asm/proc-fns.h>
+#include "slcr.h"
 
 static inline void arch_idle(void)
 {
@@ -32,6 +33,8 @@ static inline void arch_reset(char mode, const char *cmd)
 {
 	if (zynq_board_reset)
 		zynq_board_reset->reset(zynq_board_reset);
+	else
+		xslcr_system_reset();
 }
 
 #endif
