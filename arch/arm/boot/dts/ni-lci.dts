@@ -7,14 +7,12 @@
 	#size-cells = <0x1>;
 	interrupt-parent = <&gic>;
 
+	/* Populated by the bootloader */
 	memory {
 		device_type = "memory";
-		reg = <0x00000000 0x20000000>;
+		reg = <0 0>;
 	};
-	chosen {
-		bootargs = "console=ttyPS0,115200 ramdisk_size=65536 root=/dev/ram rw ip=:::::eth0:dhcp";
-		linux,stdout-path = "/amba@0/uart@E0001000";
-	};
+	chosen { };
 
 	amba@0 {
 		compatible = "simple-bus";
