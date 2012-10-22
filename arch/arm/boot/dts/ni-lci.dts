@@ -197,5 +197,10 @@
 			reg = <0xf8007000 0x1000>;
 			interrupts = <0 8 0>;
 		};
+
+		lcifpga@40000000 {
+			compatible = "ni,lci-1.00.a";
+			reg = <0x40000000 0x140000>;
+		};
 	};
 };
