@@ -199,6 +199,7 @@ static int of_platform_serial_probe(struct platform_device *ofdev)
 	{
 		u32 tx_threshold;
 		struct uart_8250_port port8250;
+
 		memset(&port8250, 0, sizeof(port8250));
 		port8250.port = port;
 
@@ -221,8 +222,27 @@ static int of_platform_serial_probe(struct platform_device *ofdev)
 #ifdef CONFIG_SERIAL_8250_NI16550
 	case PORT_NI16550:
 	{
+		struct device_node *np = ofdev->dev.of_node;
+		const char *transceiver;
+
 		struct uart_8250_port port8250;
-		ret = ni16550_register_port(&port8250);
+		memset(&port8250, 0, sizeof(port8250));
+		port8250.port = port;
+
+		if (of_property_read_string(np, "transceiver", &transceiver)) {
+			dev_warn(&ofdev->dev, "no transceiver property set\n");
+			return -ENODEV;
+		}
+		if (strcmp(transceiver, "RS-232") == 0) {
+			ret = serial8250_register_8250_port(&port8250);
+		} else if (strcmp(transceiver, "RS-485") == 0) {
+			ret = ni16550_register_port(&port8250);
+		} else {
+			dev_warn(&ofdev->dev,
+				"unsupported transceiver property (%s)\n",
+				transceiver);
+			return -EINVAL;
+		}
 		break;
 	}
 #endif
@@ -258,8 +278,20 @@ static int of_platform_serial_remove(struct platform_device *ofdev)
 		break;
 #ifdef CONFIG_SERIAL_8250_NI16550
 	case PORT_NI16550:
-		ni16550_unregister_port(info->line);
+	{
+		struct device_node *np = ofdev->dev.of_node;
+		const char *transceiver;
+		if (of_property_read_string(np, "transceiver", &transceiver)) {
+			dev_warn(&ofdev->dev, "no transceiver property set\n");
+		} else {
+			if (strcmp(transceiver, "RS-485") == 0) {
+				ni16550_unregister_port(info->line);
+				break;
+			}
+		}
+		serial8250_unregister_port(info->line);
 		break;
+	}
 #endif
 	default:
 		/* need to add code for these */
