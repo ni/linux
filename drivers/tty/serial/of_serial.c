@@ -124,8 +124,25 @@ static int __devinit of_platform_serial_probe(struct platform_device *ofdev)
 #endif
 #ifdef CONFIG_SERIAL_NI16550
 	case PORT_NI16550:
-		ret = ni16550_register_port(&port);
+	{
+		struct device_node *np = ofdev->dev.of_node;
+		const char *transceiver;
+		if (of_property_read_string(np, "transceiver", &transceiver)) {
+			dev_warn(&ofdev->dev, "no transceiver property set\n");
+			return -ENODEV;
+		}
+		if (strcmp(transceiver, "RS-232") == 0) {
+			ret = serial8250_register_port(&port);
+		} else if (strcmp(transceiver, "RS-485") == 0) {
+			ret = ni16550_register_port(&port);
+		} else {
+			dev_warn(&ofdev->dev,
+				 "unsupported transceiver property (%s)\n",
+				 transceiver);
+			return -EINVAL;
+		}
 		break;
+	}
 #endif
 #ifdef CONFIG_SERIAL_OF_PLATFORM_NWPSERIAL
 	case PORT_NWPSERIAL:
@@ -166,8 +183,20 @@ static int of_platform_serial_remove(struct platform_device *ofdev)
 #endif
 #ifdef CONFIG_SERIAL_NI16550
 	case PORT_NI16550:
-		ni16550_unregister_port(info->line);
+	{
+		struct device_node *np = ofdev->dev.of_node;
+		const char *transceiver;
+		if (of_property_read_string(np, "transceiver", &transceiver)) {
+			dev_warn(&ofdev->dev, "no transceiver property set\n");
+		} else {
+			if (strcmp(transceiver, "RS-485") == 0) {
+				ni16550_unregister_port(info->line);
+				break;
+			}
+		}
+		serial8250_unregister_port(info->line);
 		break;
+	}
 #endif
 #ifdef CONFIG_SERIAL_OF_PLATFORM_NWPSERIAL
 	case PORT_NWPSERIAL:

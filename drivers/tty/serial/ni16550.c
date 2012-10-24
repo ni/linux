@@ -1,5 +1,5 @@
 /*
- *  NI 16550 UART Driver
+ *  NI 16550 Transceiver Driver
  *
  *  The National Instruments (NI) 16550 has built-in RS-485 transceiver control
  *  circuitry. This driver extends the 16550 driver provided by Linux with
