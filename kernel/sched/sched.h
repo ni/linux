@@ -1059,6 +1059,15 @@ extern void init_sched_fair_class(void);
 extern void resched_task(struct task_struct *p);
 extern void resched_cpu(int cpu);
 
+#ifdef CONFIG_PREEMPT_LAZY
+extern void resched_task_lazy(struct task_struct *tsk);
+#else
+static inline void resched_task_lazy(struct task_struct *tsk)
+{
+	resched_task(tsk);
+}
+#endif
+
 extern struct rt_bandwidth def_rt_bandwidth;
 extern void init_rt_bandwidth(struct rt_bandwidth *rt_b, u64 period, u64 runtime);
 

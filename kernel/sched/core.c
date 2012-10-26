@@ -538,6 +538,37 @@ void resched_task(struct task_struct *p)
 		smp_send_reschedule(cpu);
 }
 
+#ifdef CONFIG_PREEMPT_LAZY
+void resched_task_lazy(struct task_struct *p)
+{
+	int cpu;
+
+	if (!sched_feat(PREEMPT_LAZY)) {
+		resched_task(p);
+		return;
+	}
+
+	assert_raw_spin_locked(&task_rq(p)->lock);
+
+	if (test_tsk_need_resched(p))
+		return;
+
+	if (test_tsk_need_resched_lazy(p))
+		return;
+
+	set_tsk_need_resched_lazy(p);
+
+	cpu = task_cpu(p);
+	if (cpu == smp_processor_id())
+		return;
+
+	/* NEED_RESCHED_LAZY must be visible before we test polling */
+	smp_mb();
+	if (!tsk_is_polling(p))
+		smp_send_reschedule(cpu);
+}
+#endif
+
 void resched_cpu(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
@@ -702,6 +733,17 @@ void resched_task(struct task_struct *p)
 	assert_raw_spin_locked(&task_rq(p)->lock);
 	set_tsk_need_resched(p);
 }
+#ifdef CONFIG_PREEMPT_LAZY
+void resched_task_lazy(struct task_struct *p)
+{
+	if (!sched_feat(PREEMPT_LAZY)) {
+		resched_task(p);
+		return;
+	}
+	assert_raw_spin_locked(&task_rq(p)->lock);
+	set_tsk_need_resched_lazy(p);
+}
+#endif
 #endif /* CONFIG_SMP */
 
 #if defined(CONFIG_RT_GROUP_SCHED) || (defined(CONFIG_FAIR_GROUP_SCHED) && \
@@ -1735,6 +1777,9 @@ void sched_fork(struct task_struct *p)
 #ifdef CONFIG_PREEMPT_COUNT
 	/* Want to start with kernel preemption disabled. */
 	task_thread_info(p)->preempt_count = 1;
+#endif
+#ifdef CONFIG_HAVE_PREEMPT_LAZY
+	task_thread_info(p)->preempt_lazy_count = 0;
 #endif
 #ifdef CONFIG_SMP
 	plist_node_init(&p->pushable_tasks, MAX_PRIO);
@@ -2953,6 +2998,7 @@ void migrate_disable(void)
 		return;
 	}
 
+	preempt_lazy_disable();
 	pin_current_cpu();
 	p->migrate_disable = 1;
 	preempt_enable();
@@ -3008,6 +3054,7 @@ void migrate_enable(void)
 
 	unpin_current_cpu();
 	preempt_enable();
+	preempt_lazy_enable();
 }
 EXPORT_SYMBOL(migrate_enable);
 #else
@@ -3129,6 +3176,7 @@ need_resched:
 	put_prev_task(rq, prev);
 	next = pick_next_task(rq);
 	clear_tsk_need_resched(prev);
+	clear_tsk_need_resched_lazy(prev);
 	rq->skip_clock_update = 0;
 
 	if (likely(prev != next)) {
@@ -3234,6 +3282,14 @@ asmlinkage void __sched notrace preempt_schedule(void)
 	 */
 	if (likely(ti->preempt_count || irqs_disabled()))
 		return;
+
+#ifdef CONFIG_PREEMPT_LAZY
+	/*
+	 * Check for lazy preemption
+	 */
+	if (ti->preempt_lazy_count && !test_thread_flag(TIF_NEED_RESCHED))
+		return;
+#endif
 
 	do {
 		add_preempt_count_notrace(PREEMPT_ACTIVE);
@@ -4946,7 +5002,9 @@ void __cpuinit init_idle(struct task_struct *idle, int cpu)
 
 	/* Set the preempt count _outside_ the spinlocks! */
 	task_thread_info(idle)->preempt_count = 0;
-
+#ifdef CONFIG_HAVE_PREEMPT_LAZY
+	task_thread_info(idle)->preempt_lazy_count = 0;
+#endif
 	/*
 	 * The idle tasks have their own, simple scheduling class:
 	 */

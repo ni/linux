@@ -23,15 +23,38 @@
 
 #define preempt_count()	(current_thread_info()->preempt_count)
 
+#ifdef CONFIG_PREEMPT_LAZY
+#define add_preempt_lazy_count(val)	do { preempt_lazy_count() += (val); } while (0)
+#define sub_preempt_lazy_count(val)	do { preempt_lazy_count() -= (val); } while (0)
+#define inc_preempt_lazy_count()	add_preempt_lazy_count(1)
+#define dec_preempt_lazy_count()	sub_preempt_lazy_count(1)
+#define preempt_lazy_count()		(current_thread_info()->preempt_lazy_count)
+#else
+#define add_preempt_lazy_count(val)	do { } while (0)
+#define sub_preempt_lazy_count(val)	do { } while (0)
+#define inc_preempt_lazy_count()	do { } while (0)
+#define dec_preempt_lazy_count()	do { } while (0)
+#define preempt_lazy_count()		(0)
+#endif
+
 #ifdef CONFIG_PREEMPT
 
 asmlinkage void preempt_schedule(void);
 
+# ifdef CONFIG_PREEMPT_LAZY
 #define preempt_check_resched() \
 do { \
-	if (unlikely(test_thread_flag(TIF_NEED_RESCHED))) \
+	if (unlikely(test_thread_flag(TIF_NEED_RESCHED) || \
+		     test_thread_flag(TIF_NEED_RESCHED_LAZY)))  \
 		preempt_schedule(); \
 } while (0)
+# else
+#define preempt_check_resched() \
+do { \
+	if (unlikely(test_thread_flag(TIF_NEED_RESCHED)))	\
+		preempt_schedule(); \
+} while (0)
+# endif
 
 #ifdef CONFIG_CONTEXT_TRACKING
 
@@ -64,6 +87,12 @@ do { \
 	barrier(); \
 } while (0)
 
+#define preempt_lazy_disable() \
+do { \
+	inc_preempt_lazy_count(); \
+	barrier(); \
+} while (0)
+
 #define sched_preempt_enable_no_resched() \
 do { \
 	barrier(); \
@@ -81,6 +110,13 @@ do { \
 #define preempt_enable() \
 do { \
 	sched_preempt_enable_no_resched(); \
+	barrier(); \
+	preempt_check_resched(); \
+} while (0)
+
+#define preempt_lazy_enable() \
+do { \
+	dec_preempt_lazy_count(); \
 	barrier(); \
 	preempt_check_resched(); \
 } while (0)
