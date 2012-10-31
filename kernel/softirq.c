@@ -564,7 +564,7 @@ static __init int set_ksoftirqd_pri(char *str)
 	int pri;
 
 	get_option(&str, &pri);
-	if (rt_prio(pri))
+	if (pri > 0 && pri < MAX_USER_RT_PRIO)
 		ksoftirqd_pri = pri;
 	return 0;
 }

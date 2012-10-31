@@ -210,7 +210,7 @@ int irq_set_priority(unsigned int irq, int priority)
 
 	if (!desc)
 		return -EINVAL;
-	if (!rt_prio(priority))
+	if (!(priority > 0 && priority < MAX_USER_RT_PRIO))
 		return -EINVAL;
 	raw_spin_lock_irqsave(&desc->lock, flags);
 	desc->irq_data.priority = priority;
@@ -894,7 +894,7 @@ static __init int set_irqthread_pri(char *str)
 	int pri;
 
 	get_option(&str, &pri);
-	if (rt_prio(pri))
+	if (pri > 0 && pri < MAX_USER_RT_PRIO)
 		irqthread_pri = pri;
 	return 0;
 }
