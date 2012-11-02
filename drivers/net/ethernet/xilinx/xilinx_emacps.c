@@ -529,6 +529,90 @@ struct xemacps_bd {
 	u32 ctrl;
 };
 
+
+/* Describes the name and offset of an individual statistic register, as
+   returned by `ethtool -S`. Also describes which net_device_stats statistics
+   this register should contribute to. */
+struct xemacps_statistic {
+	char stat_string[ETH_GSTRING_LEN];
+	int offset;
+	u32 stat_bits;
+};
+
+/* Bitfield defs for net_device_stat statistics */
+#define NDS_RXERR		1<<0
+#define NDS_RXLENERR		1<<1
+#define NDS_RXOVERERR		1<<2
+#define NDS_RXCRCERR		1<<3
+#define NDS_RXFRAMEERR		1<<4
+#define NDS_RXFIFOERR		1<<5
+#define NDS_TXERR		1<<6
+#define NDS_TXABORTEDERR	1<<7
+#define NDS_TXCARRIERERR	1<<8
+#define NDS_TXFIFOERR		1<<9
+#define NDS_COLLISIONS		1<<10
+
+#define XEMACPS_STAT(name) XEMACPS_STAT_TITLE_BITS(name, #name, 0)
+#define XEMACPS_STAT_TITLE(name, title) XEMACPS_STAT_TITLE_BITS(name, title, 0)
+#define XEMACPS_STAT_BITS(name, bits) XEMACPS_STAT_TITLE_BITS(name, #name, bits)
+#define XEMACPS_STAT_TITLE_BITS(name, title, bits) { 	\
+	.stat_string = title,				\
+	.offset = XEMACPS_##name##_OFFSET,		\
+	.stat_bits = bits				\
+}
+
+/* list of xemacps statistic registers. The names MUST match the
+   corresponding XEMACPS_*_OFFSET definitions. */
+static const struct xemacps_statistic xemacps_statistics[] = {
+	XEMACPS_STAT_TITLE(OCTTXL, "OCTTX"),
+	/* OCTTXH is read by OCTTXL; cf xemacps_update_stats */
+	XEMACPS_STAT(TXCNT),
+	XEMACPS_STAT(TXBCCNT),
+	XEMACPS_STAT(TXMCCNT),
+	XEMACPS_STAT(TXPAUSECNT),
+	XEMACPS_STAT(TX64CNT),
+	XEMACPS_STAT(TX65CNT),
+	XEMACPS_STAT(TX128CNT),
+	XEMACPS_STAT(TX256CNT),
+	XEMACPS_STAT(TX512CNT),
+	XEMACPS_STAT(TX1024CNT),
+	XEMACPS_STAT(TX1519CNT),
+	XEMACPS_STAT_BITS(TXURUNCNT, NDS_TXERR|NDS_TXFIFOERR),
+	XEMACPS_STAT_BITS(SNGLCOLLCNT, NDS_TXERR|NDS_COLLISIONS),
+	XEMACPS_STAT_BITS(MULTICOLLCNT, NDS_TXERR|NDS_COLLISIONS),
+	XEMACPS_STAT_BITS(EXCESSCOLLCNT,
+		NDS_TXERR|NDS_TXABORTEDERR|NDS_COLLISIONS),
+	XEMACPS_STAT_BITS(LATECOLLCNT, NDS_TXERR|NDS_COLLISIONS),
+	XEMACPS_STAT(TXDEFERCNT),
+	XEMACPS_STAT_BITS(CSENSECNT, NDS_TXERR|NDS_TXCARRIERERR),
+	XEMACPS_STAT_TITLE(OCTRXL, "OCTRX"),
+	/* OCTRXH is read by OCTRXL; cf xemacps_update_stats */
+	XEMACPS_STAT(RXCNT),
+	XEMACPS_STAT(RXBROADCNT),
+	XEMACPS_STAT(RXMULTICNT),
+	XEMACPS_STAT(RXPAUSECNT),
+	XEMACPS_STAT(RX64CNT),
+	XEMACPS_STAT(RX65CNT),
+	XEMACPS_STAT(RX128CNT),
+	XEMACPS_STAT(RX256CNT),
+	XEMACPS_STAT(RX512CNT),
+	XEMACPS_STAT(RX1024CNT),
+	XEMACPS_STAT(RX1519CNT),
+	XEMACPS_STAT_BITS(RXUNDRCNT, NDS_RXERR|NDS_RXLENERR),
+	XEMACPS_STAT_BITS(RXOVRCNT, NDS_RXERR|NDS_RXLENERR),
+	XEMACPS_STAT_BITS(RXJABCNT, NDS_RXERR|NDS_RXLENERR),
+	XEMACPS_STAT_BITS(RXFCSCNT, NDS_RXERR|NDS_RXCRCERR),
+	XEMACPS_STAT_BITS(RXLENGTHCNT, NDS_RXERR|NDS_RXLENERR),
+	XEMACPS_STAT_BITS(RXSYMBCNT, NDS_RXERR),
+	XEMACPS_STAT_BITS(RXALIGNCNT, NDS_RXERR|NDS_RXFRAMEERR),
+	XEMACPS_STAT_BITS(RXRESERRCNT, NDS_RXERR|NDS_RXOVERERR),
+	XEMACPS_STAT_BITS(RXORCNT, NDS_RXERR|NDS_RXFIFOERR),
+	XEMACPS_STAT_BITS(RXIPCCNT, NDS_RXERR),
+	XEMACPS_STAT_BITS(RXTCPCCNT, NDS_RXERR),
+	XEMACPS_STAT_BITS(RXUDPCCNT, NDS_RXERR),
+};
+#define XEMACPS_STATS_LEN ARRAY_SIZE(xemacps_statistics)
+
 /* Our private device data. */
 struct net_local {
 	void   __iomem         *baseaddr;
@@ -600,6 +684,7 @@ struct net_local {
 	unsigned int 	       ptpenetclk;
 #endif
 #endif
+	u64                    ethtool_stats[XEMACPS_STATS_LEN];
 };
 
 static struct net_device_ops netdev_ops;
@@ -2688,60 +2773,110 @@ xemacps_set_pauseparam(struct net_device *ndev,
 }
 
 /**
+ * xemacps_update_stats - update device statistics
+ * @lp: xemacps device
+ *
+ * Note: This is necessary because xemacps statistic registers are cleared on
+ * read.
+ */
+static void xemacps_update_stats(struct net_local *lp)
+{
+	int i;
+
+	for (i=0; i<XEMACPS_STATS_LEN; i++) {
+		u32 off = xemacps_statistics[i].offset;
+		u64 val = xemacps_read(lp->baseaddr, off);
+
+		switch (off) {
+		case XEMACPS_OCTTXL_OFFSET:
+		case XEMACPS_OCTRXL_OFFSET:
+			/* Add XEMACPS_OCTTXH, XEMACPS_OCTRXH */
+			lp->ethtool_stats[i] +=
+				((u64)xemacps_read(lp->baseaddr, off+4))<<32;
+			/* fall through */
+		default:
+			lp->ethtool_stats[i] += val;
+			break;
+		}
+	}
+}
+
+/**
  * xemacps_get_stats - get device statistic raw data in 64bit mode
  * @ndev: network device
  **/
-static struct net_device_stats
-*xemacps_get_stats(struct net_device *ndev)
+static struct net_device_stats* xemacps_get_stats(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 	struct net_device_stats *nstat = &lp->stats;
+	int i;
 
-	nstat->rx_errors +=
-		(xemacps_read(lp->baseaddr, XEMACPS_RXUNDRCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXOVRCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXJABCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXFCSCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXLENGTHCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXSYMBCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXALIGNCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXRESERRCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXORCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXIPCCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXTCPCCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXUDPCCNT_OFFSET));
-	nstat->rx_length_errors +=
-		(xemacps_read(lp->baseaddr, XEMACPS_RXUNDRCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXOVRCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXJABCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_RXLENGTHCNT_OFFSET));
-	nstat->rx_over_errors +=
-		xemacps_read(lp->baseaddr, XEMACPS_RXRESERRCNT_OFFSET);
-	nstat->rx_crc_errors +=
-		xemacps_read(lp->baseaddr, XEMACPS_RXFCSCNT_OFFSET);
-	nstat->rx_frame_errors +=
-		xemacps_read(lp->baseaddr, XEMACPS_RXALIGNCNT_OFFSET);
-	nstat->rx_fifo_errors +=
-		xemacps_read(lp->baseaddr, XEMACPS_RXORCNT_OFFSET);
-	nstat->tx_errors +=
-		(xemacps_read(lp->baseaddr, XEMACPS_TXURUNCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_SNGLCOLLCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_MULTICOLLCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_EXCESSCOLLCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_LATECOLLCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_CSENSECNT_OFFSET));
-	nstat->tx_aborted_errors +=
-		xemacps_read(lp->baseaddr, XEMACPS_EXCESSCOLLCNT_OFFSET);
-	nstat->tx_carrier_errors +=
-		xemacps_read(lp->baseaddr, XEMACPS_CSENSECNT_OFFSET);
-	nstat->tx_fifo_errors +=
-		xemacps_read(lp->baseaddr, XEMACPS_TXURUNCNT_OFFSET);
-	nstat->collisions +=
-		(xemacps_read(lp->baseaddr, XEMACPS_SNGLCOLLCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_MULTICOLLCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_EXCESSCOLLCNT_OFFSET) +
-		xemacps_read(lp->baseaddr, XEMACPS_LATECOLLCNT_OFFSET));
+	xemacps_update_stats(lp);
+	nstat->rx_errors=0;
+	nstat->rx_length_errors=0;
+	nstat->rx_over_errors=0;
+	nstat->rx_crc_errors=0;
+	nstat->rx_frame_errors=0;
+	nstat->rx_fifo_errors=0;
+	nstat->tx_errors=0;
+	nstat->tx_aborted_errors=0;
+	nstat->tx_carrier_errors=0;
+	nstat->tx_fifo_errors=0;
+	nstat->collisions=0;
+
+	for (i=0; i<XEMACPS_STATS_LEN; i++) {
+		u32 bits = xemacps_statistics[i].stat_bits;
+		u64 val = lp->ethtool_stats[i];
+
+		nstat->rx_errors += (bits & NDS_RXERR) ? val : 0;
+		nstat->rx_length_errors += (bits & NDS_RXLENERR) ? val : 0;
+		nstat->rx_over_errors += (bits & NDS_RXOVERERR) ? val : 0;
+		nstat->rx_crc_errors += (bits & NDS_RXCRCERR) ? val : 0;
+		nstat->rx_frame_errors += (bits & NDS_RXFRAMEERR) ? val : 0;
+		nstat->rx_fifo_errors += (bits & NDS_RXFIFOERR) ? val : 0;
+		nstat->tx_errors += (bits & NDS_TXERR) ? val : 0;
+		nstat->tx_aborted_errors += (bits & NDS_TXABORTEDERR) ? val : 0;
+		nstat->tx_carrier_errors += (bits & NDS_TXCARRIERERR) ? val : 0;
+		nstat->tx_fifo_errors += (bits & NDS_TXFIFOERR) ? val : 0;
+		nstat->collisions += (bits & NDS_COLLISIONS) ? val : 0;
+	}
 	return nstat;
+}
+
+static void xemacps_get_ethtool_stats(struct net_device *netdev,
+	struct ethtool_stats *stats,
+	u64 *data)
+{
+	struct net_local *lp;
+
+	lp = netdev_priv(netdev);
+	xemacps_update_stats(lp);
+	memcpy(data, &lp->ethtool_stats, sizeof(u64)*XEMACPS_STATS_LEN);
+}
+
+static int xemacps_get_sset_count(struct net_device *netdev, int sset)
+{
+	switch (sset) {
+	case ETH_SS_STATS:
+		return XEMACPS_STATS_LEN;
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
+static void xemacps_get_ethtool_strings(struct net_device *netdev,
+	u32 sset, u8 *p)
+{
+	int i;
+
+	switch (sset) {
+	case ETH_SS_STATS:
+		for (i=0; i < XEMACPS_STATS_LEN; i++, p += ETH_GSTRING_LEN) {
+			memcpy(p, xemacps_statistics[i].stat_string,
+				ETH_GSTRING_LEN);
+		}
+		break;
+	}
 }
 
 static struct ethtool_ops xemacps_ethtool_ops = {
@@ -2760,6 +2895,9 @@ static struct ethtool_ops xemacps_ethtool_ops = {
 	.get_tso        = ethtool_op_get_tso,        /* ethtool default */
 	.get_pauseparam = xemacps_get_pauseparam,
 	.set_pauseparam = xemacps_set_pauseparam,
+	.get_ethtool_stats = xemacps_get_ethtool_stats,
+	.get_strings    = xemacps_get_ethtool_strings,
+	.get_sset_count = xemacps_get_sset_count,
 };
 
 #ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
