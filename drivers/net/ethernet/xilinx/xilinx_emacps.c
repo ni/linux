@@ -2983,7 +2983,6 @@ static int xemacps_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 		return xemacps_hwtstamp_ioctl(ndev, rq, cmd);
 #endif
 	default:
-		printk(KERN_INFO "GEM: ioctl %d not implemented.\n", cmd);
 		return -EOPNOTSUPP;
 	}
 
