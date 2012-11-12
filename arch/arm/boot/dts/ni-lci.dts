@@ -107,7 +107,7 @@
 			compatible = "xlnx,ps7-usb-1.00.a";
 			reg = <0xe0002000 0x1000>;
 			interrupts = <0 21 0>;
-			dr_mode = "host";
+			dr_mode = "peripheral";
 			phy_type = "ulpi";
 		};
 
