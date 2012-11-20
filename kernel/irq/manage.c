@@ -1150,7 +1150,6 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	if (!desc)
 		return -EINVAL;
 
-	desc->irq_data.priority = irqthread_pri;
 	if (desc->irq_data.chip == &no_irq_chip)
 		return -ENOSYS;
 	if (!try_module_get(desc->owner))
@@ -1213,6 +1212,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		 * on which the requesting code placed the interrupt.
 		 */
 		set_bit(IRQTF_AFFINITY, &new->thread_flags);
+		set_bit(IRQTF_PRIORITY, &new->thread_flags);
 	}
 
 	if (!alloc_cpumask_var(&mask, GFP_KERNEL)) {
