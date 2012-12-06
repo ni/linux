@@ -15,20 +15,23 @@
 #ifndef __MACH_SYSTEM_H__
 #define __MACH_SYSTEM_H__
 
+#include <asm/proc-fns.h>
+
 static inline void arch_idle(void)
 {
 	cpu_do_idle();
 }
 
+struct zynq_board_reset {
+	void (*reset)(struct zynq_board_reset *);
+};
+
+extern struct zynq_board_reset *zynq_board_reset;
+
 static inline void arch_reset(char mode, const char *cmd)
 {
-#if defined(CONFIG_NIZYNQ_PROTO_CPLD)
-	extern int nizynqprotocpld_reboot(void);
-	nizynqprotocpld_reboot();
-#elif defined(CONFIG_NI_DOSEQUIS_CPLD)
-	extern int nidosequiscpld_reboot(void);
-	nidosequiscpld_reboot();
-#endif
+	if (zynq_board_reset)
+		zynq_board_reset->reset(zynq_board_reset);
 }
 
 #endif

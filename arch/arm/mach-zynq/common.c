@@ -19,6 +19,7 @@
 #include <linux/cpumask.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
+#include <linux/export.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/of.h>
@@ -41,6 +42,9 @@
 #define IRQ_I2C1		80
 #define IRQ_SPI1		81
 #define IRQ_UART1		82
+
+struct zynq_board_reset *zynq_board_reset;
+EXPORT_SYMBOL_GPL(zynq_board_reset);
 
 static struct of_device_id zynq_of_bus_ids[] __initdata = {
 	{ .compatible = "simple-bus", },

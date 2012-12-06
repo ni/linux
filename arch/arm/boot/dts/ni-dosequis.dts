@@ -223,8 +223,8 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			nidosequiscpld@40 {
-				compatible = "nidosequiscpld";
+			nizynqcpld@40 {
+				compatible = "nizynqcpld";
 				reg = <0x40>;
 				interrupts = <46 0>;
 				interrupt-parent = <&gpio>;

@@ -170,25 +170,15 @@ config HWLAT_DETECTOR
 
 	  If unsure, say N
 
-config NIZYNQ_PROTO_CPLD
-	tristate "National Instruments Zynq proto CPLD driver"
+config NIZYNQ_CPLD
+	tristate "National Instruments Zynq CPLD driver"
 	depends on I2C && SYSFS && LEDS_CLASS
 	help
 	  If you say yes here, you get support for the CPLD features
-	  on the NI Zynq proto board.
+	  on the NI Zynq proto and Dos Equis boards.
 
 	  This driver can also be built as a module.  If so, the module
-	  will be called nizynqprotocpld.ko.
-
-config NI_DOSEQUIS_CPLD
-	tristate "National Instruments Dos Equis CPLD driver"
-	depends on I2C && SYSFS && LEDS_CLASS
-	help
-	  If you say yes here, you get support for the CPLD features
-	  on the NI Dos Equis board.
-
-	  This driver can also be built as a module.  If so, the module
-	  will be called nidosequiscpld.ko.
+	  will be called nizynqcpld.ko.
 
 config FPGA_PERIPHERAL
 	bool "FPGA Peripheral Driver"

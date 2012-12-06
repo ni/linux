@@ -141,8 +141,8 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			nizynqprotocpld@40 {
-				compatible = "nizynqprotocpld";
+			nizynqcpld@40 {
+				compatible = "nizynqcpld";
 				reg = <0x40>;
 			};
 
