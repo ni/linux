@@ -2107,6 +2107,7 @@ static int xemacps_down(struct net_device *ndev, bool carrier_off)
 		netif_carrier_off(ndev);
 
 	phy_disconnect(lp->phy_dev);
+	lp->phy_dev = NULL;
 
 	xemacps_descriptor_free(lp);
 	xemacps_reset_hw(lp);
