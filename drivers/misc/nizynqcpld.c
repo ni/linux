@@ -723,6 +723,7 @@ static int nizynqcpld_watchdog_misc_open(struct inode *inode,
 	struct miscdevice *misc_dev = file->private_data;
 	struct nizynqcpld *cpld = container_of(misc_dev, struct nizynqcpld,
 					       watchdog.misc_dev);
+	file->private_data = cpld;
 
 	if (!atomic_dec_and_test(&cpld->watchdog.available)) {
 		atomic_inc(&cpld->watchdog.available);
