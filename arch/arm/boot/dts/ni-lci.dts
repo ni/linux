@@ -30,6 +30,14 @@
 			phandle = <0x1>;
 		};
 
+		sdhci0: sdhci@e0100000 {
+                        compatible = "xlnx,ps7-sdhci-1.00.a";
+                        reg = <0xE0100000 0x1000>;
+                        xlnx,has-cd = <0x0>;
+                        interrupts = <0 24 0>;
+                        clock-frequency = <100000000>;
+                };
+
 		uart@e0000000 {
 			compatible = "xlnx,ps7-uart-1.00.a";
 			reg = <0xe0000000 0x1000>;
@@ -136,6 +144,11 @@
 			gpio1-label     = "phy_interupt";
 			gpio1-direction = "input";
 			gpio1-settings  = "level-low";
+
+			/* GPIO15 (MIO15) */
+			gpio15-label     = "wake_interrupt";
+			gpio15-direction = "input";
+			gpio15-settings  = "level-low";
 		};
 
 		i2c0: i2c@e0005000 {
