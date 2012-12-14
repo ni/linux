@@ -25,6 +25,9 @@ struct local_irq_lock {
 	DEFINE_PER_CPU(struct local_irq_lock, lvar) = {			\
 		.lock = __SPIN_LOCK_UNLOCKED((lvar).lock) }
 
+#define DECLARE_LOCAL_IRQ_LOCK(lvar)					\
+	DECLARE_PER_CPU(struct local_irq_lock, lvar)
+
 #define local_irq_lock_init(lvar)					\
 	do {								\
 		int __cpu;						\
@@ -96,6 +99,9 @@ static inline void __local_lock_irq(struct local_irq_lock *lv)
 #define local_lock_irq(lvar)						\
 	do { __local_lock_irq(&get_local_var(lvar)); } while (0)
 
+#define local_lock_irq_on(lvar, cpu)					\
+	do { __local_lock_irq(&per_cpu(lvar, cpu)); } while (0)
+
 static inline void __local_unlock_irq(struct local_irq_lock *lv)
 {
 	LL_WARN(!lv->nestcnt);
@@ -109,6 +115,11 @@ static inline void __local_unlock_irq(struct local_irq_lock *lv)
 	do {								\
 		__local_unlock_irq(&__get_cpu_var(lvar));		\
 		put_local_var(lvar);					\
+	} while (0)
+
+#define local_unlock_irq_on(lvar, cpu)					\
+	do {								\
+		__local_unlock_irq(&per_cpu(lvar, cpu));		\
 	} while (0)
 
 static inline int __local_lock_irqsave(struct local_irq_lock *lv)
@@ -129,6 +140,12 @@ static inline int __local_lock_irqsave(struct local_irq_lock *lv)
 		_flags = __get_cpu_var(lvar).flags;			\
 	} while (0)
 
+#define local_lock_irqsave_on(lvar, _flags, cpu)			\
+	do {								\
+		__local_lock_irqsave(&per_cpu(lvar, cpu));		\
+		_flags = per_cpu(lvar, cpu).flags;			\
+	} while (0)
+
 static inline int __local_unlock_irqrestore(struct local_irq_lock *lv,
 					    unsigned long flags)
 {
@@ -146,6 +163,11 @@ static inline int __local_unlock_irqrestore(struct local_irq_lock *lv,
 	do {								\
 		if (__local_unlock_irqrestore(&__get_cpu_var(lvar), flags)) \
 			put_local_var(lvar);				\
+	} while (0)
+
+#define local_unlock_irqrestore_on(lvar, flags, cpu)			\
+	do {								\
+		__local_unlock_irqrestore(&per_cpu(lvar, cpu), flags);	\
 	} while (0)
 
 #define local_spin_trylock_irq(lvar, lock)				\
@@ -201,6 +223,7 @@ static inline int __local_unlock_irqrestore(struct local_irq_lock *lv,
 #else /* PREEMPT_RT_BASE */
 
 #define DEFINE_LOCAL_IRQ_LOCK(lvar)		__typeof__(const int) lvar
+#define DECLARE_LOCAL_IRQ_LOCK(lvar)		extern __typeof__(const int) lvar
 
 static inline void local_irq_lock_init(int lvar) { }
 
