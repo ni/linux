@@ -2333,6 +2333,8 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	regval = xemacps_read(lp->baseaddr, XEMACPS_NWCTRL_OFFSET);
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
 			(regval | XEMACPS_NWCTRL_STARTTX_MASK));
+	/* Ensure write is seen by the MAC */
+	wmb();
 	spin_unlock_irqrestore(&lp->nwctrlreg_lock, flags);
 
 	ndev->trans_start = jiffies;
