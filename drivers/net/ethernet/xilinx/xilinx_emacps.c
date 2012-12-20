@@ -2294,6 +2294,7 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	regval = xemacps_read(lp->baseaddr, XEMACPS_NWCTRL_OFFSET);
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
 		      (regval | XEMACPS_NWCTRL_STARTTX_MASK));
+	wmb();
 
 #ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
 
