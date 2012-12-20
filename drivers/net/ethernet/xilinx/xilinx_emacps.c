@@ -1572,20 +1572,23 @@ static ssize_t xemacps_set_ni_polling_interval(struct device *dev,
 {
 	struct net_device *ndev = to_net_dev(dev);
 	struct net_local *lp = netdev_priv(ndev);
-	int val;
-	int rc = kstrtoint(buf, 0, &val);
+	int interval;
 
-	if (0 <= rc) {
-		if (lp->ni_polling_interval != val) {
-			lp->ni_polling_interval = val;
-			schedule_work(&lp->reset_task);
-		}
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
+	if (0 > kstrtoint(buf, 0, &interval))
+		return -EINVAL;
+
+	if (lp->ni_polling_interval != interval) {
+		lp->ni_polling_interval = interval;
+		schedule_work(&lp->reset_task);
 	}
 
 	return count;
 }
 
-static DEVICE_ATTR(ni_polling_interval, S_IWUSR | S_IRUGO,
+static DEVICE_ATTR(ni_polling_interval, S_IWUGO | S_IRUGO,
 		   xemacps_get_ni_polling_interval,
 		   xemacps_set_ni_polling_interval);
 
@@ -1621,41 +1624,45 @@ static ssize_t xemacps_set_ni_polling_policy(struct device *dev,
 	char policy_str [16] = { 0, };
 	int policy;
 
-	if (1 == sscanf(buf, "%15s", policy_str)) {
-		if ((0 == strcmp(policy_str, "SCHED_NORMAL") ||
-		    (0 == strcmp(policy_str, "SCHED_OTHER"))))
-			policy = SCHED_NORMAL;
-		else if (0 == strcmp(policy_str, "SCHED_FIFO"))
-			policy = SCHED_FIFO;
-		else if (0 == strcmp(policy_str, "SCHED_RR"))
-			policy = SCHED_RR;
-		else if (0 == strcmp(policy_str, "SCHED_BATCH"))
-			policy = SCHED_BATCH;
-		else if (0 == strcmp(policy_str, "SCHED_IDLE"))
-			policy = SCHED_IDLE;
-		else
-			return count;
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
 
-		lp->ni_polling_policy = policy;
+	if (1 != sscanf(buf, "%15s", policy_str))
+		return -EINVAL;
 
-		/* Synchronize with xemacps_open/close. */
-		rtnl_lock();
+	if ((0 == strcmp(policy_str, "SCHED_NORMAL") ||
+	    (0 == strcmp(policy_str, "SCHED_OTHER"))))
+		policy = SCHED_NORMAL;
+	else if (0 == strcmp(policy_str, "SCHED_FIFO"))
+		policy = SCHED_FIFO;
+	else if (0 == strcmp(policy_str, "SCHED_RR"))
+		policy = SCHED_RR;
+	else if (0 == strcmp(policy_str, "SCHED_BATCH"))
+		policy = SCHED_BATCH;
+	else if (0 == strcmp(policy_str, "SCHED_IDLE"))
+		policy = SCHED_IDLE;
+	else
+		return -EINVAL;
 
-		if (lp->ni_polling_task) {
-			const struct sched_param param = {
-				.sched_priority = lp->ni_polling_priority,
-			};
-			sched_setscheduler(lp->ni_polling_task,
-					   lp->ni_polling_policy, &param);
-		}
+	lp->ni_polling_policy = policy;
 
-		rtnl_unlock();
+	/* Synchronize with xemacps_open/close. */
+	rtnl_lock();
+
+	if (lp->ni_polling_task) {
+		const struct sched_param param = {
+			.sched_priority = lp->ni_polling_priority,
+		};
+		sched_setscheduler(lp->ni_polling_task,
+				   lp->ni_polling_policy, &param);
 	}
+
+	rtnl_unlock();
 
 	return count;
 }
 
-static DEVICE_ATTR(ni_polling_policy, S_IWUSR | S_IRUGO,
+static DEVICE_ATTR(ni_polling_policy, S_IWUGO | S_IRUGO,
 		   xemacps_get_ni_polling_policy,
 		   xemacps_set_ni_polling_policy);
 
@@ -1677,27 +1684,31 @@ static ssize_t xemacps_set_ni_polling_priority(struct device *dev,
 	struct net_local *lp = netdev_priv(ndev);
 	int priority;
 
-	if (1 == sscanf(buf, "%d", &priority)) {
-		lp->ni_polling_priority = priority;
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
 
-		/* Synchronize with xemacps_open/close. */
-		rtnl_lock();
+	if (0 > kstrtoint(buf, 0, &priority))
+		return -EINVAL;
 
-		if (lp->ni_polling_task) {
-			const struct sched_param param = {
-				.sched_priority = lp->ni_polling_priority,
-			};
-			sched_setscheduler(lp->ni_polling_task,
-					   lp->ni_polling_policy, &param);
-		}
+	lp->ni_polling_priority = priority;
 
-		rtnl_unlock();
+	/* Synchronize with xemacps_open/close. */
+	rtnl_lock();
+
+	if (lp->ni_polling_task) {
+		const struct sched_param param = {
+			.sched_priority = lp->ni_polling_priority,
+		};
+		sched_setscheduler(lp->ni_polling_task,
+				   lp->ni_polling_policy, &param);
 	}
+
+	rtnl_unlock();
 
 	return count;
 }
 
-static DEVICE_ATTR(ni_polling_priority, S_IWUSR | S_IRUGO,
+static DEVICE_ATTR(ni_polling_priority, S_IWUGO | S_IRUGO,
 		   xemacps_get_ni_polling_priority,
 		   xemacps_set_ni_polling_priority);
 
