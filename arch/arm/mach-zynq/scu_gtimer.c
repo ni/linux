@@ -176,7 +176,6 @@ static struct platform_driver xscugtimer_platform_driver = {
 
 static int __init xscugtimer_init(void)
 {
-	printk(KERN_EMERG "xscugtimer: init called.\n");
 	return platform_driver_register(&xscugtimer_platform_driver);
 }
 
