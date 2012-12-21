@@ -245,6 +245,9 @@ static inline void resume_device_irqs(void) { };
 static inline int check_wakeup_irqs(void) { return 0; }
 #endif
 
+extern void init_irq_default_prio(struct irq_desc *desc);
+extern int irq_set_priority(unsigned int irq, int priority);
+
 #if defined(CONFIG_SMP) && defined(CONFIG_GENERIC_HARDIRQS)
 
 extern cpumask_var_t irq_default_affinity;
@@ -252,8 +255,6 @@ extern cpumask_var_t irq_default_affinity;
 extern int irq_set_affinity(unsigned int irq, const struct cpumask *cpumask);
 extern int irq_can_set_affinity(unsigned int irq);
 extern int irq_select_affinity(unsigned int irq);
-extern void init_irq_default_prio(struct irq_desc *desc);
-extern int irq_set_priority(unsigned int irq, int priority);
 
 extern int irq_set_affinity_hint(unsigned int irq, const struct cpumask *m);
 

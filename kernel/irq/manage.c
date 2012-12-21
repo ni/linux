@@ -81,6 +81,45 @@ void synchronize_irq(unsigned int irq)
 }
 EXPORT_SYMBOL(synchronize_irq);
 
+static void
+irq_thread_check_priority(struct irq_desc *desc, struct irqaction *action)
+{
+	struct sched_param param;
+
+	if (!test_and_clear_bit(IRQTF_PRIORITY, &action->thread_flags))
+		return;
+
+	param.sched_priority = desc->irq_data.priority;
+	sched_setscheduler(current, SCHED_FIFO, &param);
+}
+
+void irq_set_thread_priority(struct irq_desc *desc)
+{
+	struct irqaction *action = desc->action;
+
+	while (action) {
+		if (action->thread)
+			set_bit(IRQTF_PRIORITY, &action->thread_flags);
+		action = action->next;
+	}
+}
+
+int irq_set_priority(unsigned int irq, int priority)
+{
+	unsigned long flags;
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	if (!desc)
+		return -EINVAL;
+	if (!(priority > 0 && priority < MAX_USER_RT_PRIO))
+		return -EINVAL;
+	raw_spin_lock_irqsave(&desc->lock, flags);
+	desc->irq_data.priority = priority;
+	irq_set_thread_priority(desc);
+	raw_spin_unlock_irqrestore(&desc->lock, flags);
+	return 0;
+}
+
 #ifdef CONFIG_SMP
 cpumask_var_t irq_default_affinity;
 
@@ -116,29 +155,6 @@ void irq_set_thread_affinity(struct irq_desc *desc)
 	while (action) {
 		if (action->thread)
 			set_bit(IRQTF_AFFINITY, &action->thread_flags);
-		action = action->next;
-	}
-}
-
-static void
-irq_thread_check_priority(struct irq_desc *desc, struct irqaction *action)
-{
-	struct sched_param param;
-
-	if (!test_and_clear_bit(IRQTF_PRIORITY, &action->thread_flags))
-		return;
-
-	param.sched_priority = desc->irq_data.priority;
-	sched_setscheduler(current, SCHED_FIFO, &param);
-}
-
-void irq_set_thread_priority(struct irq_desc *desc)
-{
-	struct irqaction *action = desc->action;
-
-	while (action) {
-		if (action->thread)
-			set_bit(IRQTF_PRIORITY, &action->thread_flags);
 		action = action->next;
 	}
 }
@@ -202,23 +218,6 @@ int __irq_set_affinity_locked(struct irq_data *data, const struct cpumask *mask)
 
 	return ret;
 }
-
-int irq_set_priority(unsigned int irq, int priority)
-{
-	unsigned long flags;
-	struct irq_desc *desc = irq_to_desc(irq);
-
-	if (!desc)
-		return -EINVAL;
-	if (!(priority > 0 && priority < MAX_USER_RT_PRIO))
-		return -EINVAL;
-	raw_spin_lock_irqsave(&desc->lock, flags);
-	desc->irq_data.priority = priority;
-	irq_set_thread_priority(desc);
-	raw_spin_unlock_irqrestore(&desc->lock, flags);
-	return 0;
-}
-
 
 /**
  *	irq_set_affinity - Set the irq affinity of a given irq
