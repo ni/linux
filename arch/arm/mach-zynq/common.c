@@ -85,6 +85,7 @@ void __init xilinx_init_machine(void)
 static int xgpiops_irq_domain_init(struct device_node *dev, struct device_node *ipar)
 {
 	irq_domain_add_simple(dev, XGPIOPS_IRQBASE);
+	return 0;
 }
 
 static const struct of_device_id xilinx_dt_irq_match[] __initconst = {
