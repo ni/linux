@@ -992,6 +992,7 @@ static int nizynqcpld_probe(struct i2c_client *client,
 
 	cpld->dev = &client->dev;
 	cpld->client = client;
+	mutex_init(&cpld->lock);
 
 	err = nizynqcpld_read(cpld, NIZYNQCPLD_VERSION,
 			      &version);
