@@ -68,6 +68,7 @@ obj-$(CONFIG_USB_G_PRINTER)	+= g_printer.o
 obj-$(CONFIG_USB_MIDI_GADGET)	+= g_midi.o
 obj-$(CONFIG_USB_CDC_COMPOSITE) += g_cdc.o
 obj-$(CONFIG_USB_G_HID)		+= g_hid.o
+obj-$(CONFIG_USB_G_LCI)		+= g_lci.o
 obj-$(CONFIG_USB_G_DBGP)	+= g_dbgp.o
 obj-$(CONFIG_USB_G_MULTI)	+= g_multi.o
 obj-$(CONFIG_USB_G_NOKIA)	+= g_nokia.o
