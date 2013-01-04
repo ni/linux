@@ -791,8 +791,9 @@ static void xemacps_phy_init(struct net_device *ndev)
 	xemacps_mdio_write(lp->mii_bus, lp->phy_dev->addr, 0, regval);
 	for (i = 0; i < 10; i++)
 		mdelay(500);
-#ifdef DEBUG_VERBOSE
-	printk(KERN_INFO "GEM: phy register dump, start from 0, four in a row.");
+
+#ifdef VERBOSE_DEBUG
+	printk(KERN_DEBUG "GEM: phy register dump, start from 0, four in a row.");
 	for (i = 0; i <= 30; i++) {
 		if (!(i%4))
 			printk("\n %02d:  ", i);
@@ -803,7 +804,6 @@ static void xemacps_phy_init(struct net_device *ndev)
 #endif
 }
 
-
 /**
  * xemacps_adjust_link - handles link status changes, such as speed,
  * duplex, up/down, ...
@@ -813,9 +813,7 @@ static void xemacps_adjust_link(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 	struct phy_device *phydev = lp->phy_dev;
-#ifdef DEBUG
 	int status_change = 0;
-#endif
 	u32 regval;
 	u32 regval1;
 
@@ -867,9 +865,7 @@ static void xemacps_adjust_link(struct net_device *ndev)
 
 			lp->speed = phydev->speed;
 			lp->duplex = phydev->duplex;
-#ifdef DEBUG
 			status_change = 1;
-#endif
 		}
 
 		netif_carrier_on(ndev);
@@ -878,23 +874,16 @@ static void xemacps_adjust_link(struct net_device *ndev)
 
 	if (phydev->link != lp->link) {
 		lp->link = phydev->link;
-#ifdef DEBUG
 		status_change = 1;
-#endif
 	}
 
-#ifdef DEBUG
 	if (status_change) {
 		if (phydev->link)
-			printk(KERN_INFO "%s: link up (%d/%s)\n",
-				ndev->name, phydev->speed,
-				DUPLEX_FULL == phydev->duplex ?
-				"FULL" : "HALF");
+			netdev_dbg(ndev, "link up (%d/%s)\n", phydev->speed,
+				   DUPLEX_FULL == phydev->duplex ? "FULL" : "HALF");
 		else
-			printk(KERN_INFO "%s: link down\n", ndev->name);
+			netdev_dbg(ndev, "link down\n");
 	}
-#endif
-
 }
 
 /**
@@ -916,13 +905,13 @@ static int xemacps_mii_probe(struct net_device *ndev)
 					PHY_INTERFACE_MODE_RGMII_ID);
 	}
 	if (!phydev) {
-		printk(KERN_ERR "%s: no PHY found\n", ndev->name);
+		netdev_err(ndev, "no PHY found\n");
 		return -1;
 	}
-#ifdef DEBUG
-	printk(KERN_INFO "GEM: phydev %p, phydev->phy_id 0x%x, phydev->addr 0x%x\n",
-		phydev, phydev->phy_id, phydev->addr);
-#endif
+
+	netdev_dbg(ndev, "phydev %p, phydev->phy_id 0x%x, phydev->addr 0x%x\n",
+		   phydev, phydev->phy_id, phydev->addr);
+
 	phydev->supported &= (PHY_GBIT_FEATURES | SUPPORTED_Pause |
 							SUPPORTED_Asym_Pause);
 	phydev->advertising = phydev->supported;
@@ -936,13 +925,10 @@ static int xemacps_mii_probe(struct net_device *ndev)
 		phy_start(lp->phy_dev);
 	else
 		xemacps_phy_init(lp->ndev);
-#ifdef DEBUG
-	printk(KERN_INFO "%s, phy_addr 0x%x, phy_id 0x%08x\n",
-			ndev->name, lp->phy_dev->addr, lp->phy_dev->phy_id);
 
-	printk(KERN_INFO "%s, attach [%s] phy driver\n", ndev->name,
-			lp->phy_dev->drv->name);
-#endif
+	netdev_dbg(ndev, "phy_addr 0x%x, phy_id 0x%08x\n", lp->phy_dev->addr,
+		   lp->phy_dev->phy_id);
+	netdev_dbg(ndev, "attach [%s] phy driver\n", lp->phy_dev->drv->name);
 
 	return 0;
 }
@@ -1019,7 +1005,7 @@ static void __init xemacps_update_hwaddr(struct net_local *lp)
 	} else {
 		dev_info(&lp->pdev->dev, "invalid address, use assigned\n");
 		random_ether_addr(lp->ndev->dev_addr);
-		printk(KERN_INFO "MAC updated %02x:%02x:%02x:%02x:%02x:%02x\n",
+		netdev_info(lp->ndev, "MAC updated %02x:%02x:%02x:%02x:%02x:%02x\n",
 			lp->ndev->dev_addr[0], lp->ndev->dev_addr[1],
 			lp->ndev->dev_addr[2], lp->ndev->dev_addr[3],
 			lp->ndev->dev_addr[4], lp->ndev->dev_addr[5]);
@@ -1049,7 +1035,7 @@ static void xemacps_set_hwaddr(struct net_local *lp)
 #ifdef DEBUG
 	regvall = xemacps_read(lp->baseaddr, XEMACPS_LADDR1L_OFFSET);
 	regvalh = xemacps_read(lp->baseaddr, XEMACPS_LADDR1H_OFFSET);
-	printk(KERN_INFO "GEM: MAC 0x%08x, 0x%08x, %02x:%02x:%02x:%02x:%02x:%02x\n",
+	netdev_dbg(lp->ndev, "GEM: MAC 0x%08x, 0x%08x, %02x:%02x:%02x:%02x:%02x:%02x\n",
 		regvall, regvalh,
 		(regvall & 0xff), ((regvall >> 8) & 0xff),
 		((regvall >> 16) & 0xff), (regvall >> 24),
@@ -1340,8 +1326,7 @@ static void xemacps_tx_poll(struct net_device *ndev)
 	if (regval & (XEMACPS_TXSR_URUN_MASK | XEMACPS_TXSR_RXOVR_MASK |
 		XEMACPS_TXSR_HRESPNOK_MASK | XEMACPS_TXSR_COL1000_MASK |
 		XEMACPS_TXSR_BUFEXH_MASK)) {
-		printk(KERN_ERR "%s: TX ERROR 0x%x\n",
-			ndev->name, regval);
+		netdev_dbg(ndev, "TX ERROR 0x%x\n", regval);
 		lp->stats.tx_errors++;
 	}
 #ifndef CONFIG_XILINX_PS_EMAC_BROKEN_TX
@@ -1407,10 +1392,6 @@ static void xemacps_tx_poll(struct net_device *ndev)
 			DMA_TO_DEVICE);
 		rp->skb = NULL;
 		dev_kfree_skb(skb);
-#ifdef DEBUG_VERBOSE_TX
-		printk(KERN_INFO "GEM: TX bd index %d BD_STAT 0x%08x after sent.\n",
-			bdidx, regval);
-#endif
 		/* log tx completed packets and bytes, errors logs
 		 * are in other error counters.
 		 */
@@ -1848,12 +1829,10 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	}
 	wmb();
 
-#ifdef DEBUG
-	printk(KERN_INFO "GEM: lp->tx_bd %p lp->tx_bd_dma %p lp->tx_skb %p\n",
-		lp->tx_bd, (void *)lp->tx_bd_dma, lp->tx_skb);
-	printk(KERN_INFO "GEM: lp->rx_bd %p lp->rx_bd_dma %p lp->rx_skb %p\n",
-		lp->rx_bd, (void *)lp->rx_bd_dma, lp->rx_skb);
-#endif
+	netdev_dbg(lp->ndev, "lp->tx_bd %p lp->tx_bd_dma %p lp->tx_skb %p\n",
+		   lp->tx_bd, (void *)lp->tx_bd_dma, lp->tx_skb);
+	netdev_dbg(lp->ndev, "lp->rx_bd %p lp->rx_bd_dma %p lp->rx_skb %p\n",
+		   lp->rx_bd, (void *)lp->rx_bd_dma, lp->rx_skb);
 	return 0;
 
 err_out:
@@ -1988,26 +1967,24 @@ static int xemacps_up(struct net_device *ndev)
 		if (IS_ERR(lp->ni_polling_task)) {
 			rc = PTR_ERR(lp->ni_polling_task);
 			lp->ni_polling_task = NULL;
-			printk(KERN_ERR "%s: Unable to create polling "
-			       "thread, error %d\n",
-			ndev->name, rc);
+			netdev_err(ndev, "Unable to create polling thread, "
+					 "error %d\n", rc);
 			return rc;
 		}
 	} else {
 		rc = request_irq(ndev->irq, xemacps_interrupt,
 				 IRQF_SAMPLE_RANDOM, ndev->name, ndev);
 		if (rc) {
-			printk(KERN_ERR "%s: Unable to request IRQ, "
-			       "error %d\n",
-			ndev->name, rc);
+			netdev_err(ndev, "Unable to request IRQ, "
+					 "error %d\n", rc);
 			return rc;
 		}
 	}
 
 	rc = xemacps_descriptor_init(lp);
 	if (rc) {
-		printk(KERN_ERR "%s Unable to allocate DMA memory, rc %d\n",
-		ndev->name, rc);
+		netdev_err(ndev, "Unable to allocate DMA memory, "
+				 "error %d\n", rc);
 		return rc;
 	}
 
@@ -2015,7 +1992,7 @@ static int xemacps_up(struct net_device *ndev)
 	napi_enable(&lp->napi);
 	rc = xemacps_mii_probe(ndev);
 	if (rc != 0) {
-		printk(KERN_ERR "%s mii_probe fail.\n", lp->mii_bus->name);
+		netdev_err(ndev, "%s mii_probe fail.\n", lp->mii_bus->name);
 		if (rc == (-2)) {
 			mdiobus_unregister(lp->mii_bus);
 			kfree(lp->mii_bus->irq);
@@ -2213,11 +2190,9 @@ static int xemacps_set_mac_address(struct net_device *ndev, void *addr)
 
 	if (!is_valid_ether_addr(hwaddr->sa_data))
 		return -EADDRNOTAVAIL;
-#ifdef DEBUG
-	printk(KERN_INFO "GEM: hwaddr 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",
+	netdev_dbg(ndev, "hwaddr 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",
 		hwaddr->sa_data[0], hwaddr->sa_data[1], hwaddr->sa_data[2],
 		hwaddr->sa_data[3], hwaddr->sa_data[4], hwaddr->sa_data[5]);
-#endif
 	memcpy(ndev->dev_addr, hwaddr->sa_data, ndev->addr_len);
 
 	xemacps_set_hwaddr(lp);
@@ -2407,8 +2382,8 @@ static void xemacps_set_hashtable(struct net_device *ndev)
 		hash_index = calc_mac_hash(mc_addr);
 
 		if (hash_index >= XEMACPS_MAX_HASH_BITS) {
-			printk(KERN_ERR "hash calculation out of range %d\n",
-				hash_index);
+			netdev_err(ndev, "hash calculation out of range %d\n",
+				   hash_index);
 			break;
 		}
 		if (hash_index < 32)
@@ -2722,9 +2697,7 @@ xemacps_set_pauseparam(struct net_device *ndev,
 	u32 regval;
 
 	if (netif_running(ndev)) {
-		printk(KERN_ERR
-			"%s: Please stop netif before apply configruation\n",
-			ndev->name);
+		netdev_err(ndev, "Please stop netif before apply configuration\n");
 		return -EFAULT;
 	}
 
@@ -3056,10 +3029,6 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto err_out_free_netdev;
 	}
-#ifdef DEBUG
-	printk(KERN_INFO "GEM: BASEADDRESS hw: %p virt: %p\n",
-			(void *)r_mem->start, lp->baseaddr);
-#endif
 
 	ndev->irq = platform_get_irq(pdev, 0);
 
@@ -3083,6 +3052,9 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Cannot register net device, aborting.\n");
 		goto err_out_iounmap;
 	}
+
+	netdev_dbg(ndev, "BASEADDRESS hw: %p virt: %p\n",
+			(void *)r_mem->start, lp->baseaddr);
 
 	if (ndev->irq == 54) { /* If it is ENET0 */
 		enetnum = 0;
@@ -3244,7 +3216,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, regval);
 
 	if (create_mdio_bus && xemacps_mii_init(lp) != 0) {
-		printk(KERN_ERR "%s: error in xemacps_mii_init\n", ndev->name);
+		netdev_err(ndev, "error in xemacps_mii_init\n");
 		goto err_out_unregister_netdev;
 	}
 
@@ -3253,8 +3225,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	if (0 != sysfs_create_file(&ndev->dev.kobj,
 				   &dev_attr_ni_polling_interval.attr)) {
-		printk(KERN_ERR "%s: error creating sysfs file\n",
-		       ndev->name);
+		netdev_err(ndev, "error creating sysfs file\n");
 		goto err_out_unregister_netdev;
 	}
 
@@ -3263,8 +3234,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	if (0 != sysfs_create_file(&ndev->dev.kobj,
 				   &dev_attr_ni_polling_policy.attr)) {
-		printk(KERN_ERR "%s: error creating sysfs file\n",
-		       ndev->name);
+		netdev_err(ndev, "error creating sysfs file\n");
 		goto err_out_sysfs_remove_file1;
 	}
 
@@ -3273,8 +3243,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	if (0 != sysfs_create_file(&ndev->dev.kobj,
 				   &dev_attr_ni_polling_priority.attr)) {
-		printk(KERN_ERR "%s: error creating sysfs file\n",
-		       ndev->name);
+		netdev_err(ndev, "error creating sysfs file\n");
 		goto err_out_sysfs_remove_file2;
 	}
 
@@ -3293,8 +3262,8 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, ndev);
 
-	printk(KERN_INFO "%s, pdev->id %d, baseaddr 0x%08lx, irq %d\n",
-		ndev->name, pdev->id, ndev->base_addr, ndev->irq);
+	netdev_info(ndev, "pdev->id %d, baseaddr 0x%08lx, irq %d\n",
+		    pdev->id, ndev->base_addr, ndev->irq);
 
 	return 0;
 
