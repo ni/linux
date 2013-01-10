@@ -38,6 +38,24 @@
 			clock-frequency = <100000000>;
 		};
 
+		serial@80000000 {
+			device_type = "serial";
+			compatible = "ni16550";
+			transceiver = "RS-232";
+			reg = <0x80000000 0x8>;
+			interrupts = <0 30 0>;
+			clock-frequency = <58824000>;
+		};
+
+		serial@80000010 {
+			device_type = "serial";
+			compatible = "ni16550";
+			transceiver = "RS-232";
+			reg = <0x80000010 0x8>;
+			interrupts = <0 31 0>;
+			clock-frequency = <58824000>;
+		};
+
 		uart@e0000000 {
 			compatible = "xlnx,ps7-uart-1.00.a";
 			reg = <0xe0000000 0x1000>;
