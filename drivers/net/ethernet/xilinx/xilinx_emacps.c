@@ -1354,7 +1354,7 @@ static int xemacps_rx(struct net_local *lp, int budget)
 	u32 regval;
 
 	cur_p = &lp->rx_bd[lp->rx_bd_ci];
-	regval = cur_p->addr;
+	regval = ACCESS_ONCE(cur_p->addr);
 	rmb();
 	while (numbdfree < budget) {
 		if (!(regval & XEMACPS_RXBUF_NEW_MASK))
@@ -1376,7 +1376,7 @@ static int xemacps_rx(struct net_local *lp, int budget)
 		}
 
 		/* the packet length */
-		len = cur_p->ctrl & XEMACPS_RXBUF_LEN_MASK;
+		len = ACCESS_ONCE(cur_p->ctrl) & XEMACPS_RXBUF_LEN_MASK;
 		rmb();
 		skb = lp->rx_skb[lp->rx_bd_ci].skb;
 		dma_unmap_single(lp->ndev->dev.parent,
@@ -1423,24 +1423,23 @@ static int xemacps_rx(struct net_local *lp, int budget)
 		packets++;
 		netif_receive_skb(skb);
 
-		cur_p->addr = (cur_p->addr & ~XEMACPS_RXBUF_ADD_MASK)
-					| (new_skb_baddr);
 		lp->rx_skb[lp->rx_bd_ci].skb = new_skb;
 		lp->rx_skb[lp->rx_bd_ci].mapping = new_skb_baddr;
 		lp->rx_skb[lp->rx_bd_ci].len = XEMACPS_RX_BUF_SIZE;
 
-		cur_p->ctrl = 0;
-		cur_p->addr &= (~XEMACPS_RXBUF_NEW_MASK);
+		regval = (regval & ~XEMACPS_RXBUF_ADD_MASK)
+					| (new_skb_baddr);
+		regval &= (~XEMACPS_RXBUF_NEW_MASK);
+		cur_p->addr = regval;
 		wmb();
 
 		lp->rx_bd_ci++;
 		lp->rx_bd_ci = lp->rx_bd_ci % XEMACPS_RECV_BD_CNT;
 		cur_p = &lp->rx_bd[lp->rx_bd_ci];
-		regval = cur_p->addr;
+		regval = ACCESS_ONCE(cur_p->addr);
 		rmb();
 		numbdfree++;
 	}
-	wmb();
 	lp->stats.rx_packets += packets;
 	lp->stats.rx_bytes += size;
 	return numbdfree;
@@ -1462,6 +1461,8 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 	while (1) {
 		regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
 		xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, regval);
+		/* Ensure write is seen by the MAC */
+		wmb();
 		if (regval & XEMACPS_RXSR_HRESPNOK_MASK)
 			dev_err(&lp->pdev->dev, "RX error 0x%x\n", regval);
 
@@ -1475,6 +1476,8 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 		 */
 		xemacps_write(lp->baseaddr,
 			XEMACPS_IER_OFFSET, XEMACPS_IXR_FRAMERX_MASK);
+		/* Ensure write is seen by the MAC */
+		wmb();
 
 		/* If a packet has come in between the last check of the BD
 		 * list and unmasking the interrupts, we may have missed the
@@ -1484,6 +1487,8 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 		&&  napi_reschedule(napi)) {
 			xemacps_write(lp->baseaddr,
 				XEMACPS_IDR_OFFSET, XEMACPS_IXR_FRAMERX_MASK);
+			/* Ensure write is seen by the MAC */
+			wmb();
 			continue;
 		}
 		break;
@@ -1515,6 +1520,8 @@ static void xemacps_tx_poll(unsigned long data)
 
 	regval = xemacps_read(lp->baseaddr, XEMACPS_TXSR_OFFSET);
 	xemacps_write(lp->baseaddr, XEMACPS_TXSR_OFFSET, regval);
+	/* Ensure write is seen by the MAC */
+	wmb();
 	dev_dbg(&lp->pdev->dev, "TX status 0x%x\n", regval);
 	if (regval & (XEMACPS_TXSR_HRESPNOK_MASK | XEMACPS_TXSR_BUFEXH_MASK))
 		dev_err(&lp->pdev->dev, "TX error 0x%x\n", regval);
@@ -1575,6 +1582,8 @@ static void xemacps_tx_poll(unsigned long data)
 		regval = xemacps_read(lp->baseaddr, XEMACPS_NWCTRL_OFFSET);
 		regval |= XEMACPS_NWCTRL_STARTTX_MASK;
 		xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, regval);
+		/* Ensure write is seen by the MAC */
+		wmb();
 		spin_unlock_irqrestore(&lp->nwctrlreg_lock, flags);
 	}
 
@@ -1599,6 +1608,8 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 		return IRQ_NONE;
 
 	xemacps_write(lp->baseaddr, XEMACPS_ISR_OFFSET, regisr);
+	/* Ensure write is seen by the MAC */
+	wmb();
 
 	while (regisr) {
 		if (regisr & (XEMACPS_IXR_TXCOMPL_MASK |
@@ -1613,19 +1624,27 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 			regctrl |= XEMACPS_NWCTRL_FLUSH_DPRAM_MASK;
 			xemacps_write(lp->baseaddr,
 					XEMACPS_NWCTRL_OFFSET, regctrl);
+			/* Ensure write is seen by the MAC */
+			wmb();
 			spin_unlock(&lp->nwctrlreg_lock);
 			xemacps_write(lp->baseaddr,
 				XEMACPS_IDR_OFFSET, XEMACPS_IXR_FRAMERX_MASK);
+			/* Ensure write is seen by the MAC */
+			wmb();
 			napi_schedule(&lp->napi);
 		}
 
 		if (regisr & XEMACPS_IXR_FRAMERX_MASK) {
 			xemacps_write(lp->baseaddr,
 				XEMACPS_IDR_OFFSET, XEMACPS_IXR_FRAMERX_MASK);
+			/* Ensure write is seen by the MAC */
+			wmb();
 			napi_schedule(&lp->napi);
 		}
 		regisr = xemacps_read(lp->baseaddr, XEMACPS_ISR_OFFSET);
 		xemacps_write(lp->baseaddr, XEMACPS_ISR_OFFSET, regisr);
+		/* Ensure write is seen by the MAC */
+		wmb();
 	}
 
 	return IRQ_HANDLED;
