@@ -57,12 +57,6 @@
 /* Transmission timeout is 3 seconds. */
 #define TX_TIMEOUT			(3*HZ)
 
-/* for RX skb IP header word-aligned */
-#define RX_IP_ALIGN_OFFSET		2
-
-/* DMA buffer descriptors must be aligned on a 4-byte boundary. */
-#define ALIGNMENT_BD			8
-
 /* Maximum value for hash bits. 2**6 */
 #define XEMACPS_MAX_HASH_BITS		64
 
