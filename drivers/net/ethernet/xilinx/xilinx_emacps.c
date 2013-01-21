@@ -83,11 +83,14 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 /* Number of receive buffer bytes as a unit, this is HW setup */
 #define XEMACPS_RX_BUF_UNIT	64
 
-/* Default SEND and RECV buffer descriptors (BD) numbers.
- * BD Space needed is (XEMACPS_SEND_BD_CNT+XEMACPS_RECV_BD_CNT)*8
- */
+/* Transmit and receive descriptor counts. The values are chosen to use a full
+   page of memory. When allocating coherent DMA memory, it gives you full pages
+   regardless of how much you ask for. We share a page between the transmit and
+   receive descriptors. Descriptors are 8 bytes and a page is 4096 bytes which
+   gives us 512 descriptors. We only need 64 transmit descriptors, which leaves
+   448 receive descriptors. */
 #define XEMACPS_SEND_BD_CNT	64
-#define XEMACPS_RECV_BD_CNT	128
+#define XEMACPS_RECV_BD_CNT	448
 
 #define XEMACPS_NAPI_WEIGHT	64
 
@@ -1565,17 +1568,12 @@ static void xemacps_descriptor_free(struct net_local *lp)
 
 	xemacps_clean_rings(lp);
 
-	size = XEMACPS_RECV_BD_CNT * sizeof(struct xemacps_bd);
 	if (lp->rx_bd) {
+		size = (XEMACPS_RECV_BD_CNT + XEMACPS_SEND_BD_CNT) *
+			sizeof(struct xemacps_bd);
 		dma_free_coherent(&lp->pdev->dev, size,
 			lp->rx_bd, lp->rx_bd_dma);
 		lp->rx_bd = NULL;
-	}
-
-	size = XEMACPS_SEND_BD_CNT * sizeof(struct xemacps_bd);
-	if (lp->tx_bd) {
-		dma_free_coherent(&lp->pdev->dev, size,
-			lp->tx_bd, lp->tx_bd_dma);
 		lp->tx_bd = NULL;
 	}
 }
@@ -1599,13 +1597,12 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	lp->tx_bd_tail = 0;
 	lp->rx_bd_ci = 0;
 
-	size = XEMACPS_RECV_BD_CNT * sizeof(struct xemacps_bd);
+	size = (XEMACPS_RECV_BD_CNT + XEMACPS_SEND_BD_CNT) *
+		sizeof(struct xemacps_bd);
 	lp->rx_bd = dma_alloc_coherent(&lp->pdev->dev, size,
 			&lp->rx_bd_dma, GFP_KERNEL);
 	if (!lp->rx_bd)
 		goto err_out;
-	dev_dbg(&lp->pdev->dev, "RX ring %d bytes at 0x%x mapped %p\n",
-			size, lp->rx_bd_dma, lp->rx_bd);
 
 	memset(lp->rx_bd, 0, sizeof(*lp->rx_bd) * XEMACPS_RECV_BD_CNT);
 	for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
@@ -1631,14 +1628,9 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	cur_p->ctrl = 0;
 	cur_p->addr |= XEMACPS_RXBUF_WRAP_MASK;
 
-
-	size = XEMACPS_SEND_BD_CNT * sizeof(struct xemacps_bd);
-	lp->tx_bd = dma_alloc_coherent(&lp->pdev->dev, size,
-			&lp->tx_bd_dma, GFP_KERNEL);
-	if (!lp->tx_bd)
-		goto err_out;
-	dev_dbg(&lp->pdev->dev, "TX ring %d bytes at 0x%x mapped %p\n",
-			size, lp->tx_bd_dma, lp->tx_bd);
+	lp->tx_bd = lp->rx_bd + XEMACPS_RECV_BD_CNT;
+	lp->tx_bd_dma = lp->rx_bd_dma + (XEMACPS_RECV_BD_CNT *
+		sizeof(struct xemacps_bd));
 
 	memset(lp->tx_bd, 0, sizeof(*lp->tx_bd) * XEMACPS_SEND_BD_CNT);
 	for (i = 0; i < XEMACPS_SEND_BD_CNT; i++) {
