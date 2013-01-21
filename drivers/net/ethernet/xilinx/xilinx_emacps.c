@@ -1169,12 +1169,13 @@ static int xemacps_rx(struct net_local *lp, int budget)
 	unsigned int numbdfree = 0;
 	u32 size = 0;
 	u32 packets = 0;
+	u32 addr;
 
 	cur_p = &lp->rx_bd[lp->rx_bd_ci];
-	while ((cur_p->addr & XEMACPS_RXBUF_NEW_MASK) &&
-	       (numbdfree < budget)) {
+	addr = ACCESS_ONCE(cur_p->addr);
+	while ((addr & XEMACPS_RXBUF_NEW_MASK) && (numbdfree < budget)) {
 		/* the packet length */
-		len = cur_p->ctrl & XEMACPS_RXBUF_LEN_MASK;
+		len = ACCESS_ONCE(cur_p->ctrl) & XEMACPS_RXBUF_LEN_MASK;
 		skb = lp->rx_skb[lp->rx_bd_ci].skb;
 		dma_unmap_single(lp->ndev->dev.parent,
 				 lp->rx_skb[lp->rx_bd_ci].mapping,
@@ -1225,19 +1226,19 @@ static int xemacps_rx(struct net_local *lp, int budget)
 						     new_skb->data,
 						     XEMACPS_RX_BUF_SIZE,
 						     DMA_FROM_DEVICE);
-		cur_p->addr = (cur_p->addr & ~XEMACPS_RXBUF_ADD_MASK) | (new_skb_baddr);
 		lp->rx_skb[lp->rx_bd_ci].skb = new_skb;
 		lp->rx_skb[lp->rx_bd_ci].mapping = new_skb_baddr;
 
-		cur_p->ctrl = 0;
-		cur_p->addr &= (~XEMACPS_RXBUF_NEW_MASK);
+		addr = (addr & ~XEMACPS_RXBUF_ADD_MASK) | (new_skb_baddr);
+		addr &= (~XEMACPS_RXBUF_NEW_MASK);
+		cur_p->addr = addr;
+		wmb();
 
 		lp->rx_bd_ci++;
 		lp->rx_bd_ci = lp->rx_bd_ci % XEMACPS_RECV_BD_CNT;
 		cur_p = &lp->rx_bd[lp->rx_bd_ci];
 		numbdfree++;
 	}
-	wmb();
 	lp->stats.rx_packets += packets;
 	lp->stats.rx_bytes += size;
 	return numbdfree;
@@ -1258,6 +1259,7 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 	while (work_done < budget) {
 		regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
 		xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, regval);
+		wmb();
 		temp_work_done = xemacps_rx(lp, budget - work_done);
 		work_done += temp_work_done;
 		if (temp_work_done <= 0)
@@ -1274,6 +1276,7 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 	xemacps_write(lp->baseaddr, XEMACPS_IER_OFFSET,
 					(XEMACPS_IXR_FRAMERX_MASK |
 					XEMACPS_IXR_RX_ERR_MASK));
+	wmb();
 
 	return work_done;
 }
@@ -1298,6 +1301,7 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 	while (regisr) {
 		/* acknowledge interrupt and clear it */
 		xemacps_write(lp->baseaddr, XEMACPS_ISR_OFFSET, regisr);
+		wmb();
 
 		/* RX interrupts */
 		if (regisr &
@@ -1309,6 +1313,7 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 					XEMACPS_IDR_OFFSET,
 					(XEMACPS_IXR_FRAMERX_MASK |
 					 XEMACPS_IXR_RX_ERR_MASK));
+				wmb();
 				dev_dbg(&lp->pdev->dev,
 					"schedule RX softirq\n");
 				__napi_schedule(&lp->napi);
