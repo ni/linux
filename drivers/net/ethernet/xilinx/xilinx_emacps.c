@@ -1255,14 +1255,11 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 	int temp_work_done;
 	u32 regval;
 
-	regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
-	xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, regval);
-
 	while (work_done < budget) {
-		temp_work_done = xemacps_rx(lp, budget - work_done);
-		work_done += temp_work_done;
 		regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
 		xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, regval);
+		temp_work_done = xemacps_rx(lp, budget - work_done);
+		work_done += temp_work_done;
 		if (temp_work_done <= 0)
 			break;
 	}
