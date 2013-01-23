@@ -62,14 +62,6 @@
 #define DRIVER_DESCRIPTION	"Xilinx Tri-Mode Ethernet MAC driver"
 #define DRIVER_VERSION		"1.00a"
 
-#ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
-/* Transmission timeout is 1 second. */
-#define TX_TIMEOUT		(1*HZ)
-#else
-/* Transmission timeout is 3 seconds. */
-#define TX_TIMEOUT		(3*HZ)
-#endif
-
 /* for RX skb IP header word-aligned */
 #define RX_IP_ALIGN_OFFSET	2
 
@@ -94,14 +86,10 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 /* Default SEND and RECV buffer descriptors (BD) numbers.
  * BD Space needed is (XEMACPS_SEND_BD_CNT+XEMACPS_RECV_BD_CNT)*8
  */
-#define XEMACPS_SEND_BD_CNT	256
+#define XEMACPS_SEND_BD_CNT	64
 #define XEMACPS_RECV_BD_CNT	128
 
 #define XEMACPS_NAPI_WEIGHT	64
-
-#ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
-#define XEMACPS_SEND_BD_TPT	64
-#endif
 
 /* Register offset definitions. Unless otherwise noted, register access is
  * 32 bit. Names are self explained here.
@@ -389,14 +377,7 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 #define XEMACPS_IXR_MGMNT_MASK      0x00000001	/* PHY management complete */
 
 #define XEMACPS_IXR_ALL_MASK	(XEMACPS_IXR_FRAMERX_MASK | \
-				 XEMACPS_IXR_RX_ERR_MASK | \
-				 XEMACPS_IXR_TXCOMPL_MASK | \
-				 XEMACPS_IXR_TX_ERR_MASK)
-
-#define XEMACPS_IXR_TX_ERR_MASK	(XEMACPS_IXR_TXEXH_MASK |    \
-					XEMACPS_IXR_RETRY_MASK |    \
-					XEMACPS_IXR_URUN_MASK  |    \
-					XEMACPS_IXR_TXUSED_MASK)
+				 XEMACPS_IXR_RX_ERR_MASK)
 
 #define XEMACPS_IXR_RX_ERR_MASK	(XEMACPS_IXR_HRESPNOK_MASK | \
 					XEMACPS_IXR_RXUSED_MASK |  \
@@ -482,6 +463,11 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 #define XSLCR_FPGA2_CLK_CTRL_OFFSET	0x190 /* PL Clock 2 Output Control */
 #define XSLCR_FPGA3_CLK_CTRL_OFFSET	0x1A0 /* PL Clock 3 Output Control */
 
+#define XSLCR_PSS_IDCODE		0x530 /* PS IDCODE */
+
+#define XSLCR_PSS_IDCODE_REVISION_MASK	0xF0000000
+#define XSLCR_PSS_IDCODE_REVISION_SHIFT	28
+
 #define BOARD_TYPE_ZYNQ			0x01
 #define BOARD_TYPE_PEEP			0x02
 
@@ -518,7 +504,6 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 struct ring_info {
 	struct sk_buff *skb;
 	dma_addr_t     mapping;
-	unsigned long  start_jiffies;
 };
 
 /* DMA buffer descriptor structure. Each BD is two words */
@@ -628,7 +613,9 @@ struct net_local {
 	u32                    tx_bd_tail;
 	u32                    rx_bd_ci;
 
-	atomic_t               tx_bd_freecnt;
+	u32                    tx_bd_freecnt;
+
+	bool                   needs_tx_stall_workaround;
 
 	unsigned long          flags;
 
@@ -638,10 +625,10 @@ struct net_local {
 	struct napi_struct     napi;    /* napi information for device */
 	struct net_device_stats stats;  /* Statistics for this device */
 
-	struct work_struct     tx_task;
+	unsigned long          tx_task_start_jiffies;
+	struct delayed_work    tx_task;
+	struct timer_list      tx_timer;
 	struct work_struct     reset_task;
-
-	struct timer_list      watchdog_timer;
 
 #ifdef CONFIG_FPGA_PERIPHERAL
 	struct notifier_block  fpga_notifier;
@@ -1298,152 +1285,6 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 }
 
 /**
- * xemacps_tx_poll - tasklet poll routine
- * @data: pointer to network interface device structure
- **/
-static void xemacps_tx_poll(struct net_device *ndev)
-{
-	struct net_local *lp = netdev_priv(ndev);
-	u32 regval;
-	u32 len = 0;
-	unsigned int bdcount = 0;
-	unsigned int bdpartialcount = 0;
-	unsigned int sop = 0;
-	struct xemacps_bd *cur_p;
-	u32 cur_i;
-	u32 numbdstofree;
-	struct ring_info *rp;
-	struct sk_buff *skb;
-
-	regval = xemacps_read(lp->baseaddr, XEMACPS_TXSR_OFFSET);
-	xemacps_write(lp->baseaddr, XEMACPS_TXSR_OFFSET, regval);
-	dev_dbg(&lp->pdev->dev, "TX status 0x%x\n", regval);
-
-	/* If this error is seen, it is in deep trouble and nothing
-	 * we can do to revive hardware other than reset hardware.
-	 * Or try to close this interface and reopen it.
-	 */
-	if (regval & (XEMACPS_TXSR_URUN_MASK | XEMACPS_TXSR_RXOVR_MASK |
-		XEMACPS_TXSR_HRESPNOK_MASK | XEMACPS_TXSR_COL1000_MASK |
-		XEMACPS_TXSR_BUFEXH_MASK)) {
-		netdev_dbg(ndev, "TX ERROR 0x%x\n", regval);
-		lp->stats.tx_errors++;
-	}
-#ifndef CONFIG_XILINX_PS_EMAC_BROKEN_TX
-	/* This may happen when a buffer becomes complete
-	 * between reading the ISR and scanning the descriptors.
-	 * Nothing to worry about.
-	 */
-	if (!(regval & XEMACPS_TXSR_TXCOMPL_MASK))
-		goto tx_poll_out;
-#endif
-	cur_i = lp->tx_bd_ci;
-	cur_p = &lp->tx_bd[cur_i];
-	while (bdcount < XEMACPS_SEND_BD_CNT) {
-		if ((sop == 0) && (cur_p->ctrl & XEMACPS_TXBUF_USED_MASK))
-			sop = 1;
-		else
-			break;
-
-		if (sop == 1) {
-			bdcount++;
-			bdpartialcount++;
-		}
-		/* hardware has processed this BD so check the "last" bit.
-		 * If it is clear, then there are more BDs for the current
-		 * packet. Keep a count of these partial packet BDs.
-		 */
-		if ((sop == 1) && (cur_p->ctrl & XEMACPS_TXBUF_LAST_MASK)) {
-			sop = 0;
-			bdpartialcount = 0;
-		}
-
-		cur_i++;
-		cur_i = cur_i % XEMACPS_SEND_BD_CNT;
-		cur_p = &lp->tx_bd[cur_i];
-	}
-	numbdstofree = bdcount - bdpartialcount;
-	cur_p = &lp->tx_bd[lp->tx_bd_ci];
-	while (numbdstofree) {
-		rp = &lp->tx_skb[lp->tx_bd_ci];
-		skb = rp->skb;
-		len += skb->len;
-
-#ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
-		if ((lp->hwtstamp_config.tx_type == HWTSTAMP_TX_ON) &&
-			(ntohs(skb->protocol) == 0x800)) {
-			unsigned ip_proto, dest_port, msg_type;
-
-			skb_reset_mac_header(skb);
-
-			ip_proto = *((u8 *)skb->mac_header + 14 + 9);
-			dest_port = ntohs(*(((u16 *)skb->mac_header) +
-					((14 + 20 + 2)/2)));
-			msg_type = *((u8 *)skb->mac_header + 42);
-			if ((ip_proto == IPPROTO_UDP) &&
-				(dest_port == 0x13F)) {
-				/* Timestamp this packet */
-				xemacps_tx_hwtstamp(lp, skb, msg_type & 0x2);
-			}
-		}
-#endif /* CONFIG_XILINX_PS_EMAC_HWTSTAMP */
-
-		dma_unmap_single(&lp->pdev->dev, rp->mapping, skb->len,
-			DMA_TO_DEVICE);
-		rp->skb = NULL;
-		dev_kfree_skb(skb);
-		/* log tx completed packets and bytes, errors logs
-		 * are in other error counters.
-		 */
-		if (cur_p->ctrl & XEMACPS_TXBUF_LAST_MASK) {
-			if (!(cur_p->ctrl & XEMACPS_TXBUF_ERR_MASK)) {
-				lp->stats.tx_packets++;
-				lp->stats.tx_bytes += len;
-			} else {
-				lp->stats.tx_errors++;
-			}
-			len = 0;
-		}
-
-		/* Preserve used and wrap bits; clear everything else. */
-		cur_p->ctrl &= (XEMACPS_TXBUF_USED_MASK | XEMACPS_TXBUF_WRAP_MASK);
-
-		lp->tx_bd_ci++;
-		lp->tx_bd_ci = lp->tx_bd_ci % XEMACPS_SEND_BD_CNT;
-		cur_p = &lp->tx_bd[lp->tx_bd_ci];
-		numbdstofree--;
-	}
-	wmb();
-
-	atomic_add(bdcount - bdpartialcount, &lp->tx_bd_freecnt);
-
-#ifndef CONFIG_XILINX_PS_EMAC_BROKEN_TX
-tx_poll_out:
-	if (netif_queue_stopped(ndev))
-#else
-	if (netif_queue_stopped(ndev) && (bdcount - bdpartialcount))
-#endif
-		netif_start_queue(ndev);
-}
-
-static void xemacps_tx_task(struct work_struct *work)
-{
-	struct net_local *lp =
-		container_of(work, struct net_local, tx_task);
-
-	if (test_bit(XEMACPS_STATE_DOWN, &lp->flags))
-		return;
-
-	xemacps_tx_poll(lp->ndev);
-
-	/* We disable TX interrupts in interrupt service
-	 * routine, now it is time to enable it back.
-	 */
-	xemacps_write(lp->baseaddr, XEMACPS_IER_OFFSET,
-		      XEMACPS_IXR_TXCOMPL_MASK | XEMACPS_IXR_TX_ERR_MASK);
-}
-
-/**
  * xemacps_interrupt - interrupt main service routine
  * @irq: interrupt number
  * @dev_id: pointer to a network device structure
@@ -1478,19 +1319,6 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 					"schedule RX softirq\n");
 				__napi_schedule(&lp->napi);
 			}
-
-		/* TX interrupts */
-		if (regisr &
-		    (XEMACPS_IXR_TXCOMPL_MASK | XEMACPS_IXR_TX_ERR_MASK)) {
-			/* disable TX interrupt */
-			xemacps_write(lp->baseaddr,
-				XEMACPS_IDR_OFFSET,
-				(XEMACPS_IXR_TXCOMPL_MASK|
-				 XEMACPS_IXR_TX_ERR_MASK));
-			dev_dbg(&lp->pdev->dev, "schedule TX tasklet\n");
-			/* Schedule our Tx task non-reentrantly. */
-			queue_work(system_nrt_wq, &lp->tx_task);
-		}
 
 		regisr = xemacps_read(lp->baseaddr, XEMACPS_ISR_OFFSET);
 	}
@@ -1819,7 +1647,7 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	}
 	/* wrap bit set for last BD, bdptr is moved to last here */
 	cur_p->ctrl = (XEMACPS_TXBUF_WRAP_MASK | XEMACPS_TXBUF_USED_MASK);
-	atomic_set(&lp->tx_bd_freecnt, XEMACPS_SEND_BD_CNT);
+	lp->tx_bd_freecnt = XEMACPS_SEND_BD_CNT;
 
 	for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
 		cur_p = &lp->rx_bd[i];
@@ -2001,9 +1829,6 @@ static int xemacps_up(struct net_device *ndev)
 		return -ENXIO;
 	}
 
-	lp->watchdog_timer.expires = jiffies + TX_TIMEOUT;
-	add_timer(&lp->watchdog_timer);
-
 	clear_bit(XEMACPS_STATE_DOWN, &lp->flags);
 
 	netif_start_queue(ndev);
@@ -2029,7 +1854,7 @@ static int xemacps_down(struct net_device *ndev, bool carrier_off)
 	napi_disable(&lp->napi);
 
 	/* Wait for any outstanding Tx polling to complete. */
-	cancel_work_sync(&lp->tx_task);
+	cancel_delayed_work_sync(&lp->tx_task);
 
 	/* Disable further calls to xemacps_start_xmit. */
 	netif_stop_queue(ndev);
@@ -2038,12 +1863,12 @@ static int xemacps_down(struct net_device *ndev, bool carrier_off)
 	netif_tx_lock(ndev);
 	netif_tx_unlock(ndev);
 
+	/* Wait for any outstanding transmit timer calls to complete. */
+	del_timer_sync(&lp->tx_timer);
+
 	/* If we're not resetting, cancel the reset task. */
 	if (!test_bit(XEMACPS_STATE_RESET, &lp->flags))
 		cancel_work_sync(&lp->reset_task);
-
-	/* Wait for any outstanding watchdog timer calls to complete. */
-	del_timer_sync(&lp->watchdog_timer);
 
 	/* Turn off carrier if specified. */
 	if (carrier_off)
@@ -2117,38 +1942,6 @@ static int xemacps_close(struct net_device *ndev)
 	return xemacps_down(ndev, true);
 }
 
-/*
- * We use our own timer routine rather than relying upon netdev->tx_timeout
- * because we have a very large hardware transmit queue. Due to the large
- * queue, the netdev->ndo_tx_timeout function cannot detect a transmit stall
- * in a timely fashion.
- */
-static void xemacps_watchdog_timer(unsigned long arg)
-{
-	struct net_local *lp = (struct net_local *)arg;
-	int reset = 0;
-
-	if (test_bit(XEMACPS_STATE_DOWN, &lp->flags))
-		return;
-
-	/* If Tx packets have been sent */
-	if (XEMACPS_SEND_BD_CNT > atomic_read(&lp->tx_bd_freecnt)) {
-		/* Check if the earliest Tx packet was sent longer ago than
-		   out timeout, and schedule a reset if so. */
-		if (time_after(jiffies, (lp->tx_skb[lp->tx_bd_ci].start_jiffies +
-					 TX_TIMEOUT)))
-			reset = 1;
-	}
-
-	if (reset) {
-		dev_info(&lp->pdev->dev,
-			 "Tx stall detected, resetting interface\n");
-		schedule_work(&lp->reset_task);
-	} else if (!test_bit(XEMACPS_STATE_DOWN, &lp->flags))
-		/* rearm timer */
-		mod_timer(&lp->watchdog_timer, jiffies + TX_TIMEOUT);
-}
-
 static void xemacps_reset_task(struct work_struct *work)
 {
 	struct net_local *lp =
@@ -2199,92 +1992,220 @@ static int xemacps_set_mac_address(struct net_device *ndev, void *addr)
 	return 0;
 }
 
+/*
+ * Transmit handling
+ */
+
+/**
+ * xemacps_tx_clean - clean up completed transmit buffers
+ * @lp: local device instance pointer
+ * return number of transmit buffers cleaned
+ **/
+static int xemacps_tx_clean(struct net_local *lp)
+{
+	struct ring_info *curr_inf;
+	struct xemacps_bd *curr_bd;
+	int bdcount;
+	u32 regval;
+
+	/* Read and clear the transmit status register. We don't use this
+	   value for anything, but we must keep it current. Not reading and
+	   clearing this register seems to lead to the transmitter getting
+	   confused. */
+	regval = xemacps_read(lp->baseaddr, XEMACPS_TXSR_OFFSET);
+	xemacps_write(lp->baseaddr, XEMACPS_TXSR_OFFSET, regval);
+	wmb();
+
+	bdcount = 0;
+
+	for (;;) {
+		curr_bd = &(lp->tx_bd[lp->tx_bd_ci]);
+		curr_inf = &(lp->tx_skb[lp->tx_bd_ci]);
+
+		regval = ACCESS_ONCE(curr_bd->ctrl);
+
+		/* Break out if this bd doesn't have a send buffer or has not
+		   yet completed. */
+		if (!(curr_inf->skb && (regval & XEMACPS_TXBUF_USED_MASK)))
+			break;
+
+		if (unlikely(regval & XEMACPS_TXBUF_ERR_MASK))
+			++lp->stats.tx_errors;
+		else {
+			++lp->stats.tx_packets;
+			lp->stats.tx_bytes += curr_inf->skb->len;
+		}
+
+		dma_unmap_single(&lp->pdev->dev, curr_inf->mapping,
+				 curr_inf->skb->len,
+				 DMA_TO_DEVICE);
+
+		dev_kfree_skb(curr_inf->skb);
+		curr_inf->skb = NULL;
+
+		regval &= (XEMACPS_TXBUF_USED_MASK | XEMACPS_TXBUF_WRAP_MASK);
+		curr_bd->ctrl = regval;
+		wmb();
+
+		++lp->tx_bd_ci;
+		lp->tx_bd_ci %= XEMACPS_SEND_BD_CNT;
+
+		++bdcount;
+	}
+
+	lp->tx_bd_freecnt += bdcount;
+	return bdcount;
+}
+
+/**
+ * xemacps_tx_timer - deferred cleaning of transmit buffers
+ * @arg: struct net_local *
+ **/
+static void xemacps_tx_timer(unsigned long arg)
+{
+	struct net_local *lp = (struct net_local *)arg;
+
+	netif_tx_lock(lp->ndev);
+	xemacps_tx_clean(lp);
+	netif_tx_unlock(lp->ndev);
+}
+
+/**
+ * xemacps_tx_task - reenable transmit after transmit buffers have been cleaned
+ * @work: work struct
+ **/
+static void xemacps_tx_task(struct work_struct *work)
+{
+	struct net_local *lp =
+		container_of(work, struct net_local, tx_task.work);
+	int cleaned;
+
+	netif_tx_lock(lp->ndev);
+	cleaned = xemacps_tx_clean(lp);
+	netif_tx_unlock(lp->ndev);
+
+	if (cleaned)
+		/* Start it back up. */
+		netif_start_queue(lp->ndev);
+	else if (time_after(jiffies, lp->tx_task_start_jiffies + HZ)) {
+		/* Realistically, I don't know what circumstances could lead
+		   to this, since in my testing we clean some descriptors the
+		   first time through and restart the transmit queue. */
+		dev_info(&lp->pdev->dev,
+			"transmit didn't complete, resetting interface\n");
+		schedule_work(&lp->reset_task);
+	} else
+		/* In the testing I've done, we never get here. We always
+		   clean some descriptors the first time through and restart
+		   the transmit queue. */
+		schedule_delayed_work(&lp->tx_task, 1);
+}
+
 /**
  * xemacps_start_xmit - transmit a packet (called by kernel)
  * @skb: socket buffer
  * @ndev: network interface device structure
- * return 0 on success, other value if error
+ * return NETDEV_TX_OK or NETDEV_TX_BUSY
  **/
-static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
+static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
+				      struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
-	dma_addr_t  mapping;
-	unsigned int nr_frags, len;
-	int i;
+	struct ring_info *curr_inf;
+	struct xemacps_bd *curr_bd;
 	u32 regval;
-	void       *virt_addr;
-	skb_frag_t *frag;
-	struct xemacps_bd *cur_p;
 
-	nr_frags = skb_shinfo(skb)->nr_frags + 1;
+	xemacps_tx_clean(lp);
 
-	cur_p = &(lp->tx_bd[lp->tx_bd_tail]);
-	if (nr_frags >= atomic_read(&lp->tx_bd_freecnt)) {
-		netif_stop_queue(ndev); /* stop send queue */
+	/* Realistically, I don't think we should ever get here. In the testing
+	   I've done, I saw a maximum of 14 transmit packets in use at the same
+	   time. I manually shortened the transmit ring to make sure this code
+	   path is tested. */
+	if (unlikely(lp->tx_bd_freecnt == 0)) {
+		netif_stop_queue(ndev);
+		lp->tx_task_start_jiffies = jiffies;
+		schedule_delayed_work(&lp->tx_task, 1);
 		return NETDEV_TX_BUSY;
 	}
-	atomic_sub(nr_frags, &lp->tx_bd_freecnt);
-	frag = &skb_shinfo(skb)->frags[0];
 
-	for (i = 0; i < nr_frags; i++) {
-		if (i == 0) {
-			len = skb_headlen(skb);
-			mapping = dma_map_single(&lp->pdev->dev, skb->data,
-				len, DMA_TO_DEVICE);
-		} else {
-			len = frag->size;
-			virt_addr = (void *)page_address(frag->page.p) +
-				frag->page_offset;
-			mapping = dma_map_single(&lp->pdev->dev, virt_addr,
-				len, DMA_TO_DEVICE);
-			frag++;
-		}
+	curr_inf = &(lp->tx_skb[lp->tx_bd_tail]);
+	curr_bd = &(lp->tx_bd[lp->tx_bd_tail]);
 
-		lp->tx_skb[lp->tx_bd_tail].skb = skb;
-		lp->tx_skb[lp->tx_bd_tail].mapping = mapping;
-		lp->tx_skb[lp->tx_bd_tail].start_jiffies = jiffies;
+	curr_inf->mapping = dma_map_single(&lp->pdev->dev, skb->data,
+					   skb_headlen(skb), DMA_TO_DEVICE);
 
-		cur_p->addr = mapping;
-
-		/* Preserve only critical status bits.  Packet is NOT to be
-		 * committed to hardware at this time.
-		 */
-		regval = cur_p->ctrl;
-		regval &= (XEMACPS_TXBUF_USED_MASK | XEMACPS_TXBUF_WRAP_MASK);
-		/* update length field */
-		regval |= ((regval & ~XEMACPS_TXBUF_LEN_MASK) | len);
-		regval &= ~XEMACPS_TXBUF_USED_MASK;
-		/* last fragment of this packet? */
-		if (i == (nr_frags - 1))
-			regval |= XEMACPS_TXBUF_LAST_MASK;
-		cur_p->ctrl = regval;
-
-		lp->tx_bd_tail++;
-		lp->tx_bd_tail = lp->tx_bd_tail % XEMACPS_SEND_BD_CNT;
-
-		cur_p = &(lp->tx_bd[lp->tx_bd_tail]);
+	if (unlikely(dma_mapping_error(&lp->pdev->dev, curr_inf->mapping))) {
+		/* There's nothing we can do about this. */
+		dev_err(&lp->pdev->dev, "transmit DMA mapping error\n");
+		dev_kfree_skb(skb);
+		return NETDEV_TX_OK;
 	}
+
+	curr_inf->skb = skb;
+
+	curr_bd->addr = curr_inf->mapping;
 	wmb();
+
+	regval = ACCESS_ONCE(curr_bd->ctrl);
+	regval &= XEMACPS_TXBUF_WRAP_MASK;
+	regval |= skb_headlen(skb);
+	regval |= XEMACPS_TXBUF_LAST_MASK;
+	curr_bd->ctrl = regval;
+	wmb();
+
+	++lp->tx_bd_tail;
+	lp->tx_bd_tail %= XEMACPS_SEND_BD_CNT;
+
+	--lp->tx_bd_freecnt;
 
 	regval = xemacps_read(lp->baseaddr, XEMACPS_NWCTRL_OFFSET);
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
 		      (regval | XEMACPS_NWCTRL_STARTTX_MASK));
 	wmb();
 
-#ifdef CONFIG_XILINX_PS_EMAC_BROKEN_TX
+	if (unlikely((lp->needs_tx_stall_workaround))) {
+		int loop_count = 0;
 
-	if (XEMACPS_SEND_BD_TPT > atomic_read(&lp->tx_bd_freecnt)) {
-		/* disable TX interrupt */
-		xemacps_write(lp->baseaddr,
-			XEMACPS_IDR_OFFSET,
-			(XEMACPS_IXR_TXCOMPL_MASK|
-			 XEMACPS_IXR_TX_ERR_MASK));
+		/* We poll the transmit status register waiting for the packet
+		   to be sent. At 1Gb, I've seen a maximum loop count of ~300.
+		   At 100Mb, ~2300, and at 10Mb, ~22000. There are things we
+		   could do to lower the impact of this polling loop, but I
+		   don't think it's worth it to spend the time on a problem
+		   that doesn't exist in Zynq chips we'll actually ship with.
+		   This limits the transmit side to one buffer at a time in
+		   progress, which precludes the condition that causes the
+		   transmit stall hardware bug. */
+		do {
+			/* Wait for something other than TXGO to be set in the
+			   transmit status register. */
+			regval = xemacps_read(lp->baseaddr, XEMACPS_TXSR_OFFSET);
+			regval &= ~XEMACPS_TXSR_TXGO_MASK;
+			if (regval)
+				break;
+			cpu_relax();
+			++loop_count;
+		} while (100000 > loop_count);
 
-		/* Schedule our Tx task non-reentrantly. */
-		queue_work(system_nrt_wq, &lp->tx_task);
+		/* I don't know what circumstances could lead to this case. I
+		   have never seen it in the testing I've done. */
+		if (unlikely(!regval)) {
+			dev_info(&lp->pdev->dev,
+			  "transmit didn't complete, resetting interface\n");
+
+			/* We don't own this SKB, make sure we don't try to
+			   free it during the upcoming reset. */
+			curr_inf->skb = NULL;
+
+			schedule_work(&lp->reset_task);
+			return NETDEV_TX_BUSY;
+		}
 	}
-#endif
-	return 0;
+
+	/* If no other packets are transmitted in the meantime, the timer
+	   callback will clean things up later. */
+	mod_timer(&lp->tx_timer, jiffies + HZ);
+
+	return NETDEV_TX_OK;
 }
 
 /*
@@ -3220,6 +3141,16 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		goto err_out_unregister_netdev;
 	}
 
+	/* Read PSS_IDCODE and get the revision field. */
+	regval = xslcr_read(XSLCR_PSS_IDCODE);
+	regval &= XSLCR_PSS_IDCODE_REVISION_MASK;
+	regval >>= XSLCR_PSS_IDCODE_REVISION_SHIFT;
+
+	/* Transmit stall hardware bug is fixed if PSS_IDCODE revision field is
+	   greater than zero. */
+	if (0 == regval)
+		lp->needs_tx_stall_workaround = true;
+
 	/* Default to interrupt mode. */
 	lp->ni_polling_interval = -1;
 
@@ -3247,11 +3178,9 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		goto err_out_sysfs_remove_file2;
 	}
 
-	INIT_WORK(&lp->tx_task, xemacps_tx_task);
+	INIT_DELAYED_WORK(&lp->tx_task, xemacps_tx_task);
+	setup_timer(&lp->tx_timer, xemacps_tx_timer, (unsigned long)lp);
 	INIT_WORK(&lp->reset_task, xemacps_reset_task);
-
-	setup_timer(&lp->watchdog_timer, xemacps_watchdog_timer,
-		    (unsigned long)lp);
 
 	xemacps_update_hwaddr(lp);
 
