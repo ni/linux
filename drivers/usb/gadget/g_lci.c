@@ -34,9 +34,6 @@
 #include "f_mass_storage.c"
 #include "usbstring.c"
 
-static char* serialNum = "00000000";
-module_param(serialNum, charp, 444);
-
 static void lci_cleanup(void);
 static int lci_unbind(struct usb_composite_dev*);
 
@@ -51,8 +48,8 @@ static struct usb_device_descriptor lci_device_descriptor = {
 	.bDeviceProtocol =	0x01,
 
 	/* Vendor and product id can be overridden by module parameters.  */
-	.idVendor =		cpu_to_le16(0x3923),
-	.idProduct =		cpu_to_le16(0x76F6),
+	.idVendor =		cpu_to_le16(0x0000),
+	.idProduct =		cpu_to_le16(0x0000),
 	.bNumConfigurations =	1,
 };
 
@@ -64,15 +61,12 @@ static struct usb_configuration lci_configuration = {
 
 #define STRING_MANUFACTURER_IDX		0
 #define STRING_PRODUCT_IDX		1
-#define STRING_SERIAL_IDX		2
 
 static char manufacturer[50];
-static char serial[16];
 
 static struct usb_string strings_dev[] = {
 	[STRING_MANUFACTURER_IDX].s = manufacturer,
 	[STRING_PRODUCT_IDX].s = DRIVER_DESC,
-	[STRING_SERIAL_IDX].s = serial,
 	{  } /* end of list */
 };
 
@@ -92,22 +86,6 @@ static struct usb_composite_driver lci_composite_driver = {
 	.strings	= dev_strings,
 	.max_speed	= USB_SPEED_HIGH,
 	.unbind		= __exit_p(lci_unbind),
-};
-
-static struct usb_otg_descriptor otg_descriptor = {
-	.bLength =		sizeof otg_descriptor,
-	.bDescriptorType =	USB_DT_OTG,
-
-	/*
-	 * REVISIT SRP-only hardware is possible, although
-	 * it would not be called "OTG" ...
-	 */
-	.bmAttributes =		USB_OTG_SRP | USB_OTG_HNP,
-};
-
-static const struct usb_descriptor_header *otg_desc[] = {
-	(struct usb_descriptor_header *) &otg_descriptor,
-	NULL,
 };
 
 static unsigned long lci_registered;
@@ -153,8 +131,6 @@ void platform_device_release(struct device *dev)
    //No work necessary, but the platform driver code spews debug warnings to
    //dmesg if this method is not provided.
 }
-
-#define NUM_HID_INTERFACES 4
 
 static struct platform_device lci_hid_plat_device[] = {
 	{  
@@ -273,7 +249,8 @@ static int __init hid_plat_driver_probe(struct platform_device *pdev)
 	}
 
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
-	if (!entry)	return -ENOMEM;
+	if (!entry)
+		return -ENOMEM;
 
 	entry->func = func;
 	list_add_tail(&entry->node, &hidg_func_list);
@@ -283,23 +260,23 @@ static int __init hid_plat_driver_probe(struct platform_device *pdev)
 
 static int hid_register(void)
 {
-   //The HID gadget is a platform driver. To use the gadget, a data structure 
-   //must be registered and probed into the platform driver for each interface.
+	//The HID gadget is a platform driver. To use the gadget, a data structure 
+	//must be registered and probed into the platform driver for each interface.
 
-   int status, i;
+	int status, i;
 
-   for(i = 0; i < NUM_HID_INTERFACES; ++i)
-   {
-      status = platform_device_register(&lci_hid_plat_device[i]);
-      if(status < 0) return status;
-      set_bit(i, &lci_hid_device_registered);
+	for(i = 0; i < ARRAY_SIZE(lci_hid_plat_device); ++i)
+	{
+		status = platform_device_register(&lci_hid_plat_device[i]);
+		if(status < 0) return status;
+		set_bit(i, &lci_hid_device_registered);
 
-      status = platform_driver_probe(&lci_hid_plat_driver[i], hid_plat_driver_probe);
-      if(status < 0) return status;
-      set_bit(i, &lci_hid_driver_probed);
-   }   
+		status = platform_driver_probe(&lci_hid_plat_driver[i], hid_plat_driver_probe);
+		if(status < 0) return status;
+		set_bit(i, &lci_hid_driver_probed);
+	}   
 
-   return status;
+	return status;
 }
 
 static void hid_unregister(void)
@@ -307,7 +284,7 @@ static void hid_unregister(void)
 	int i;
 	struct hidg_func_node *e, *n;
 
-	for(i = 0; i < NUM_HID_INTERFACES; ++i)
+	for(i = 0; i < ARRAY_SIZE(lci_hid_plat_device); ++i)
 	{
 		if(test_and_clear_bit(i, &lci_hid_driver_probed))
 		{
@@ -333,11 +310,6 @@ static int __init lci_bind_config(struct usb_configuration *c)
 	struct hidg_func_node *e;
 	int func = 0, status = 0;
 
-	if (gadget_is_otg(c->cdev->gadget)) {
-		c->descriptors = otg_desc;
-		c->bmAttributes |= USB_CONFIG_ATT_WAKEUP;
-	}
-
 	list_for_each_entry(e, &hidg_func_list, node) {
 		status = hidg_bind_config(c, e->func, func++);
 		if (status) break;
@@ -358,14 +330,16 @@ static int __init lci_bind(struct usb_composite_dev *cdev)
 	//Sanity check HID gadget count
 	list_for_each(tmp, &hidg_func_list)	num_hid_interfaces++;
 
-	if (num_hid_interfaces != NUM_HID_INTERFACES) {
-		printk("ERROR: hid interface count %d, expected: %d", 
-				num_hid_interfaces, NUM_HID_INTERFACES);
+	if (num_hid_interfaces != ARRAY_SIZE(lci_hid_plat_device)) {
 		return -ENODEV;
 	}
 
 	//Setup HID
 	status = ghid_setup(cdev->gadget, num_hid_interfaces);
+	if (status < 0) return status;
+
+	//Setup HID bulk mode
+	status = ghid_bulk_setup(cdev->gadget);
 	if (status < 0) return status;
 
 	//Write manufacturer string
@@ -383,15 +357,6 @@ static int __init lci_bind(struct usb_composite_dev *cdev)
 	strings_dev[STRING_PRODUCT_IDX].id = status;
 	lci_device_descriptor.iProduct = status;
 
-	//Write serial string
-	snprintf(serial, sizeof serial, "%s", serialNum);
-	status = usb_string_id(cdev);
-	if (status < 0) return status;
-	strings_dev[STRING_SERIAL_IDX].id = status;
-	lci_device_descriptor.iSerialNumber = status;
-
-	//TODO: not setting up bcdDevice, is this important?
-
 	//Add configuration to device
 	status = usb_add_config(cdev, &lci_configuration, lci_bind_config);
 	if (status < 0) return status;
@@ -405,6 +370,7 @@ static int __init lci_bind(struct usb_composite_dev *cdev)
 static int __exit lci_unbind(struct usb_composite_dev *cdev)
 {
 	ghid_cleanup();
+	ghid_bulk_cleanup();
 	return 0;
 }
 
