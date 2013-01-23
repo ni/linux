@@ -1836,7 +1836,7 @@ static int xemacps_up(struct net_device *ndev)
 	return 0;
 }
 
-static int xemacps_down(struct net_device *ndev, bool carrier_off)
+static int xemacps_down(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 
@@ -1870,9 +1870,8 @@ static int xemacps_down(struct net_device *ndev, bool carrier_off)
 	if (!test_bit(XEMACPS_STATE_RESET, &lp->flags))
 		cancel_work_sync(&lp->reset_task);
 
-	/* Turn off carrier if specified. */
-	if (carrier_off)
-		netif_carrier_off(ndev);
+	/* Turn off carrier. */
+	netif_carrier_off(ndev);
 
 	phy_disconnect(lp->phy_dev);
 	lp->phy_dev = NULL;
@@ -1931,15 +1930,12 @@ static int xemacps_close(struct net_device *ndev)
 	struct net_local *lp = netdev_priv(ndev);
 
 	/* If we're being closed while the FPGA is being reprogrammed, the
-	   interface is already mostly down. We only need to turn off carrier
-	   and return. */
-	if (test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags)) {
-		netif_carrier_off(ndev);
+	   interface is already down. We can just return. */
+	if (test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags))
 		return 0;
-	}
 #endif
-	/* Shut down the interface and turn off carrier. */
-	return xemacps_down(ndev, true);
+	/* Shut down the interface. */
+	return xemacps_down(ndev);
 }
 
 static void xemacps_reset_task(struct work_struct *work)
@@ -1956,9 +1952,8 @@ static void xemacps_reset_task(struct work_struct *work)
 	set_bit(XEMACPS_STATE_RESET, &lp->flags);
 
 	if (!(test_bit(XEMACPS_STATE_DOWN, &lp->flags))) {
-		/* Shut down the interface but don't turn off carrier. This
-		   speeds up the recovery. */
-		xemacps_down(lp->ndev, false);
+		/* Shut down the interface and bring it back up. */
+		xemacps_down(lp->ndev);
 		xemacps_up(lp->ndev);
 	}
 
@@ -2867,10 +2862,7 @@ int xemacps_fpga_notifier(struct notifier_block *nb, unsigned long val, void *da
 			if (!test_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags)) {
 				/* If the interface has been opened. */
 				if (netif_running(lp->ndev))
-					/* Shut down the interface but don't
-					   turn off carrier. This speeds up
-					   the recovery. */
-					xemacps_down(lp->ndev, false);
+					xemacps_down(lp->ndev);
 
 				set_bit(XEMACPS_STATE_FPGA_DOWN, &lp->flags);
 			}
