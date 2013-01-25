@@ -209,6 +209,7 @@ struct wl1271_if_operations {
 struct wlcore_platdev_data {
 	struct wl12xx_platform_data *pdata;
 	struct wl1271_if_operations *if_ops;
+	bool pwr_in_suspend;
 };
 
 #define MAX_NUM_KEYS 14

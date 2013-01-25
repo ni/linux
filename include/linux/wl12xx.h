@@ -59,7 +59,6 @@ struct wl12xx_platform_data {
 	int irq;
 	int board_ref_clock;
 	int board_tcxo_clock;
-	bool pwr_in_suspend;
 };
 
 #ifdef CONFIG_WILINK_PLATFORM_DATA
