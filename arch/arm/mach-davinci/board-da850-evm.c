@@ -1373,7 +1373,6 @@ static const short da850_wl12xx_pins[] __initconst = {
 static struct wl12xx_platform_data da850_wl12xx_wlan_data __initdata = {
 	.irq			= -1,
 	.board_ref_clock	= WL12XX_REFCLOCK_38,
-	.platform_quirks	= WL12XX_PLATFORM_QUIRK_EDGE_IRQ,
 };
 
 static __init int da850_wl12xx_init(void)
@@ -1402,6 +1401,13 @@ static __init int da850_wl12xx_init(void)
 	if (ret) {
 		pr_err("Could not request wl12xx irq gpio: %d\n", ret);
 		goto free_wlan_en;
+	}
+
+	ret = irq_set_irq_type(gpio_to_irq(DA850_WLAN_IRQ),
+			       IRQ_TYPE_EDGE_RISING);
+	if (ret) {
+		pr_err("Could not set wl12xx irq type: %d\n", ret);
+		goto free;
 	}
 
 	da850_wl12xx_wlan_data.irq = gpio_to_irq(DA850_WLAN_IRQ);
