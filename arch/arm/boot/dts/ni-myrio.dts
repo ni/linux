@@ -163,11 +163,6 @@
 				compatible = "nizynqcpld";
 				reg = <0x40>;
 			};
-
-			ds3231_rtc@68 {
-				compatible = "ds3232";
-				reg = <0x68>;
-			};
 		};
 
 		devcfg@f8007000 {
