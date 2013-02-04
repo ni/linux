@@ -1237,6 +1237,7 @@ static int xemacps_rx(struct net_local *lp, int budget)
 		lp->rx_bd_ci++;
 		lp->rx_bd_ci = lp->rx_bd_ci % XEMACPS_RECV_BD_CNT;
 		cur_p = &lp->rx_bd[lp->rx_bd_ci];
+		addr = ACCESS_ONCE(cur_p->addr);
 		numbdfree++;
 	}
 	lp->stats.rx_packets += packets;
