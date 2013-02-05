@@ -36,6 +36,12 @@
 			xlnx,has-cd = <0x1>;
 			interrupts = <0 24 0>;
 			clock-frequency = <100000000>;
+
+			wl12xx: wl12xx@0 {
+				compatible = "ti,wl12xx_sdio";
+				interrupt-parent = <&gpio>;
+				interrupts = <15 0>;
+			};
 		};
 
 		serial@80000000 {
@@ -147,6 +153,11 @@
 			gpio1-label     = "phy_interupt";
 			gpio1-direction = "input";
 			gpio1-settings  = "level-low";
+
+			/* GPIO15 (MIO15) */
+			gpio15-label     = "wake_interrupt";
+			gpio15-direction = "input";
+			gpio15-settings  = "level-low";
 		};
 
 		i2c0: i2c@e0004000 {
