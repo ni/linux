@@ -442,7 +442,8 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 #define XEMACPS_RXBUF_CFI_MASK       0x00010000 /* CFI frame */
 #define XEMACPS_RXBUF_EOF_MASK       0x00008000 /* End of frame. */
 #define XEMACPS_RXBUF_SOF_MASK       0x00004000 /* Start of frame. */
-#define XEMACPS_RXBUF_LEN_MASK       0x00003FFF /* Mask for length field */
+#define XEMACPS_RXBUF_BAD_FCS        0x00002000 /* Frame has bad FCS */
+#define XEMACPS_RXBUF_LEN_MASK       0x00001FFF /* Mask for length field */
 
 #define XEMACPS_RXBUF_WRAP_MASK      0x00000002 /* Wrap bit, last BD */
 #define XEMACPS_RXBUF_NEW_MASK       0x00000001 /* Used bit.. */
@@ -1178,12 +1179,18 @@ static int xemacps_rx(struct net_local *lp, int budget)
 	u32 size = 0;
 	u32 packets = 0;
 	u32 addr;
+	u32 ctrl;
 
 	cur_p = &lp->rx_bd[lp->rx_bd_ci];
 	addr = ACCESS_ONCE(cur_p->addr);
 	while ((addr & XEMACPS_RXBUF_NEW_MASK) && (numbdfree < budget)) {
+		ctrl = ACCESS_ONCE(cur_p->ctrl);
+		if (ctrl & XEMACPS_RXBUF_BAD_FCS) {
+			new_skb_baddr = lp->rx_skb[lp->rx_bd_ci].mapping;
+			goto rx_skip;
+		}
 		/* the packet length */
-		len = ACCESS_ONCE(cur_p->ctrl) & XEMACPS_RXBUF_LEN_MASK;
+		len = ctrl & XEMACPS_RXBUF_LEN_MASK;
 		skb = lp->rx_skb[lp->rx_bd_ci].skb;
 		dma_unmap_single(lp->ndev->dev.parent,
 				 lp->rx_skb[lp->rx_bd_ci].mapping,
@@ -1236,7 +1243,7 @@ static int xemacps_rx(struct net_local *lp, int budget)
 						     DMA_FROM_DEVICE);
 		lp->rx_skb[lp->rx_bd_ci].skb = new_skb;
 		lp->rx_skb[lp->rx_bd_ci].mapping = new_skb_baddr;
-
+rx_skip:
 		addr = (addr & ~XEMACPS_RXBUF_ADD_MASK) | (new_skb_baddr);
 		addr &= (~XEMACPS_RXBUF_NEW_MASK);
 		cur_p->addr = addr;
