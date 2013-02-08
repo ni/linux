@@ -99,8 +99,7 @@ struct nizynqcpld_watchdog {
 };
 
 struct nizynqcpld_desc {
-	const char *attr_group_name;
-	struct attribute_group *attr_group;
+	const struct attribute **attrs;
 	u8 supported_version;
 	struct nizynqcpld_led_desc *led_descs;
 	unsigned num_led_descs;
@@ -477,7 +476,7 @@ static ssize_t nizynqcpld_bootmode_store(struct device *dev,
 static DEVICE_ATTR(bootmode, S_IRUSR|S_IWUSR, nizynqcpld_bootmode_show,
 		   nizynqcpld_bootmode_store);
 
-static struct attribute *nizynqcpld_attrs[] = {
+static const struct attribute *nizynqcpld_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
@@ -485,10 +484,6 @@ static struct attribute *nizynqcpld_attrs[] = {
 	&dev_attr_ip_reset.dev_attr.attr,
 	&dev_attr_safe_mode.dev_attr.attr,
 	NULL
-};
-
-static struct attribute_group nizynqcpld_attr_group = {
-	.attrs = nizynqcpld_attrs,
 };
 
 static ssize_t dosequiscpld_wdmode_show(struct device *dev,
@@ -536,7 +531,7 @@ static ssize_t dosequiscpld_wdmode_store(struct device *dev,
 static DEVICE_ATTR(watchdog_mode, S_IRUSR|S_IWUSR, dosequiscpld_wdmode_show,
 	dosequiscpld_wdmode_store);
 
-static struct attribute *dosequis6_attrs[] = {
+static const struct attribute *dosequis6_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
@@ -545,10 +540,6 @@ static struct attribute *dosequis6_attrs[] = {
 	&dev_attr_safe_mode.dev_attr.attr,
 	&dev_attr_watchdog_mode.attr,
 	NULL
-};
-
-static struct attribute_group dosequis6_attr_group = {
-	.attrs = dosequis6_attrs,
 };
 
 /*
@@ -1027,8 +1018,7 @@ static struct nizynqcpld_watchdog_desc dosxv5_watchdog_desc = {
 
 static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	{
-		.attr_group_name	= "nizynqprotocpld",
-		.attr_group		= &nizynqcpld_attr_group,
+		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 3,
 		.led_descs		= proto_leds,
 		.num_led_descs		= ARRAY_SIZE(proto_leds),
@@ -1038,8 +1028,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.switch_addr		= PROTO_SWITCHANDLED,
 	},
 	{
-		.attr_group_name	= "nidosequiscpld",
-		.attr_group		= &nizynqcpld_attr_group,
+		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 4,
 		.watchdog_desc		= &dosxv4_watchdog_desc,
 		.led_descs		= dosx_leds,
@@ -1050,8 +1039,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.switch_addr		= DOSX_DEBUGSWITCH,
 	},
 	{
-		.attr_group_name	= "nidosequiscpld",
-		.attr_group		= &nizynqcpld_attr_group,
+		.attrs			= nizynqcpld_attrs,
 		.supported_version	= 5,
 		.watchdog_desc		= &dosxv5_watchdog_desc,
 		.led_descs		= dosx_leds,
@@ -1062,8 +1050,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.switch_addr		= DOSX_DEBUGSWITCH,
 	},
 	{
-		.attr_group_name	= "nidosequiscpld",
-		.attr_group		= &dosequis6_attr_group,
+		.attrs			= dosequis6_attrs,
 		.supported_version	= 6,
 		.watchdog_desc		= &dosxv5_watchdog_desc,
 		.led_descs		= dosx_leds,
@@ -1134,11 +1121,10 @@ static int nizynqcpld_probe(struct i2c_client *client,
 			goto err_led;
 	}
 
-	desc->attr_group->name = desc->attr_group_name;
-	err = sysfs_create_group(&cpld->dev->kobj, desc->attr_group);
+	err = sysfs_create_files(&cpld->dev->kobj, desc->attrs);
 	if (err) {
-		dev_err(cpld->dev, "could not register attr group for device.\n");
-		goto err_sysfs_create_group;
+		dev_err(cpld->dev, "could not register attrs for device.\n");
+		goto err_sysfs_create_files;
 	}
 
 	if (desc->watchdog_desc) {
@@ -1171,8 +1157,8 @@ static int nizynqcpld_probe(struct i2c_client *client,
 	return 0;
 
 err_watchdog_register:
-	sysfs_remove_group(&client->dev.kobj, &nizynqcpld_attr_group);
-err_sysfs_create_group:
+	sysfs_remove_files(&client->dev.kobj, desc->attrs);
+err_sysfs_create_files:
 err_led:
 	while (i--)
 		nizynqcpld_led_unregister(&cpld->leds[i]);
@@ -1196,7 +1182,7 @@ static int __devexit nizynqcpld_remove(struct i2c_client *client)
 	if (desc->watchdog_desc)
 		misc_deregister(&cpld->watchdog.misc_dev);
 
-	sysfs_remove_group(&cpld->dev->kobj, &nizynqcpld_attr_group);
+	sysfs_remove_files(&cpld->dev->kobj, desc->attrs);
 	for (i = desc->num_led_descs - 1; i; --i)
 		nizynqcpld_led_unregister(&cpld->leds[i]);
 	kfree(cpld->leds);
