@@ -628,6 +628,10 @@ struct net_local {
 	unsigned long          tx_task_start_jiffies;
 	struct delayed_work    tx_task;
 	struct timer_list      tx_timer;
+	bool                   rx_error;
+	int                    rx_reset;
+	unsigned long          rx_last_jiffies;
+	struct timer_list      rx_timer;
 	struct work_struct     reset_task;
 
 #ifdef CONFIG_FPGA_PERIPHERAL
@@ -1250,6 +1254,53 @@ static int xemacps_rx(struct net_local *lp, int budget)
 }
 
 /**
+ * xemacps_rx_timer - check for potential receive stall and handle it
+ * @arg: struct net_local *
+ **/
+static void xemacps_rx_timer(unsigned long arg)
+{
+	struct net_local *lp = (struct net_local *)arg;
+	unsigned long flags;
+	bool reset = false;
+
+	/* This is the handler for the receive stall hardware bug. If
+	   we haven't received any packets for a while and a receive
+	   error has occured recently, we may have triggered this bug.
+	   We can just toggle the RXEN bit to clear the bug condition
+	   and start receiving packets again. Sometimes toggling RXEN
+	   doesn't clear the stall the first time, so we check for a
+	   while after a potential stall is detected. If we see that
+	   we're still not receiving packets, we toggle RXEN again. */
+	if (time_after(jiffies, lp->rx_last_jiffies + HZ)) {
+		if (lp->rx_error)
+			lp->rx_reset = 4;
+
+		if (lp->rx_reset) {
+			reset = true;
+			--lp->rx_reset;
+		}
+	}
+
+	if (reset) {
+		spin_lock_irqsave(&lp->nwctrl_lock, flags);
+
+		xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
+			      (lp->nwctrl_base & ~XEMACPS_NWCTRL_RXEN_MASK));
+		wmb();
+		xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
+			      lp->nwctrl_base);
+		wmb();
+
+		lp->rx_error = false;
+
+		spin_unlock_irqrestore(&lp->nwctrl_lock, flags);
+	}
+
+	/* Reschedule the timer. */
+	mod_timer(&lp->rx_timer, jiffies + HZ);
+}
+
+/**
  * xemacps_rx_poll - NAPI poll routine
  * napi: pointer to napi struct
  * budget:
@@ -1263,12 +1314,17 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 
 	while (work_done < budget) {
 		regval = xemacps_read(lp->baseaddr, XEMACPS_RXSR_OFFSET);
+		if (regval & XEMACPS_RXSR_ERROR_MASK)
+			lp->rx_error = true;
 		xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, regval);
 		wmb();
 		temp_work_done = xemacps_rx(lp, budget - work_done);
 		work_done += temp_work_done;
 		if (temp_work_done <= 0)
 			break;
+		/* We've received packets, so reset the receive stall
+		   timeout. */
+		lp->rx_last_jiffies = jiffies;
 	}
 
 	if (work_done >= budget)
@@ -1766,6 +1822,9 @@ static int xemacps_up(struct net_device *ndev)
 	struct net_local *lp = netdev_priv(ndev);
 	int rc;
 
+	lp->rx_error = false;
+	lp->rx_last_jiffies = jiffies;
+
 	if (0 <= lp->ni_polling_interval) {
 		lp->ni_polling_task =
 			kthread_create(xemacps_polling_thread, ndev,
@@ -1808,6 +1867,9 @@ static int xemacps_up(struct net_device *ndev)
 		return -ENXIO;
 	}
 
+	/* Schedule the receive stall timer. */
+	mod_timer(&lp->rx_timer, jiffies + HZ);
+
 	clear_bit(XEMACPS_STATE_DOWN, &lp->flags);
 
 	netif_start_queue(ndev);
@@ -1842,8 +1904,9 @@ static int xemacps_down(struct net_device *ndev)
 	netif_tx_lock(ndev);
 	netif_tx_unlock(ndev);
 
-	/* Wait for any outstanding transmit timer calls to complete. */
+	/* Wait for any outstanding timer calls to complete. */
 	del_timer_sync(&lp->tx_timer);
+	del_timer_sync(&lp->rx_timer);
 
 	/* If we're not resetting, cancel the reset task. */
 	if (!test_bit(XEMACPS_STATE_RESET, &lp->flags))
@@ -3155,6 +3218,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK(&lp->tx_task, xemacps_tx_task);
 	setup_timer(&lp->tx_timer, xemacps_tx_timer, (unsigned long)lp);
+	setup_timer(&lp->rx_timer, xemacps_rx_timer, (unsigned long)lp);
 	INIT_WORK(&lp->reset_task, xemacps_reset_task);
 
 	xemacps_update_hwaddr(lp);
