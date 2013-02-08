@@ -1866,7 +1866,6 @@ static void xemacps_init_hw(struct net_local *lp)
 	regval |= XEMACPS_NWCFG_FDEN_MASK;
 	regval |= XEMACPS_NWCFG_RXCHKSUMEN_MASK;
 	regval |= XEMACPS_NWCFG_PAUSECOPYDI_MASK;
-	regval |= XEMACPS_NWCFG_FCSREM_MASK;
 	regval |= XEMACPS_NWCFG_PAUSEEN_MASK;
 	regval |= XEMACPS_NWCFG_100_MASK;
 	regval |= XEMACPS_NWCFG_HDRXEN_MASK;
