@@ -1275,12 +1275,12 @@ static int xemacps_rx_poll(struct napi_struct *napi, int budget)
 		return work_done;
 
 	napi_complete(napi);
-	/* We disabled TX/RX interrupts in interrupt service
-	 * routine, now it is time to enable it back.
-	 */
+
+	/* We disabled RX interrupts in interrupt service routine, now
+	   it is time to enable it back. */
 	xemacps_write(lp->baseaddr, XEMACPS_IER_OFFSET,
-					(XEMACPS_IXR_FRAMERX_MASK |
-					XEMACPS_IXR_RX_ERR_MASK));
+		      (XEMACPS_IXR_FRAMERX_MASK |
+		       XEMACPS_IXR_RX_ERR_MASK));
 	wmb();
 
 	return work_done;
@@ -1303,29 +1303,17 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 	if (unlikely(!regisr))
 		return IRQ_NONE;
 
-	while (regisr) {
-		/* acknowledge interrupt and clear it */
-		xemacps_write(lp->baseaddr, XEMACPS_ISR_OFFSET, regisr);
-		wmb();
+	/* Disable receive interrupts and schedule NAPI. */
+	xemacps_write(lp->baseaddr, XEMACPS_IDR_OFFSET,
+		      (XEMACPS_IXR_FRAMERX_MASK |
+		       XEMACPS_IXR_RX_ERR_MASK));
+	wmb();
 
-		/* RX interrupts */
-		if (regisr &
-		    (XEMACPS_IXR_FRAMERX_MASK | XEMACPS_IXR_RX_ERR_MASK))
-			if (napi_schedule_prep(&lp->napi)) {
-				/* disable RX interrupt, napi will be the
-				 * one processing it.  */
-				xemacps_write(lp->baseaddr,
-					XEMACPS_IDR_OFFSET,
-					(XEMACPS_IXR_FRAMERX_MASK |
-					 XEMACPS_IXR_RX_ERR_MASK));
-				wmb();
-				dev_dbg(&lp->pdev->dev,
-					"schedule RX softirq\n");
-				__napi_schedule(&lp->napi);
-			}
+	napi_schedule(&lp->napi);
 
-		regisr = xemacps_read(lp->baseaddr, XEMACPS_ISR_OFFSET);
-	}
+	/* Acknowledge and clear the interrupts. */
+	xemacps_write(lp->baseaddr, XEMACPS_ISR_OFFSET, regisr);
+	wmb();
 
 	return IRQ_HANDLED;
 }
