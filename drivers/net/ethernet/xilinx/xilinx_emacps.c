@@ -1423,6 +1423,33 @@ static ssize_t xemacps_get_ni_polling_interval(struct device *dev,
 	return sprintf(buf, "%d\n", lp->ni_polling_interval);
 }
 
+static int xemacps_start_packet_receive_mechanism(struct net_local *lp)
+{
+	int rc = 0;
+
+	if (0 <= lp->ni_polling_interval) {
+		lp->ni_polling_task =
+			kthread_create(xemacps_polling_thread, lp->ndev,
+				       "poll/%s", lp->ndev->name);
+
+		if (IS_ERR(lp->ni_polling_task)) {
+			rc = PTR_ERR(lp->ni_polling_task);
+			lp->ni_polling_task = NULL;
+			netdev_err(lp->ndev, "Unable to create polling thread, "
+					 "error %d\n", rc);
+		}
+	} else {
+		rc = request_irq(lp->ndev->irq, xemacps_interrupt,
+				 IRQF_SAMPLE_RANDOM, lp->ndev->name, lp->ndev);
+		if (rc) {
+			netdev_err(lp->ndev, "Unable to request IRQ, "
+					 "error %d\n", rc);
+		}
+	}
+
+	return rc;
+}
+
 static ssize_t xemacps_set_ni_polling_interval(struct device *dev,
 					       struct device_attribute *attr,
 					       const char *buf, size_t count)
@@ -1438,8 +1465,28 @@ static ssize_t xemacps_set_ni_polling_interval(struct device *dev,
 		return -EINVAL;
 
 	if (lp->ni_polling_interval != interval) {
+		/* Synchronize with xemacps_open/close. */
+		rtnl_lock();
+
 		lp->ni_polling_interval = interval;
-		schedule_work(&lp->reset_task);
+
+		if (!(test_bit(XEMACPS_STATE_DOWN, &lp->flags))) {
+			/* Stop whatever mechanism is currently active. */
+			if (lp->ni_polling_task) {
+				kthread_stop(lp->ni_polling_task);
+				lp->ni_polling_task = NULL;
+			} else
+				free_irq(ndev->irq, ndev);
+
+			/* Start up whatever we've just selected. */
+			xemacps_start_packet_receive_mechanism(lp);
+
+			/* Start the polling task if it exists. */
+			if (lp->ni_polling_task)
+				wake_up_process(lp->ni_polling_task);
+		}
+
+		rtnl_unlock();
 	}
 
 	return count;
@@ -1825,27 +1872,9 @@ static int xemacps_up(struct net_device *ndev)
 	lp->rx_error = false;
 	lp->rx_last_jiffies = jiffies;
 
-	if (0 <= lp->ni_polling_interval) {
-		lp->ni_polling_task =
-			kthread_create(xemacps_polling_thread, ndev,
-				       "poll/%s", ndev->name);
-
-		if (IS_ERR(lp->ni_polling_task)) {
-			rc = PTR_ERR(lp->ni_polling_task);
-			lp->ni_polling_task = NULL;
-			netdev_err(ndev, "Unable to create polling thread, "
-					 "error %d\n", rc);
-			return rc;
-		}
-	} else {
-		rc = request_irq(ndev->irq, xemacps_interrupt,
-				 IRQF_SAMPLE_RANDOM, ndev->name, ndev);
-		if (rc) {
-			netdev_err(ndev, "Unable to request IRQ, "
-					 "error %d\n", rc);
-			return rc;
-		}
-	}
+	rc = xemacps_start_packet_receive_mechanism(lp);
+	if (rc)
+		return rc;
 
 	rc = xemacps_descriptor_init(lp);
 	if (rc) {
