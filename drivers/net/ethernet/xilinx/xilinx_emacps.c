@@ -622,6 +622,9 @@ struct net_local {
 	struct napi_struct     napi;    /* napi information for device */
 	struct net_device_stats stats;  /* Statistics for this device */
 
+	spinlock_t             nwctrl_lock;
+	u32                    nwctrl_base;
+
 	unsigned long          tx_task_start_jiffies;
 	struct delayed_work    tx_task;
 	struct timer_list      tx_timer;
@@ -1041,6 +1044,7 @@ static void xemacps_reset_hw(struct net_local *lp)
 
 	/* Have a clean start */
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, 0);
+	lp->nwctrl_base = 0;
 
 	/* Clear statistic counters */
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
@@ -1753,11 +1757,10 @@ static void xemacps_init_hw(struct net_local *lp)
 	xemacps_write(lp->baseaddr, XEMACPS_DMACR_OFFSET, regval);
 
 	/* Enable TX, RX and MDIO port */
-	regval  = 0;
-	regval |= XEMACPS_NWCTRL_MDEN_MASK;
-	regval |= XEMACPS_NWCTRL_TXEN_MASK;
-	regval |= XEMACPS_NWCTRL_RXEN_MASK;
-	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, regval);
+	lp->nwctrl_base = XEMACPS_NWCTRL_MDEN_MASK |
+			  XEMACPS_NWCTRL_TXEN_MASK |
+			  XEMACPS_NWCTRL_RXEN_MASK;
+	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET, lp->nwctrl_base);
 
 #ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
 	/* Initialize the Time Stamp Unit */
@@ -2097,6 +2100,7 @@ static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
 	struct net_local *lp = netdev_priv(ndev);
 	struct ring_info *curr_inf;
 	struct xemacps_bd *curr_bd;
+	unsigned long flags;
 	u32 regval;
 
 	xemacps_tx_clean(lp);
@@ -2142,10 +2146,11 @@ static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
 
 	--lp->tx_bd_freecnt;
 
-	regval = xemacps_read(lp->baseaddr, XEMACPS_NWCTRL_OFFSET);
+	spin_lock_irqsave(&lp->nwctrl_lock, flags);
 	xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
-		      (regval | XEMACPS_NWCTRL_STARTTX_MASK));
+		      (lp->nwctrl_base | XEMACPS_NWCTRL_STARTTX_MASK));
 	wmb();
+	spin_unlock_irqrestore(&lp->nwctrl_lock, flags);
 
 	if (unlikely((lp->needs_tx_stall_workaround))) {
 		int loop_count = 0;
@@ -3158,6 +3163,8 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		netdev_err(ndev, "error creating sysfs file\n");
 		goto err_out_sysfs_remove_file2;
 	}
+
+	spin_lock_init(&lp->nwctrl_lock);
 
 	INIT_DELAYED_WORK(&lp->tx_task, xemacps_tx_task);
 	setup_timer(&lp->tx_timer, xemacps_tx_timer, (unsigned long)lp);
