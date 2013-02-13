@@ -97,6 +97,8 @@ static int fpgaperipheral_misc_release(struct inode *inode, struct file *file)
 {
 	if (is_fpga_programmed())
 		notify_clients(FPGA_PERIPHERAL_UP);
+	else
+		notify_clients(FPGA_PERIPHERAL_FAILED);
 
 	atomic_inc(&fpgaperipheral_available);
 	return 0;
