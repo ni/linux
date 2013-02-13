@@ -2966,6 +2966,9 @@ int xemacps_fpga_notifier(struct notifier_block *nb, unsigned long val, void *da
 
 			rtnl_unlock();
 			break;
+		case FPGA_PERIPHERAL_FAILED:
+			/* This interface is not coming back up. */
+			break;
 		default:
 			dev_err(&lp->pdev->dev, "unsupported FPGA notifier value %lu\n", val);
 			break;
