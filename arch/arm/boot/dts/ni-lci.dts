@@ -89,17 +89,17 @@
 			reg = <0xE1000000 0x1000000 0xE000E000 0x1000>;
 			bank-width = <1>; /* 8-bit width */
 
-			/* SLCR SMC_CLK_CTRL value, 95MHz clock, 10.5ns cycle time */
+			/* SLCR SMC_CLK_CTRL value, 83MHz clock, 12ns cycle time */
 			/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
-			xlnx,onfi-mode0 = <0x0000E21 4 3 2 5 4 10 10>;
+			xlnx,onfi-mode0 = <0x0001021 4 3 2 7 4 10 10>;
 
-			/* SLCR SMC_CLK_CTRL value, 190MHz clock, 5.25ns cycle time */
+			/* SLCR SMC_CLK_CTRL value, 166MHz clock, 6ns cycle time */
 			/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
-			xlnx,onfi-mode1 = <0x0000721 4 2 2 5 4 9 10>;
-			xlnx,onfi-mode2 = <0x0000721 4 2 2 4 3 7 7>;
-			xlnx,onfi-mode3 = <0x0000721 4 2 2 3 2 6 6>;
-			xlnx,onfi-mode4 = <0x0000721 4 2 2 3 2 5 5>;
-			xlnx,onfi-mode5 = <0x0000721 4 2 2 2 2 4 4>;
+			xlnx,onfi-mode1 = <0x0000821 4 2 2 7 4 10 10>;
+			xlnx,onfi-mode2 = <0x0000821 4 2 2 5 3 8 7>;
+			xlnx,onfi-mode3 = <0x0000821 4 2 2 5 2 7 6>;
+			xlnx,onfi-mode4 = <0x0000821 4 2 2 4 2 6 5>;
+			xlnx,onfi-mode5 = <0x0000821 4 2 2 3 2 5 4>;
 
 			#address-cells = <1>;
 			#size-cells = <1>;
