@@ -23,29 +23,13 @@
 #include <linux/usb/g_hid.h>
 
 //In bulk mode, how many endpoints do we have?
-#define BULK_ENDPOINTS 7
+#define BULK_ENDPOINTS 8
 
 //Whether to use interrupt out, or the set_report control request for output
 #define USE_INTR_OUT
 
 //How many requests to keep outstanding
 #define REQ_COUNT 1
-
-#define RPC_MINOR 0
-#define SCOPE_SFP_MINOR 1
-#define SCOPE_MINOR 2
-#define LA_SFP_MINOR 3
-#define LA_MINOR 4
-#define ARB_MINOR 5
-
-//Bulk endpoint indeces in the f_hidg data structures
-#define RPC_IN_EP 0
-#define RPC_OUT_EP 1
-#define SCOPE_SFP_EP 2
-#define SCOPE_EP 3
-#define LA_SFP_EP 4
-#define LA_EP 5
-#define ARB_EP 6
 
 //The minor number of the first hid interface - the one that switches
 //to bulk.
@@ -132,7 +116,7 @@ static struct usb_interface_descriptor hidg_bulk_interface_desc = {
 	.bDescriptorType	= USB_DT_INTERFACE,
 	/* .bInterfaceNumber	= DYNAMIC */
 	.bAlternateSetting	= 1,
-	.bNumEndpoints		= 7,
+	.bNumEndpoints		= 8,
 	.bInterfaceClass	= USB_CLASS_VENDOR_SPEC,
 	/* .bInterfaceSubClass	= DYNAMIC */
 	/* .bInterfaceProtocol	= DYNAMIC */
@@ -190,67 +174,71 @@ static struct usb_endpoint_descriptor hidg_hs_out_ep_desc = {
 };
 #endif
 
-static struct usb_endpoint_descriptor hidg_rpc_in_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_IN,
-	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
-	/*.wMaxPacketSize	= DYNAMIC */
-	/*.bInterval		= DONTCARE */
-};
-
-static struct usb_endpoint_descriptor hidg_scope_monitor_in_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_IN,
-	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
-	/*.wMaxPacketSize	= DYNAMIC */
-	/*.bInterval		= DONTCARE */
-};
-
-static struct usb_endpoint_descriptor hidg_scope_data_in_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_IN,
-	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
-	/*.wMaxPacketSize	= DYNAMIC */
-	/*.bInterval		= DONTCARE */
-};
-
-static struct usb_endpoint_descriptor hidg_la_monitor_in_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_IN,
-	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
-	/*.wMaxPacketSize	= DYNAMIC */
-	/*.bInterval		= DONTCARE */
-};
-
-static struct usb_endpoint_descriptor hidg_la_data_in_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_IN,
-	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
-	/*.wMaxPacketSize	= DYNAMIC */
-	/*.bInterval		= DONTCARE */
-};
-
-static struct usb_endpoint_descriptor hidg_rpc_out_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_OUT,
-	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
-	/*.wMaxPacketSize	= DYNAMIC */
-	/*.bInterval		= DONTCARE */
-};
-
-static struct usb_endpoint_descriptor hidg_arb_out_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_OUT,
-	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
-	/*.wMaxPacketSize	= DYNAMIC */
-	/*.bInterval		= DONTCARE */
+static struct usb_endpoint_descriptor hidg_bulk_ep_descs[] = {
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_IN,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	},
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_OUT,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	},
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_IN,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	},
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_OUT,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	},
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_IN,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	},
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_OUT,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	},
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_IN,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	},
+	{
+		.bLength		= USB_DT_ENDPOINT_SIZE,
+		.bDescriptorType	= USB_DT_ENDPOINT,
+		.bEndpointAddress	= USB_DIR_OUT,
+		.bmAttributes		= USB_ENDPOINT_XFER_BULK,
+		/*.wMaxPacketSize	= DYNAMIC */
+		/*.bInterval		= DONTCARE */
+	}
 };
 
 //indeces into the descriptors array for the descs we change
@@ -265,13 +253,14 @@ static struct usb_descriptor_header *hidg_hs_descriptors[] = {
 	(struct usb_descriptor_header *)&hidg_hs_out_ep_desc,
 #endif
 	(struct usb_descriptor_header *)&hidg_bulk_interface_desc,
-	(struct usb_descriptor_header *)&hidg_rpc_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_rpc_out_ep_desc,
-	(struct usb_descriptor_header *)&hidg_scope_monitor_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_scope_data_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_la_monitor_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_la_data_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_arb_out_ep_desc,
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[1],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[2],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[3],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[4],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[5],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[6],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[7],
 	NULL,
 };
 
@@ -311,13 +300,14 @@ static struct usb_descriptor_header *hidg_fs_descriptors[] = {
 	(struct usb_descriptor_header *)&hidg_fs_out_ep_desc,
 #endif
 	(struct usb_descriptor_header *)&hidg_bulk_interface_desc,
-	(struct usb_descriptor_header *)&hidg_rpc_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_rpc_out_ep_desc,
-	(struct usb_descriptor_header *)&hidg_scope_monitor_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_scope_data_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_la_monitor_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_la_data_in_ep_desc,
-	(struct usb_descriptor_header *)&hidg_arb_out_ep_desc,
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[1],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[2],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[3],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[4],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[5],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[6],
+	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[7],
 	NULL,
 };
 
@@ -494,23 +484,14 @@ static ssize_t f_hidg_bulk_read(struct file *file, char __user *buffer,
 	struct list_head *req_list;
 	struct usb_ep *ep;
 
-	int index = iminor(file->f_dentry->d_inode);
+	/* out eps are every 2N+1 in the list */
+	int index = 2 * iminor(file->f_dentry->d_inode) + 1;
 
-	/* index eps, etc. based on file minor */
-	if(index == RPC_MINOR)
-	{
-		req_list = &hidg->bulk_reqs[RPC_OUT_EP];
-		ep = hidg->bulk_eps[RPC_OUT_EP];
-		index = RPC_OUT_EP;
-	}
-	else if (index == ARB_MINOR)
-	{
-		req_list = &hidg->bulk_reqs[ARB_EP];
-		ep = hidg->bulk_eps[ARB_EP];
-		index = ARB_EP;
-	}
-	else
+	if(index > BULK_ENDPOINTS)
 		return -EINVAL;
+
+	req_list = &hidg->bulk_reqs[index];
+	ep = hidg->bulk_eps[index];
 
 	if (!count)
 		return 0;
@@ -570,23 +551,16 @@ static ssize_t f_hidg_bulk_write(struct file *file, const char __user *buffer,
 	struct list_head *req_list;
 	struct usb_request *req;
 	struct usb_ep *ep;
-	int index = iminor(file->f_dentry->d_inode);
+
+	/* in eps are every 2N in the list */
+	int index = 2 * iminor(file->f_dentry->d_inode);
+
+	if (index > BULK_ENDPOINTS) {
+		return -EINVAL;
+	}
 
 	if (!access_ok(VERIFY_READ, buffer, count))
 		return -EFAULT;
-
-	/* index eps, etc. based on file minor */
-	if (index >= SCOPE_SFP_MINOR && index <= LA_MINOR)
-	{
-		/* skip over the RPC OUT ep */
-		index++;
-	}
-	else if(index == RPC_MINOR)
-	{
-		/* leave index alone */
-	}
-	else
-		return -EINVAL;
 
 	req_list = &hidg->bulk_reqs[index];
 	ep = hidg->bulk_eps[index];
@@ -1063,12 +1037,12 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 		hidg_fs_descriptors[ALT_INTF_DESC_INDEX] = 
 			(struct usb_descriptor_header *)&hidg_bulk_interface_desc;
 		hidg_fs_descriptors[BULK_EP_DESCS_INDEX] =
-			(struct usb_descriptor_header *)&hidg_rpc_in_ep_desc;
+			(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0];
 
 		hidg_hs_descriptors[ALT_INTF_DESC_INDEX] = 
 			(struct usb_descriptor_header *)&hidg_bulk_interface_desc;
 		hidg_hs_descriptors[BULK_EP_DESCS_INDEX] =
-			(struct usb_descriptor_header *)&hidg_rpc_in_ep_desc;
+			(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0];
 
 		i = 0;
 		while(bulk_descs[i] != NULL)
@@ -1100,17 +1074,12 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 			i++;
 		}
 		/* allocate buffers for out requests */
-		/* RPC out */
-		list_for_each_entry(req, &(hidg->bulk_reqs[RPC_OUT_EP]), list) {
-			req->buf = kmalloc(4096, GFP_KERNEL);
-			if (!req->buf)
-				goto fail;
-		}
-		/* ARB out */
-		list_for_each_entry(req, &(hidg->bulk_reqs[ARB_EP]), list) {
-			req->buf = kmalloc(2 * 1024 * 1024, GFP_KERNEL);
-			if (!req->buf)
-				goto fail;
+		for( i = 1; i < BULK_ENDPOINTS; i += 2) {
+			list_for_each_entry(req, &(hidg->bulk_reqs[i]), list) {
+				req->buf = kmalloc(4096, GFP_KERNEL);
+				if (!req->buf)
+					goto fail;
+			}
 		}
 	}
 	else
@@ -1179,18 +1148,10 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 		if (status)
 			goto fail;
 
-		device_create(hidg_bulk_class, NULL, MKDEV(bulk_major, RPC_MINOR),
-			       	NULL, "hidg_bulk_rpc");
-		device_create(hidg_bulk_class, NULL, MKDEV(bulk_major, SCOPE_SFP_MINOR),
-			       	NULL, "hidg_bulk_scope_sfp");
-		device_create(hidg_bulk_class, NULL, MKDEV(bulk_major, SCOPE_MINOR),
-			       	NULL, "hidg_bulk_scope");
-		device_create(hidg_bulk_class, NULL, MKDEV(bulk_major, LA_SFP_MINOR),
-			       	NULL, "hidg_bulk_la_sfp");
-		device_create(hidg_bulk_class, NULL, MKDEV(bulk_major, LA_MINOR),
-			       	NULL, "hidg_bulk_la");
-		device_create(hidg_bulk_class, NULL, MKDEV(bulk_major, ARB_MINOR),
-			       	NULL, "hidg_bulk_arb");
+		for(i = 0; i < BULK_ENDPOINTS / 2; i++) {
+			device_create(hidg_bulk_class, NULL, MKDEV(bulk_major, i),
+					NULL, "hidg_bulk%d", i);
+		}
 	}
 
 	return 0;
