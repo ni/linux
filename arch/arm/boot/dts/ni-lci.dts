@@ -42,7 +42,7 @@
 			compatible = "xlnx,ps7-uart-1.00.a";
 			reg = <0xe0000000 0x1000>;
 			interrupts = <0 27 0>;
-			clock = <50000000>;
+			clock = <100000000>;
 		};
 
 		timer@0xf8001000 {
@@ -61,9 +61,9 @@
 			reg = <0xe000b000 0x1000>;
 			interrupts = <0 22 0>;
 			phy-handle = <&phy0>;
-			xlnx,slcr-div0-1000Mbps = <8>;
-			xlnx,slcr-div0-100Mbps = <8>;
-			xlnx,slcr-div0-10Mbps = <8>;
+			xlnx,slcr-div0-1000Mbps = <12>;
+			xlnx,slcr-div0-100Mbps = <12>;
+			xlnx,slcr-div0-10Mbps = <12>;
 			xlnx,slcr-div1-1000Mbps = <1>;
 			xlnx,slcr-div1-100Mbps = <5>;
 			xlnx,slcr-div1-10Mbps = <50>;
