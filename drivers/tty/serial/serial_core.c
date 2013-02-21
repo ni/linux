@@ -92,7 +92,7 @@ static void __uart_start(struct tty_struct *tty)
 	struct uart_port *port = state->uart_port;
 
 	if (!uart_circ_empty(&state->xmit) && state->xmit.buf &&
-	    !tty->stopped && !tty->hw_stopped)
+	    !tty->stopped && !tty->hw_stopped && !port->suspended)
 		port->ops->start_tx(port);
 }
 
@@ -135,8 +135,18 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 	unsigned long page;
 	int retval = 0;
 
-	if (port->flags & ASYNC_INITIALIZED)
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP)
+		return -ENODEV;
+#endif
+
+	if (port->flags & ASYNC_INITIALIZED) {
+#ifdef CONFIG_FPGA_PERIPHERAL
+		up_read(&uport->fpga_lock);
+#endif
 		return 0;
+	}
 
 	/*
 	 * Set the TTY IO error marker - we will only clear this
@@ -145,8 +155,12 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 	 */
 	set_bit(TTY_IO_ERROR, &tty->flags);
 
-	if (uport->type == PORT_UNKNOWN)
+	if (uport->type == PORT_UNKNOWN) {
+#ifdef CONFIG_FPGA_PERIPHERAL
+		up_read(&uport->fpga_lock);
+#endif
 		return 0;
+	}
 
 	/*
 	 * Initialise and allocate the transmit and temporary
@@ -155,8 +169,12 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 	if (!state->xmit.buf) {
 		/* This is protected by the per port mutex */
 		page = get_zeroed_page(GFP_KERNEL);
-		if (!page)
+		if (!page) {
+#ifdef CONFIG_FPGA_PERIPHERAL
+			up_read(&uport->fpga_lock);
+#endif
 			return -ENOMEM;
+		}
 
 		state->xmit.buf = (unsigned char *) page;
 		uart_circ_clear(&state->xmit);
@@ -205,6 +223,10 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 	 */
 	if (retval && capable(CAP_SYS_ADMIN))
 		retval = 0;
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 
 	return retval;
 }
@@ -975,6 +997,12 @@ static int uart_tiocmget(struct tty_struct *tty)
 	struct uart_port *uport = state->uart_port;
 	int result = -EIO;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP)
+		return -ENODEV;
+#endif
+
 	mutex_lock(&port->mutex);
 	if (!(tty->flags & (1 << TTY_IO_ERROR))) {
 		result = uport->mctrl;
@@ -983,6 +1011,10 @@ static int uart_tiocmget(struct tty_struct *tty)
 		spin_unlock_irq(&uport->lock);
 	}
 	mutex_unlock(&port->mutex);
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 
 	return result;
 }
@@ -995,12 +1027,22 @@ uart_tiocmset(struct tty_struct *tty, unsigned int set, unsigned int clear)
 	struct tty_port *port = &state->port;
 	int ret = -EIO;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP)
+		return -ENODEV;
+#endif
+
 	mutex_lock(&port->mutex);
 	if (!(tty->flags & (1 << TTY_IO_ERROR))) {
 		uart_update_mctrl(uport, set, clear);
 		ret = 0;
 	}
 	mutex_unlock(&port->mutex);
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 	return ret;
 }
 
@@ -1468,7 +1510,7 @@ static void uart_wait_until_sent(struct tty_struct *tty, int timeout)
 	 * 'timeout' / 'expire' give us the maximum amount of time
 	 * we wait.
 	 */
-	while (!port->ops->tx_empty(port)) {
+	while (port->suspended || !port->ops->tx_empty(port)) {
 		msleep_interruptible(jiffies_to_msecs(char_time));
 		if (signal_pending(current))
 			break;

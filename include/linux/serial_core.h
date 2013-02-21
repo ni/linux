@@ -220,6 +220,7 @@
 #include <linux/interrupt.h>
 #include <linux/circ_buf.h>
 #include <linux/spinlock.h>
+#include <linux/rwsem.h>
 #include <linux/sched.h>
 #include <linux/tty.h>
 #include <linux/mutex.h>
@@ -331,7 +332,20 @@ struct uart_port {
 	unsigned char		unused1;
 
 #if CONFIG_FPGA_PERIPHERAL
-	struct notifier_block nb;
+	struct notifier_block	nb;
+	unsigned int		fpga_state;
+#define FPGA_UP			(0)
+#define FPGA_DOWN		(1)
+#define FPGA_FAILED		(2)
+
+	/*
+	 * Functions which need to access the UART should acquire a
+	 * read lock on this. The FPGA will not get reprogrammed unless this
+	 * lock is released. The FGPA reprogramming will acquire an
+	 * exclusive lock (write lock) on this, thereby preventing the said
+	 * functions from accessing the UART in the FPGA
+	 */
+	struct rw_semaphore	fpga_lock;
 #endif
 
 #define UPIO_PORT		(0)

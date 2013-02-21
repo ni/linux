@@ -483,6 +483,19 @@ static void io_serial_out(struct uart_port *p, int offset, int value)
 	outb(value, p->iobase + offset);
 }
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+static unsigned int disabled_serial_in(struct uart_port *p, int offset)
+{
+	WARN(1, "ttyS%d: trying to read when FPGA is down.", p->line);
+	return 0;
+}
+
+static void disabled_serial_out(struct uart_port *p, int offset, int value)
+{
+	WARN(1, "ttyS%d: trying to write when FPGA is down.", p->line);
+}
+#endif
+
 static int serial8250_default_handle_irq(struct uart_port *port);
 
 static void set_io_from_upio(struct uart_port *p)
@@ -3217,16 +3230,98 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 {
 	int ret = -EINVAL;
 	struct uart_port *port = container_of(nb, struct uart_port, nb);
+
 	pr_debug("ttyS%d - serial8250_fpga_notification, val=%lu\n",
 		 serial_index(port), val);
 
 	switch (val) {
 	case FPGA_PERIPHERAL_DOWN:
+		/* If the FPGA goes down for reprogramming, we do the
+		 * following steps:
+		 *
+		 * 1. Grab the fpga_lock which would prevent other functions
+		 *    from accessing the hardware. (All hardware accessing
+		 *    functions should grab this lock before doing anything)
+		 */
+		down_write(&port->fpga_lock);
+
+		/*
+		 * 2. Set the FPGA state to FPGA_DOWN.
+		 */
+		port->fpga_state = FPGA_DOWN;
+
+		/*
+		 * 3. Suspend the port. This would shutdown the port, unlink
+		 *    the irqs and set the suspended flag. It is not guaranteed
+		 *    that hardware will not be accessed when the port is
+		 *    suspended. Some functions do not honor port suspension
+		 *    and access the FPGA anyways.
+		 */
 		ret = uart_suspend_port(&serial8250_reg, port);
+
+		/*
+		 * 4. As a failsafe, change the serial_in and serial_out
+		 *    functions to empty functions thereby making sure that
+		 *    we never access the hardware
+		 */
+		port->serial_in = disabled_serial_in;
+		port->serial_out = disabled_serial_out;
+
 		break;
+
 	case FPGA_PERIPHERAL_UP:
+		/* If the FGPA programming succeeds and the FGPA is back
+		 * online, we do the following steps:
+		 *
+		 * 1. We short-circuited the serial_in and serial_out functions
+		 *    as a failsafe. Here we restore the original functions.
+		 */
+		set_io_from_upio(port);
+
+		/*
+		 * 2. Resume the port. This is the complementary function to
+		 *    uart_suspend_port. We will relink the irqs, unset
+		 *    the suspended flag and start transfers (if any).
+		 */
 		ret = uart_resume_port(&serial8250_reg, port);
+
+		/*
+		 * 3. Set the FPGA state to FPGA_UP
+		 */
+		port->fpga_state = FPGA_UP;
+
+		/*
+		 * 4. Unlock the FPGA lock. This will let other functions
+		 *    which were waiting for the FPGA to run. These other
+		 *    functions should check for the fpga_state before
+		 *    continuing.
+		 */
+		if (rwsem_is_locked(&port->fpga_lock))
+			up_write(&port->fpga_lock);
+
 		break;
+
+	case FPGA_PERIPHERAL_FAILED:
+		printk(KERN_EMERG "ttyS%d - FGPA programming failed.\n",
+			serial_index(port));
+		/*
+		 * If the FPGA programming fails for some reason, we do the
+		 * following steps:
+		 *
+		 * 1. Set the FPGA state to FPGA_FAILED
+		 */
+		port->fpga_state = FPGA_FAILED;
+
+		/*
+		 * 2. Unlock the FPGA lock. The functions which were waiting
+		 *    for the FGPA can now check for fpga_state and return
+		 *    errors because of FPGA programming failure.
+		 */
+		if (rwsem_is_locked(&port->fpga_lock))
+			up_write(&port->fpga_lock);
+
+		break;
+
 	default:
 		pr_err("ttyS%d - Unknown FPGA notification value"
 		       " encountered\n", serial_index(port));
@@ -3310,6 +3405,8 @@ int serial8250_register_port(struct uart_port *port)
 					&uart->capabilities);
 
 #ifdef CONFIG_FPGA_PERIPHERAL
+		init_rwsem(&uart->port.fpga_lock);
+
 		uart->port.nb.notifier_call = serial8250_fpga_notification;
 		ret = blocking_notifier_chain_register(
 			&fpgaperipheral_notifier_list, &uart->port.nb);
