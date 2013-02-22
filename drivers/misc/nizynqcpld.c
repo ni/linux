@@ -915,6 +915,7 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 	{
 		.name			= "nizynqcpld:eth1:yellow",
 		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 2,
 		.default_trigger	= "e000b000:01:Gb",
 	},
 	{
