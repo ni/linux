@@ -2080,6 +2080,9 @@ static int xemacps_tx_clean(struct net_local *lp)
 	struct xemacps_bd *curr_bd;
 	int bdcount;
 	u32 regval;
+	struct sk_buff *skb;
+	const struct skb_frag_struct *frag;
+	int i;
 
 	/* Read and clear the transmit status register. We don't use this
 	   value for anything, but we must keep it current. Not reading and
@@ -2096,26 +2099,26 @@ static int xemacps_tx_clean(struct net_local *lp)
 		curr_inf = &(lp->tx_skb[lp->tx_bd_ci]);
 
 		regval = ACCESS_ONCE(curr_bd->ctrl);
+		skb = curr_inf->skb;
 
 		/* Break out if this bd doesn't have a send buffer or has not
 		   yet completed. */
-		if (!(curr_inf->skb && (regval & XEMACPS_TXBUF_USED_MASK)))
+		if (!(skb && (regval & XEMACPS_TXBUF_USED_MASK)))
 			break;
+
+		curr_inf->skb = NULL;
 
 		if (unlikely(regval & XEMACPS_TXBUF_ERR_MASK))
 			++lp->stats.tx_errors;
 		else {
 			++lp->stats.tx_packets;
-			lp->stats.tx_bytes += curr_inf->skb->len;
+			lp->stats.tx_bytes += skb_headlen(skb);
 		}
 
 		dma_unmap_single(&lp->pdev->dev, curr_inf->mapping,
-				 curr_inf->skb->len,
-				 DMA_TO_DEVICE);
+				 skb_headlen(skb), DMA_TO_DEVICE);
 
-		dev_kfree_skb(curr_inf->skb);
-		curr_inf->skb = NULL;
-
+		/* Clear all bits except for USED and WRAP. */
 		regval &= (XEMACPS_TXBUF_USED_MASK | XEMACPS_TXBUF_WRAP_MASK);
 		curr_bd->ctrl = regval;
 		wmb();
@@ -2124,6 +2127,39 @@ static int xemacps_tx_clean(struct net_local *lp)
 		lp->tx_bd_ci %= XEMACPS_SEND_BD_CNT;
 
 		++bdcount;
+
+		for (i = 0; i < skb_shinfo(skb)->nr_frags; ++i) {
+			curr_bd = &(lp->tx_bd[lp->tx_bd_ci]);
+			curr_inf = &(lp->tx_skb[lp->tx_bd_ci]);
+
+			regval = ACCESS_ONCE(curr_bd->ctrl);
+			frag = &skb_shinfo(skb)->frags[i];
+
+			if (unlikely(regval & XEMACPS_TXBUF_ERR_MASK))
+				++lp->stats.tx_errors;
+			else
+				lp->stats.tx_bytes += skb_frag_size(frag);
+
+			dma_unmap_single(&lp->pdev->dev, curr_inf->mapping,
+					 skb_frag_size(frag), DMA_TO_DEVICE);
+
+			/* Clear all bits except for WRAP, and set USED. The
+			   MAC only sets the USED bit on the first descriptor
+			   of a fragmented packet. We must set USED manually
+			   to ensure the transmitter doesn't try to send this
+			   descriptor again prematurely. */
+			regval &= XEMACPS_TXBUF_WRAP_MASK;
+			regval |= XEMACPS_TXBUF_USED_MASK;
+			curr_bd->ctrl = regval;
+			wmb();
+
+			++lp->tx_bd_ci;
+			lp->tx_bd_ci %= XEMACPS_SEND_BD_CNT;
+
+			++bdcount;
+		}
+
+		dev_kfree_skb(skb);
 	}
 
 	lp->tx_bd_freecnt += bdcount;
@@ -2184,10 +2220,13 @@ static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
 				      struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
+	u32 first_bd_index;
 	struct ring_info *curr_inf;
 	struct xemacps_bd *curr_bd;
 	unsigned long flags;
 	u32 regval;
+	const struct skb_frag_struct *frag;
+	int i;
 
 	xemacps_tx_clean(lp);
 
@@ -2195,25 +2234,46 @@ static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
 	   I've done, I saw a maximum of 14 transmit packets in use at the same
 	   time. I manually shortened the transmit ring to make sure this code
 	   path is tested. */
-	if (unlikely(lp->tx_bd_freecnt == 0)) {
+	if (unlikely(lp->tx_bd_freecnt < (skb_shinfo(skb)->nr_frags + 1))) {
 		netif_stop_queue(ndev);
 		lp->tx_task_start_jiffies = jiffies;
 		schedule_delayed_work(&lp->tx_task, 1);
 		return NETDEV_TX_BUSY;
 	}
 
-	curr_inf = &(lp->tx_skb[lp->tx_bd_tail]);
-	curr_bd = &(lp->tx_bd[lp->tx_bd_tail]);
+	first_bd_index = lp->tx_bd_tail;
+
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; ++i) {
+		++lp->tx_bd_tail;
+		lp->tx_bd_tail %= XEMACPS_SEND_BD_CNT;
+
+		--lp->tx_bd_freecnt;
+
+		curr_inf = &(lp->tx_skb[lp->tx_bd_tail]);
+		curr_bd = &(lp->tx_bd[lp->tx_bd_tail]);
+
+		frag = &skb_shinfo(skb)->frags[i];
+
+		curr_inf->mapping = skb_frag_dma_map(&lp->pdev->dev, frag, 0,
+					skb_frag_size(frag), DMA_TO_DEVICE);
+
+		curr_bd->addr = curr_inf->mapping;
+		wmb();
+
+		regval = ACCESS_ONCE(curr_bd->ctrl);
+		regval &= XEMACPS_TXBUF_WRAP_MASK;
+		regval |= skb_frag_size(frag);
+		if (i == (skb_shinfo(skb)->nr_frags - 1))
+			regval |= XEMACPS_TXBUF_LAST_MASK;
+		curr_bd->ctrl = regval;
+		wmb();
+	}
+
+	curr_inf = &(lp->tx_skb[first_bd_index]);
+	curr_bd = &(lp->tx_bd[first_bd_index]);
 
 	curr_inf->mapping = dma_map_single(&lp->pdev->dev, skb->data,
 					   skb_headlen(skb), DMA_TO_DEVICE);
-
-	if (unlikely(dma_mapping_error(&lp->pdev->dev, curr_inf->mapping))) {
-		/* There's nothing we can do about this. */
-		dev_err(&lp->pdev->dev, "transmit DMA mapping error\n");
-		dev_kfree_skb(skb);
-		return NETDEV_TX_OK;
-	}
 
 	curr_inf->skb = skb;
 
@@ -2223,7 +2283,8 @@ static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
 	regval = ACCESS_ONCE(curr_bd->ctrl);
 	regval &= XEMACPS_TXBUF_WRAP_MASK;
 	regval |= skb_headlen(skb);
-	regval |= XEMACPS_TXBUF_LAST_MASK;
+	if (0 == skb_shinfo(skb)->nr_frags)
+		regval |= XEMACPS_TXBUF_LAST_MASK;
 	curr_bd->ctrl = regval;
 	wmb();
 
@@ -3031,7 +3092,8 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	ndev->netdev_ops	 = &netdev_ops;
 	ndev->ethtool_ops        = &xemacps_ethtool_ops;
 	ndev->base_addr          = r_mem->start;
-	ndev->features           = NETIF_F_IP_CSUM;
+	ndev->features           = NETIF_F_IP_CSUM | NETIF_F_SG;
+	ndev->hw_features        = NETIF_F_SG;
 	netif_napi_add(ndev, &lp->napi, xemacps_rx_poll, XEMACPS_NAPI_WEIGHT);
 
 	lp->ip_summed = CHECKSUM_UNNECESSARY;
