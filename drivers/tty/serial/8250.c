@@ -486,13 +486,15 @@ static void io_serial_out(struct uart_port *p, int offset, int value)
 #ifdef CONFIG_FPGA_PERIPHERAL
 static unsigned int disabled_serial_in(struct uart_port *p, int offset)
 {
-	WARN(1, "ttyS%d: trying to read when FPGA is down.", p->line);
+	WARN(1, "FPGA Access Error: Cannot read from UART for ttyS%d",
+		p->line);
 	return 0;
 }
 
 static void disabled_serial_out(struct uart_port *p, int offset, int value)
 {
-	WARN(1, "ttyS%d: trying to write when FPGA is down.", p->line);
+	WARN(1, "FPGA Access Error: Cannot write to UART for ttyS%d",
+		p->line);
 }
 #endif
 
@@ -3268,7 +3270,6 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 		port->serial_out = disabled_serial_out;
 
 		break;
-
 	case FPGA_PERIPHERAL_UP:
 		/* If the FGPA programming succeeds and the FGPA is back
 		 * online, we do the following steps:
@@ -3300,10 +3301,10 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 			up_write(&port->fpga_lock);
 
 		break;
-
 	case FPGA_PERIPHERAL_FAILED:
-		printk(KERN_EMERG "ttyS%d - FGPA programming failed.\n",
+		dev_err(port->dev, "ttyS%d - FPGA programming failed.\n",
 			serial_index(port));
+
 		/*
 		 * If the FPGA programming fails for some reason, we do the
 		 * following steps:
