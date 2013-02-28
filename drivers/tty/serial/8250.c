@@ -3241,25 +3241,30 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 		/* If the FPGA goes down for reprogramming, we do the
 		 * following steps:
 		 *
-		 * 1. Grab the fpga_lock which would prevent other functions
-		 *    from accessing the hardware. (All hardware accessing
-		 *    functions should grab this lock before doing anything)
-		 */
-		down_write(&port->fpga_lock);
-
-		/*
-		 * 2. Set the FPGA state to FPGA_DOWN.
-		 */
-		port->fpga_state = FPGA_DOWN;
-
-		/*
-		 * 3. Suspend the port. This would shutdown the port, unlink
+		 * 1. Suspend the port. This would shutdown the port, unlink
 		 *    the irqs and set the suspended flag. It is not guaranteed
 		 *    that hardware will not be accessed when the port is
 		 *    suspended. Some functions do not honor port suspension
 		 *    and access the FPGA anyways.
 		 */
 		ret = uart_suspend_port(&serial8250_reg, port);
+
+		/*
+		 * 2. Grab the fpga_lock which would prevent other functions
+		 *    from accessing the hardware. (All hardware accessing
+		 *    functions should grab this lock before doing anything)
+		 *
+		 * Note: This lock should NOT be grabbed before we call
+		 * uart_suspend_port since the suspend code path also grabs
+		 * this lock. If we have the lock before we call
+		 * uart_suspend_port, we will deadlock the system.
+		 */
+		down_write(&port->fpga_lock);
+
+		/*
+		 * 3. Set the FPGA state to FPGA_DOWN.
+		 */
+		port->fpga_state = FPGA_DOWN;
 
 		/*
 		 * 4. As a failsafe, change the serial_in and serial_out
@@ -3280,25 +3285,29 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 		set_io_from_upio(port);
 
 		/*
-		 * 2. Resume the port. This is the complementary function to
-		 *    uart_suspend_port. We will relink the irqs, unset
-		 *    the suspended flag and start transfers (if any).
-		 */
-		ret = uart_resume_port(&serial8250_reg, port);
-
-		/*
-		 * 3. Set the FPGA state to FPGA_UP
+		 * 2. Set the FPGA state to FPGA_UP
 		 */
 		port->fpga_state = FPGA_UP;
 
 		/*
-		 * 4. Unlock the FPGA lock. This will let other functions
+		 * 3. Unlock the FPGA lock. This will let other functions
 		 *    which were waiting for the FPGA to run. These other
 		 *    functions should check for the fpga_state before
 		 *    continuing.
+		 *
+		 * Note: We SHOULD release the lock before calling
+		 * uart_resume_port since the resume code path relies on this
+		 * lock being released. If we don't release the lock before
+		 * resuming the port, we will deadlock the system.
 		 */
-		if (rwsem_is_locked(&port->fpga_lock))
-			up_write(&port->fpga_lock);
+		up_write(&port->fpga_lock);
+
+		/*
+		 * 4. Resume the port. This is the complementary function to
+		 *    uart_suspend_port. We will relink the irqs, unset
+		 *    the suspended flag and start transfers (if any).
+		 */
+		ret = uart_resume_port(&serial8250_reg, port);
 
 		break;
 	case FPGA_PERIPHERAL_FAILED:
@@ -3318,8 +3327,7 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 		 *    for the FGPA can now check for fpga_state and return
 		 *    errors because of FPGA programming failure.
 		 */
-		if (rwsem_is_locked(&port->fpga_lock))
-			up_write(&port->fpga_lock);
+		up_write(&port->fpga_lock);
 
 		break;
 
