@@ -1211,6 +1211,9 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd,
 	struct tty_port *port = &state->port;
 	void __user *uarg = (void __user *)arg;
 	int ret = -ENOIOCTLCMD;
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct uart_port *uport = state->uart_port;
+#endif
 
 
 	/*
@@ -1246,6 +1249,13 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd,
 	/*
 	 * The following should only be used when hardware is present.
 	 */
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP)
+		return -ENODEV;
+#endif
+
 	switch (cmd) {
 	case TIOCMIWAIT:
 		ret = uart_wait_modem_status(state, arg);
@@ -1286,6 +1296,9 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd,
 out_up:
 	mutex_unlock(&port->mutex);
 out:
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 	return ret;
 }
 
@@ -1304,6 +1317,9 @@ static void uart_set_termios(struct tty_struct *tty,
 	struct uart_state *state = tty->driver_data;
 	unsigned long flags;
 	unsigned int cflag = tty->termios->c_cflag;
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct uart_port *uport = state->uart_port;
+#endif
 
 
 	/*
@@ -1320,6 +1336,15 @@ static void uart_set_termios(struct tty_struct *tty,
 		return;
 	}
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	/*
+	 * If the FPGA state is not FPGA_UP (the re-programming failed),
+	 * we cannot return an error code from this function.
+	 */
+	if (uport->fpga_state != FPGA_UP)
+		return;
+#endif
 	uart_change_speed(tty, state, old_termios);
 
 	/* Handle transition to B0 status */
@@ -1350,6 +1375,9 @@ static void uart_set_termios(struct tty_struct *tty,
 		}
 		spin_unlock_irqrestore(&state->uart_port->lock, flags);
 	}
+#ifdef CONFIG_FPGA_PERIPHERAL
+	up_read(&uport->fpga_lock);
+#endif
 }
 
 /*
