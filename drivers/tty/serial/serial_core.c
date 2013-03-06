@@ -137,8 +137,10 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 
 #ifdef CONFIG_FPGA_PERIPHERAL
 	down_read(&uport->fpga_lock);
-	if (uport->fpga_state != FPGA_UP)
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
 		return -ENODEV;
+	}
 #endif
 
 	if (port->flags & ASYNC_INITIALIZED) {
@@ -999,8 +1001,10 @@ static int uart_tiocmget(struct tty_struct *tty)
 
 #ifdef CONFIG_FPGA_PERIPHERAL
 	down_read(&uport->fpga_lock);
-	if (uport->fpga_state != FPGA_UP)
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
 		return -ENODEV;
+	}
 #endif
 
 	mutex_lock(&port->mutex);
@@ -1029,8 +1033,10 @@ uart_tiocmset(struct tty_struct *tty, unsigned int set, unsigned int clear)
 
 #ifdef CONFIG_FPGA_PERIPHERAL
 	down_read(&uport->fpga_lock);
-	if (uport->fpga_state != FPGA_UP)
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
 		return -ENODEV;
+	}
 #endif
 
 	mutex_lock(&port->mutex);
@@ -1252,8 +1258,10 @@ uart_ioctl(struct tty_struct *tty, unsigned int cmd,
 
 #ifdef CONFIG_FPGA_PERIPHERAL
 	down_read(&uport->fpga_lock);
-	if (uport->fpga_state != FPGA_UP)
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
 		return -ENODEV;
+	}
 #endif
 
 	switch (cmd) {
@@ -1342,8 +1350,10 @@ static void uart_set_termios(struct tty_struct *tty,
 	 * If the FPGA state is not FPGA_UP (the re-programming failed),
 	 * we cannot return an error code from this function.
 	 */
-	if (uport->fpga_state != FPGA_UP)
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
 		return;
+	}
 #endif
 	uart_change_speed(tty, state, old_termios);
 
