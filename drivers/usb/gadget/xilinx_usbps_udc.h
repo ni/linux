@@ -435,6 +435,7 @@ struct xusbps_ep {
 
 	char name[14];
 	unsigned stopped:1;
+	unsigned int wedge;
 };
 
 #define EP_DIR_IN	1
