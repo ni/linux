@@ -35,6 +35,8 @@
 #define PROTO_SCRATCHPADHR		0xFF
 
 #define DOSX_PROCESSORRESET		0x02
+#define DOSX_STATUSLEDSHIFTBYTE1	0x05
+#define DOSX_STATUSLEDSHIFTBYTE0	0x06
 #define DOSX_LED			0x07
 #define DOSX_ETHERNETLED		0x08
 #define DOSX_DEBUGSWITCH		0x09
@@ -50,6 +52,7 @@
 
 #define DOSX_WATCHDOGCONTROL_PROC_INTERRUPT	0x40
 #define DOSX_WATCHDOGCONTROL_PROC_RESET		0x20
+#define DOSX_WATCHDOGCONTROL_ENTER_USER_MODE	0x80
 #define DOSX_WATCHDOGCONTROL_PET		0x10
 #define DOSX_WATCHDOGCONTROL_RUNNING		0x08
 #define DOSX_WATCHDOGCONTROL_CAPTURECOUNTER	0x04
@@ -64,6 +67,9 @@ struct nizynqcpld_led_desc {
 	const char *default_trigger;
 	u8 addr;
 	u8 bit;
+	u8 pattern_lo_addr;
+	u8 pattern_hi_addr;
+	int max_brightness;
 };
 
 struct nizynqcpld;
@@ -74,6 +80,7 @@ struct nizynqcpld_led {
 	unsigned on :1;
 	struct led_classdev cdev;
 	struct work_struct deferred_work;
+	u16 blink_pattern;
 };
 
 #define to_nizynqcpld_led(x) \
@@ -93,6 +100,7 @@ struct nizynqcpld_watchdog {
 
 struct nizynqcpld_desc {
 	const char *attr_group_name;
+	struct attribute_group *attr_group;
 	u8 supported_version;
 	struct nizynqcpld_led_desc *led_descs;
 	unsigned num_led_descs;
@@ -101,6 +109,7 @@ struct nizynqcpld_desc {
 	u8 scratch_hr_addr;
 	u8 scratch_sr_addr;
 	u8 switch_addr;
+	u8 watchdog_addr;
 };
 
 struct nizynqcpld {
@@ -147,6 +156,13 @@ static void nizynqcpld_set_brightness_work(struct work_struct *work)
 		tmp |= desc->bit;
 
 	nizynqcpld_write(cpld, desc->addr, tmp);
+
+	if (desc->pattern_lo_addr && desc->pattern_hi_addr) {
+		/* spec says to write byte 1 first */
+		nizynqcpld_write(cpld, desc->pattern_hi_addr, led->blink_pattern >> 8);
+		nizynqcpld_write(cpld, desc->pattern_lo_addr, led->blink_pattern & 0xff);
+	}
+
 unlock_out:
 	nizynqcpld_unlock(cpld);
 }
@@ -156,6 +172,9 @@ static void nizynqcpld_led_set_brightness(struct led_classdev *led_cdev,
 {
 	struct nizynqcpld_led *led = to_nizynqcpld_led(led_cdev);
 	led->on = !!brightness;
+	/* some LED's support a blink pattern instead of a variable brightness,
+	   and blink_set isn't flexible enough for the supported patterns */
+	led->blink_pattern = brightness;
 	schedule_work(&led->deferred_work);
 }
 
@@ -172,8 +191,11 @@ nizynqcpld_led_get_brightness(struct led_classdev *led_cdev)
 	nizynqcpld_read(cpld, desc->addr, &tmp);
 	nizynqcpld_unlock(cpld);
 
+	/* for the status LED, the blink pattern used for brightness on write
+	   is write-only, so we just return on/off for all LED's */
 	return tmp & desc->bit ? LED_FULL : 0;
 }
+
 static int nizynqcpld_write(struct nizynqcpld *cpld, u8 reg, u8 data)
 {
 	int err;
@@ -212,7 +234,7 @@ static int nizynqcpld_led_register(struct nizynqcpld *cpld,
 
 	led->cdev.name = desc->name;
 	led->cdev.default_trigger = desc->default_trigger;
-	led->cdev.max_brightness = 1;
+	led->cdev.max_brightness = desc->max_brightness ? desc->max_brightness : 1;
 	led->cdev.brightness_set = nizynqcpld_led_set_brightness;
 	led->cdev.brightness_get = nizynqcpld_led_get_brightness;
 
@@ -467,6 +489,66 @@ static struct attribute *nizynqcpld_attrs[] = {
 
 static struct attribute_group nizynqcpld_attr_group = {
 	.attrs = nizynqcpld_attrs,
+};
+
+static ssize_t dosequiscpld_wdmode_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	int err;
+	u8 tmp;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, desc->watchdog_addr, &tmp);
+	nizynqcpld_unlock(cpld);
+
+	if (err)
+		return err;
+
+	/* you write a 1 to the bit to enter user mode, but it reads as a
+	   0 in user mode for backwards compatibility */
+	tmp &= DOSX_WATCHDOGCONTROL_ENTER_USER_MODE;
+	return sprintf(buf, "%s\n", tmp ? "boot" : "user");
+}
+
+static ssize_t dosequiscpld_wdmode_store(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct nizynqcpld_desc *desc = cpld->desc;
+	int err;
+
+	/* you can only switch boot->user */
+	if (strcmp(buf, "user"))
+		return -EINVAL;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_write(cpld, desc->watchdog_addr,
+		DOSX_WATCHDOGCONTROL_ENTER_USER_MODE);
+	nizynqcpld_unlock(cpld);
+
+	return err ?: count;
+}
+
+static DEVICE_ATTR(watchdog_mode, S_IRUSR|S_IWUSR, dosequiscpld_wdmode_show,
+	dosequiscpld_wdmode_store);
+
+static struct attribute *dosequis6_attrs[] = {
+	&dev_attr_bootmode.attr,
+	&dev_attr_scratch_softreset.attr,
+	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_console_out.dev_attr.attr,
+	&dev_attr_ip_reset.dev_attr.attr,
+	&dev_attr_safe_mode.dev_attr.attr,
+	&dev_attr_watchdog_mode.attr,
+	NULL
+};
+
+static struct attribute_group dosequis6_attr_group = {
+	.attrs = dosequis6_attrs,
 };
 
 /*
@@ -895,6 +977,9 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 		.name			= "nizynqcpld:status:yellow",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 2,
+		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
+		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1, /* write byte 1 first */
+		.max_brightness		= 0xffff,
 	},
 	{
 		.name			= "nizynqcpld:wifi:green",
@@ -943,6 +1028,7 @@ static struct nizynqcpld_watchdog_desc dosxv5_watchdog_desc = {
 static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	{
 		.attr_group_name	= "nizynqprotocpld",
+		.attr_group		= &nizynqcpld_attr_group,
 		.supported_version	= 3,
 		.led_descs		= proto_leds,
 		.num_led_descs		= ARRAY_SIZE(proto_leds),
@@ -953,6 +1039,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	},
 	{
 		.attr_group_name	= "nidosequiscpld",
+		.attr_group		= &nizynqcpld_attr_group,
 		.supported_version	= 4,
 		.watchdog_desc		= &dosxv4_watchdog_desc,
 		.led_descs		= dosx_leds,
@@ -964,6 +1051,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	},
 	{
 		.attr_group_name	= "nidosequiscpld",
+		.attr_group		= &nizynqcpld_attr_group,
 		.supported_version	= 5,
 		.watchdog_desc		= &dosxv5_watchdog_desc,
 		.led_descs		= dosx_leds,
@@ -972,6 +1060,19 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 		.switch_addr		= DOSX_DEBUGSWITCH,
+	},
+	{
+		.attr_group_name	= "nidosequiscpld",
+		.attr_group		= &dosequis6_attr_group,
+		.supported_version	= 6,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
+		.led_descs		= dosx_leds,
+		.num_led_descs		= ARRAY_SIZE(dosx_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= DOSX_DEBUGSWITCH,
+		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 };
 
@@ -1033,8 +1134,8 @@ static int nizynqcpld_probe(struct i2c_client *client,
 			goto err_led;
 	}
 
-	nizynqcpld_attr_group.name = desc->attr_group_name;
-	err = sysfs_create_group(&cpld->dev->kobj, &nizynqcpld_attr_group);
+	desc->attr_group->name = desc->attr_group_name;
+	err = sysfs_create_group(&cpld->dev->kobj, desc->attr_group);
 	if (err) {
 		dev_err(cpld->dev, "could not register attr group for device.\n");
 		goto err_sysfs_create_group;
