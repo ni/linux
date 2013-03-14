@@ -2188,6 +2188,10 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	if (!driver || driver != udc->driver)
 		return -EINVAL;
 
+	/* Disable USB device.*/
+	crtlreg = udc->read_fn(udc->base_address + XUSB_CONTROL_OFFSET);
+	crtlreg &= ~XUSB_CONTROL_USB_READY_MASK;
+	udc->write_fn(crtlreg, (udc->base_address + XUSB_CONTROL_OFFSET));
 	spin_lock_irqsave(&udc->lock, flags);
 	/* Stop any further activity in the device.*/
 	stop_activity(udc);
@@ -2196,13 +2200,6 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	device_del(&udc->gadget.dev);
 	dev_dbg(&udc->gadget.dev,
 		"unbound from %s\n", driver->driver.name);
-
-	/* Disable USB device.*/
-	crtlreg = udc->read_fn(udc->base_address + XUSB_CONTROL_OFFSET);
-
-	crtlreg &= ~XUSB_CONTROL_USB_READY_MASK;
-
-	udc->write_fn(crtlreg, (udc->base_address + XUSB_CONTROL_OFFSET));
 	return 0;
 }
 EXPORT_SYMBOL(usb_gadget_unregister_driver);
