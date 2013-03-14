@@ -1323,7 +1323,7 @@ static struct xusb_udc controller = {
 		},
 	.ep[1] = {
 		  .ep = {
-			 .name = "ep-a",
+			 .name = "ep-1",
 			 .ops = &xusb_ep_ops,
 			 },
 		.udc = &controller,
@@ -1338,7 +1338,7 @@ static struct xusb_udc controller = {
 		},
 	.ep[2] = {
 		  .ep = {
-			 .name = "ep-b",
+			 .name = "ep-2",
 			 .ops = &xusb_ep_ops,
 			 },
 		.udc = &controller,
@@ -1353,7 +1353,7 @@ static struct xusb_udc controller = {
 		},
 	.ep[3] = {
 		  .ep = {
-			 .name = "ep-c",
+			 .name = "ep-3",
 			 .ops = &xusb_ep_ops,
 			 },
 		.udc = &controller,
@@ -1368,7 +1368,7 @@ static struct xusb_udc controller = {
 		},
 	.ep[4] = {
 		  .ep = {
-			 .name = "ep-d",
+			 .name = "ep-4",
 			 .ops = &xusb_ep_ops,
 			 },
 		.udc = &controller,
@@ -1383,7 +1383,7 @@ static struct xusb_udc controller = {
 		},
 	.ep[5] = {
 		  .ep = {
-			 .name = "ep-e",
+			 .name = "ep-5",
 			 .ops = &xusb_ep_ops,
 			 },
 		.udc = &controller,
@@ -1398,7 +1398,7 @@ static struct xusb_udc controller = {
 		},
 	.ep[6] = {
 		  .ep = {
-			 .name = "ep-f",
+			 .name = "ep-6",
 			 .ops = &xusb_ep_ops,
 			 },
 		.udc = &controller,
@@ -1413,7 +1413,7 @@ static struct xusb_udc controller = {
 		},
 	.ep[7] = {
 		  .ep = {
-			 .name = "ep-g",
+			 .name = "ep-7",
 			 .ops = &xusb_ep_ops,
 			 },
 		.udc = &controller,
