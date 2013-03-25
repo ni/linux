@@ -36,6 +36,12 @@
                         xlnx,has-cd = <0x0>;
                         interrupts = <0 24 0>;
                         clock-frequency = <100000000>;
+                        wl12xx: wl12xx@0 {
+                                  compatible = "ti,wl12xx_sdio";
+                                  /* GPIO48 */
+                                  interrupts = <15 0>;
+                                  interrupt-parent = <&gpio>;
+                        };
                 };
 
 		uart@e0000000 {
