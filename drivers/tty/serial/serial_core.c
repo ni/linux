@@ -135,20 +135,8 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 	unsigned long page;
 	int retval = 0;
 
-#ifdef CONFIG_FPGA_PERIPHERAL
-	down_read(&uport->fpga_lock);
-	if (uport->fpga_state != FPGA_UP) {
-		up_read(&uport->fpga_lock);
-		return -ENODEV;
-	}
-#endif
-
-	if (port->flags & ASYNC_INITIALIZED) {
-#ifdef CONFIG_FPGA_PERIPHERAL
-		up_read(&uport->fpga_lock);
-#endif
+	if (port->flags & ASYNC_INITIALIZED)
 		return 0;
-	}
 
 	/*
 	 * Set the TTY IO error marker - we will only clear this
@@ -157,12 +145,8 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 	 */
 	set_bit(TTY_IO_ERROR, &tty->flags);
 
-	if (uport->type == PORT_UNKNOWN) {
-#ifdef CONFIG_FPGA_PERIPHERAL
-		up_read(&uport->fpga_lock);
-#endif
+	if (uport->type == PORT_UNKNOWN)
 		return 0;
-	}
 
 	/*
 	 * Initialise and allocate the transmit and temporary
@@ -171,16 +155,20 @@ static int uart_startup(struct tty_struct *tty, struct uart_state *state, int in
 	if (!state->xmit.buf) {
 		/* This is protected by the per port mutex */
 		page = get_zeroed_page(GFP_KERNEL);
-		if (!page) {
-#ifdef CONFIG_FPGA_PERIPHERAL
-			up_read(&uport->fpga_lock);
-#endif
+		if (!page)
 			return -ENOMEM;
-		}
 
 		state->xmit.buf = (unsigned char *) page;
 		uart_circ_clear(&state->xmit);
 	}
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	down_read(&uport->fpga_lock);
+	if (uport->fpga_state != FPGA_UP) {
+		up_read(&uport->fpga_lock);
+		return -ENODEV;
+	}
+#endif
 
 	retval = uport->ops->startup(uport);
 	if (retval == 0) {
