@@ -264,6 +264,17 @@ static struct usb_descriptor_header *hidg_hs_descriptors[] = {
 	NULL,
 };
 
+static struct usb_descriptor_header *hidg_hs_empty_descriptors[] = {
+	(struct usb_descriptor_header *)&hidg_interface_desc,
+	(struct usb_descriptor_header *)&hidg_desc,
+	(struct usb_descriptor_header *)&hidg_hs_in_ep_desc,
+#ifdef USE_INTR_OUT
+	(struct usb_descriptor_header *)&hidg_hs_out_ep_desc,
+#endif
+	(struct usb_descriptor_header *)&hidg_empty_interface_desc,
+	NULL,
+};
+
 /* Full-Speed Support */
 
 static struct usb_endpoint_descriptor hidg_fs_in_ep_desc = {
@@ -308,6 +319,17 @@ static struct usb_descriptor_header *hidg_fs_descriptors[] = {
 	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[5],
 	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[6],
 	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[7],
+	NULL,
+};
+
+static struct usb_descriptor_header *hidg_fs_empty_descriptors[] = {
+	(struct usb_descriptor_header *)&hidg_interface_desc,
+	(struct usb_descriptor_header *)&hidg_desc,
+	(struct usb_descriptor_header *)&hidg_fs_in_ep_desc,
+#ifdef USE_INTR_OUT
+	(struct usb_descriptor_header *)&hidg_fs_out_ep_desc,
+#endif
+	(struct usb_descriptor_header *)&hidg_empty_interface_desc,
 	NULL,
 };
 
@@ -1030,19 +1052,8 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 		/* high and low speed use the same bulk descriptors */
 		struct usb_request *req;
 		struct usb_endpoint_descriptor **bulk_descs = 
-			(struct usb_endpoint_descriptor **)&hidg_hs_descriptors[5];
-
-		/* switch out the empty interface/null */
-		/* put in the bulk intf and first bulk descriptor */
-		hidg_fs_descriptors[ALT_INTF_DESC_INDEX] = 
-			(struct usb_descriptor_header *)&hidg_bulk_interface_desc;
-		hidg_fs_descriptors[BULK_EP_DESCS_INDEX] =
-			(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0];
-
-		hidg_hs_descriptors[ALT_INTF_DESC_INDEX] = 
-			(struct usb_descriptor_header *)&hidg_bulk_interface_desc;
-		hidg_hs_descriptors[BULK_EP_DESCS_INDEX] =
-			(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0];
+			(struct usb_endpoint_descriptor **)
+			   &hidg_hs_descriptors[BULK_EP_DESCS_INDEX];
 
 		i = 0;
 		while(bulk_descs[i] != NULL)
@@ -1082,23 +1093,14 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 			}
 		}
 	}
-	else
-	{
-		/* switch out the bulk intf/ep descs with the empty intf */
-		hidg_fs_descriptors[ALT_INTF_DESC_INDEX] = 
-			(struct usb_descriptor_header *)&hidg_empty_interface_desc;
-		hidg_fs_descriptors[BULK_EP_DESCS_INDEX] = NULL;
-
-		hidg_hs_descriptors[ALT_INTF_DESC_INDEX] = 
-			(struct usb_descriptor_header *)&hidg_empty_interface_desc;
-		hidg_hs_descriptors[BULK_EP_DESCS_INDEX] = NULL;
-
-	}
 
 	hidg->set_report_buff = NULL;
 
 	/* copy descriptors */
-	f->descriptors = usb_copy_descriptors(hidg_fs_descriptors);
+	if(hidg->minor == FIRST_HID_MINOR)
+		f->descriptors = usb_copy_descriptors(hidg_fs_descriptors);
+	else
+		f->descriptors = usb_copy_descriptors(hidg_fs_empty_descriptors);
 
 	if (!f->descriptors)
 		goto fail;
@@ -1114,8 +1116,11 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 		if(hidg->minor == FIRST_HID_MINOR) {
 			hidg_bulk_set_maxpacket(hidg);
 		}
-		
-		f->hs_descriptors = usb_copy_descriptors(hidg_hs_descriptors);
+		if(hidg->minor == FIRST_HID_MINOR)
+			f->hs_descriptors = usb_copy_descriptors(hidg_hs_descriptors);
+		else
+			f->hs_descriptors = usb_copy_descriptors(hidg_hs_empty_descriptors);
+
 		if (!f->hs_descriptors)
 			goto fail;
 	}
