@@ -22,6 +22,8 @@
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
 #include <linux/module.h>
+#include <linux/seq_file.h>
+
 
 
 /**
@@ -386,7 +388,8 @@ out:
 	return count;
 }
 
-/* File operations for all UBI debugfs files */
+/* File operations for most UBI debugfs files. Only exception is
+detailed_erase_block_count */
 static const struct file_operations dfs_fops = {
 	.read   = dfs_file_read,
 	.write  = dfs_file_write,
@@ -394,6 +397,128 @@ static const struct file_operations dfs_fops = {
 	.llseek = no_llseek,
 	.owner  = THIS_MODULE,
 };
+
+/* Helper function. We store the number of the UBI volume we are
+  interested in in the private field of the seq_file structure. */
+static struct ubi_device *get_ubi_device_for_seq_file(struct seq_file *s)
+{
+	return ubi_get_device((int)s->private);
+}
+
+/* Helper function to determine if we are done printing out erease blocks. */
+static int is_position_before_erase_blocks_end(int pos, struct ubi_device *ubi)
+{
+	return pos < ubi->peb_count;
+}
+
+/* As long as the position is less then that total number of erase blocks
+  we still have more to print. */
+static void *detailed_erase_block_count_seq_start(struct seq_file *s,
+	loff_t *pos)
+{
+	struct ubi_device *ubi = get_ubi_device_for_seq_file(s);
+	if (is_position_before_erase_blocks_end(*pos, ubi))
+		return pos;
+
+	return NULL;
+}
+
+/* Since we are using the position as the iterator we just need to check if we
+are done and increment the position. */
+static void *detailed_erase_block_count_seq_next(struct seq_file *s, void *v,
+	loff_t *pos)
+{
+	struct ubi_device *ubi = get_ubi_device_for_seq_file(s);
+	if (is_position_before_erase_blocks_end(*pos + 1, ubi)) {
+		(*pos)++;
+		return pos;
+	}
+
+	return NULL;
+}
+
+static void detailed_erase_block_count_seq_stop(struct seq_file *s, void *v)
+{
+}
+
+static int detailed_erase_block_count_seq_show(struct seq_file *s, void *v)
+{
+	struct ubi_device *ubi = get_ubi_device_for_seq_file(s);
+	int *block_number = v;
+	int erase_count = -1;
+	int block_status = 0;
+	int reading_error_value = 0;
+	int err = ubi_io_is_bad(ubi, *block_number);
+
+	if (err) {
+		if (err < 0) {
+			/* An error reading the block... */
+			reading_error_value = 1;
+		} else {
+			/* The block is bad... */
+			block_status = 1;
+		}
+	} else {
+		struct ubi_ec_hdr erase_count_header;
+		err = ubi_io_read_ec_hdr(ubi, *block_number,
+			&erase_count_header, 0);
+		if (err != 0 && err != UBI_IO_BITFLIPS) {
+			/* An error reading the erase count */
+			reading_error_value = 2;
+		} else {
+			erase_count = be64_to_cpu(erase_count_header.ec);
+			if (erase_count > UBI_MAX_ERASECOUNTER) {
+				/* erase count is beyond maximum value */
+				block_status = 2;
+			}
+		}
+	}
+
+	/* If this is the start we'll print a header.... */
+	if (*block_number == 0) {
+		seq_puts(s,
+			 "physical_block_number\terase_count\tblock_status\treading_status\terr\n");
+	}
+
+	seq_printf(s, "%d\t%d\t%d\t%d\t%d\n", *block_number, erase_count,
+		block_status, reading_error_value, err);
+	return 0;
+}
+
+/* seq_file functions for detailed_erase_block_count */
+static const struct seq_operations detailed_erase_block_count_seq_ops = {
+	.start = detailed_erase_block_count_seq_start,
+	.next = detailed_erase_block_count_seq_next,
+	.stop = detailed_erase_block_count_seq_stop,
+	.show = detailed_erase_block_count_seq_show
+};
+
+/* inode->i_private is the number of the UBI volume. We store that in ->private
+so we can know which volume we are iterating over. */
+static int detailed_erase_block_count_open(struct inode *inode, struct file *f)
+{
+	struct seq_file *s;
+	int err;
+
+	err = seq_open(f, &detailed_erase_block_count_seq_ops);
+	if (err)
+		return err;
+
+	s = f->private_data;
+	s->private = inode->i_private;
+	return 0;
+}
+
+
+
+static const struct file_operations detailed_erase_block_count_fops = {
+	.owner = THIS_MODULE,
+	.open = detailed_erase_block_count_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release,
+};
+
 
 /**
  * ubi_debugfs_init_dev - initialize debugfs for an UBI device.
@@ -490,6 +615,12 @@ int ubi_debugfs_init_dev(struct ubi_device *ubi)
 	if (IS_ERR_OR_NULL(dent))
 		goto out_remove;
 	d->dfs_power_cut_max = dent;
+
+	fname = "detailed_erase_block_info";
+	dent = debugfs_create_file(fname, S_IRUGO, d->dfs_dir, (void *)ubi_num,
+				   &detailed_erase_block_count_fops);
+	if (IS_ERR_OR_NULL(dent))
+		goto out_remove;
 
 	return 0;
 
