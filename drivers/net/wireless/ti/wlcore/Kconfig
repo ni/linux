@@ -3,6 +3,7 @@ config WLCORE
 	tristate "TI wlcore support"
 	depends on MAC80211
 	select FW_LOADER
+	select WIRELESS_EXT
 	help
 	  This module contains the main code for TI WLAN chips.  It abstracts
 	  hardware-specific differences among different chipset families.
