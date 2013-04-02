@@ -11,6 +11,7 @@ config WL12XX
 	depends on WL12XX_MENU && GENERIC_HARDIRQS
 	depends on INET
 	select FW_LOADER
+	select WIRELESS_EXT
 	---help---
 	  This module adds support for wireless adapters based on TI wl1271 and
 	  TI wl1273 chipsets. This module does *not* include support for wl1251.
