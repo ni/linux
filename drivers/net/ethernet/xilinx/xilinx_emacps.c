@@ -1819,7 +1819,8 @@ static void xemacps_init_hw(struct net_local *lp)
 	/* network configuration */
 	regval  = 0;
 	regval |= XEMACPS_NWCFG_FDEN_MASK;
-	regval |= XEMACPS_NWCFG_RXCHKSUMEN_MASK;
+	if (lp->ip_summed == CHECKSUM_UNNECESSARY)
+		regval |= XEMACPS_NWCFG_RXCHKSUMEN_MASK;
 	regval |= XEMACPS_NWCFG_PAUSECOPYDI_MASK;
 	regval |= XEMACPS_NWCFG_PAUSEEN_MASK;
 	regval |= XEMACPS_NWCFG_100_MASK;
@@ -1843,7 +1844,8 @@ static void xemacps_init_hw(struct net_local *lp)
 		XEMACPS_DMACR_RXBUF_SHIFT);
 	regval |= XEMACPS_DMACR_RXSIZE_MASK;
 	regval |= XEMACPS_DMACR_TXSIZE_MASK;
-	regval |= XEMACPS_DMACR_TCPCKSUM_MASK;
+	if (lp->ndev->features & NETIF_F_IP_CSUM)
+		regval |= XEMACPS_DMACR_TCPCKSUM_MASK;
 #ifdef __LITTLE_ENDIAN
 	regval &= ~XEMACPS_DMACR_ENDIAN_MASK;
 #endif
@@ -2553,12 +2555,17 @@ static int
 xemacps_set_rx_csum(struct net_device *ndev, u32 data)
 {
 	struct net_local *lp = netdev_priv(ndev);
+	u32 regval = xemacps_read(lp->baseaddr, XEMACPS_NWCFG_OFFSET);
 
-	if (data)
+	if (data) {
 		lp->ip_summed = CHECKSUM_UNNECESSARY;
-	else
+		regval |= XEMACPS_NWCFG_RXCHKSUMEN_MASK;
+	} else {
 		lp->ip_summed = CHECKSUM_NONE;
+		regval &= ~XEMACPS_NWCFG_RXCHKSUMEN_MASK;
+	}
 
+	xemacps_write(lp->baseaddr, XEMACPS_NWCFG_OFFSET, regval);
 	return 0;
 }
 
@@ -2586,10 +2593,18 @@ xemacps_get_tx_csum(struct net_device *ndev)
 static int
 xemacps_set_tx_csum(struct net_device *ndev, u32 data)
 {
-	if (data)
+	struct net_local *lp = netdev_priv(ndev);
+	u32 regval = xemacps_read(lp->baseaddr, XEMACPS_DMACR_OFFSET);
+
+	if (data) {
 		ndev->features |= NETIF_F_IP_CSUM;
-	else
+		regval |= XEMACPS_DMACR_TCPCKSUM_MASK;
+	} else {
 		ndev->features &= ~NETIF_F_IP_CSUM;
+		regval &= ~XEMACPS_DMACR_TCPCKSUM_MASK;
+	}
+
+	xemacps_write(lp->baseaddr, XEMACPS_DMACR_OFFSET, regval);
 	return 0;
 }
 
