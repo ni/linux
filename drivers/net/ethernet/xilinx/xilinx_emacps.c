@@ -42,6 +42,8 @@
 #include <linux/of.h>
 #include <linux/kthread.h>
 #include <linux/rtnetlink.h>
+#include <linux/ip.h>
+#include <linux/udp.h>
 #include <mach/board.h>
 #include <mach/slcr.h>
 
@@ -2202,6 +2204,30 @@ static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
 		lp->tx_task_start_jiffies = jiffies;
 		schedule_delayed_work(&lp->tx_task, 1);
 		return NETDEV_TX_BUSY;
+	}
+
+	/* In some cases, transmit checksum offloading can compute an incorrect
+	   UDPv4 header checksum if the checksum value is not already zero. */
+	if (ndev->features & NETIF_F_IP_CSUM) {
+		/* The Ethernet header is never set. */
+		skb_reset_mac_header(skb);
+		/* If the packet is IP. */
+		if (ntohs(eth_hdr(skb)->h_proto) == ETH_P_IP) {
+			/* Usually the IP header is already set. */
+			if (unlikely(!ip_hdr(skb)))
+				skb_set_network_header(skb, ETH_HLEN);
+			/* If the packet is UDPv4. */
+			if ((ip_hdr(skb)->version == 4) &&
+			    (ip_hdr(skb)->protocol == IPPROTO_UDP)) {
+				/* Sometimes the UDP header is set, sometimes
+				   not. */
+				if (!udp_hdr(skb))
+					skb_set_transport_header(skb, ETH_HLEN +
+						(ip_hdr(skb)->ihl << 2));
+				/* Clear the checksum field. */
+				udp_hdr(skb)->check = 0;
+			}
+		}
 	}
 
 	curr_inf = &(lp->tx_skb[lp->tx_bd_tail]);
