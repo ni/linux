@@ -532,6 +532,18 @@ static ssize_t f_hidg_bulk_read(struct file *file, char __user *buffer,
 					actual = -EINVAL;
 					goto out;
 				}
+
+				/* tell the user about failure, once */
+				if(req->status < 0)
+				{
+					actual = req->status;
+					req->status = 0;
+
+					usb_ep_queue(ep, req, GFP_ATOMIC);
+					list_del(&req->list);
+					goto out;
+				}
+
 				copy_to_user(buffer, req->buf, req->actual);
 				actual += req->actual;
 
