@@ -3373,7 +3373,14 @@ int serial8250_register_port(struct uart_port *port)
 
 	uart = serial8250_find_match_or_unused(port);
 	if (uart) {
-		uart_remove_one_port(&serial8250_reg, &uart->port);
+		/*
+		 * We remove the port only if the port is already registered
+		 * with the tty layer (port.dev is not empty). Otherwise,
+		 * we'll get a warning saying that we are trying to remove a
+		 * wrong port (unregistered port).
+		 */
+		if (uart->port.dev)
+			uart_remove_one_port(&serial8250_reg, &uart->port);
 
 		uart->port.iobase       = port->iobase;
 		uart->port.membase      = port->membase;
