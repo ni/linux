@@ -822,66 +822,101 @@ static int hidg_bulk_enable_eps(struct usb_function *f, struct f_hidg *hidg)
 
 		if (hidg->bulk_eps[i] == NULL) continue;
 
-		if (hidg->bulk_eps[i]->driver_data != NULL)
-			usb_ep_disable(hidg->bulk_eps[i]);
-
 		status = config_ep_by_speed(f->config->cdev->gadget, f,
 						    hidg->bulk_eps[i]);
 		if (status) {
 			goto fail;
 		}
+
 		status = usb_ep_enable(hidg->bulk_eps[i]);
 		if (status < 0) {
 			goto fail;
 		}
-			
+
 		hidg->bulk_eps[i]->driver_data = hidg;
 	}
 fail:
 	return status;
 }
 
-static void hidg_bulk_submit_reqs(struct f_hidg *hidg)
+static int hidg_bulk_submit_reqs(struct f_hidg *hidg)
 {
-	int i;
-	struct usb_request *req;
+	int i, status;
 
 	for(i=0; i < BULK_ENDPOINTS; i++) {
 
-		if (!(hidg->bulk_eps[i]->desc->bEndpointAddress
-			       	& USB_ENDPOINT_DIR_MASK)) {
+		int j;
 
-			while (!list_empty(&hidg->bulk_reqs[i])) {
+		for(j = 0; j < REQ_COUNT; j++)
+		{
+			struct usb_request *req =
+				usb_ep_alloc_request(hidg->bulk_eps[i], GFP_KERNEL);
 
-				req = list_entry(hidg->bulk_reqs[i].next,
-					       	struct usb_request, list);
+			if (!req) {
+				status = -ENOMEM;
+				goto fail;
+			}
 
-				req->status	= 0;
-				req->zero	= 0;
-				req->length	= hidg->bulk_eps[i]->maxpacket;
-				req->context	= (void*)i;
-				req->complete	= hidg_bulk_complete;
+			req->status	= 0;
+			req->zero	= 0;
+			req->length	= hidg->bulk_eps[i]->maxpacket;
+			req->context	= (void*)i;
+			req->complete	= hidg_bulk_complete;
 
-				usb_ep_queue(hidg->bulk_eps[i], req, GFP_ATOMIC);
-				list_del(&req->list);
+			/* submit OUT reqs, hang on to IN ones */
+			if (!(hidg->bulk_eps[i]->desc->bEndpointAddress
+		       		& USB_ENDPOINT_DIR_MASK)) {
+
+				req->buf = kmalloc(4096, GFP_KERNEL);
+
+				if (!req->buf) {
+					status = -ENOMEM;
+					goto fail;
+				}
+
+				status = usb_ep_queue(hidg->bulk_eps[i], req,
+					     GFP_ATOMIC);
+				
+				if (status < 0)
+					goto fail;
+
+			} else {
+				list_add_tail(&req->list, &hidg->bulk_reqs[i]);
+				/* let any blocked writes start */
+				wake_up(&(hidg->bulk_queues[i]));
 			}
 		}
 	}
+	return 0;
+fail:
+	return status;
 }
 
 static void hidg_bulk_disable_eps(struct f_hidg *hidg)
 {
 	int i;
+	struct usb_request *req, *safe_req;
 
+	/* note that disable synchronously completes outstanding reqs */
 	for(i=0; i < BULK_ENDPOINTS; i++) {
 		if(hidg->bulk_eps[i]->driver_data != NULL)
 			usb_ep_disable(hidg->bulk_eps[i]);
-		hidg->bulk_eps[i]->driver_data = NULL;
+
+		list_for_each_entry_safe(req, safe_req, 
+					 &(hidg->bulk_reqs[i]), list) {
+			list_del(&req->list);
+
+			if (req->buf)
+				kfree(req->buf);
+
+			usb_ep_free_request(hidg->bulk_eps[i], req);
+		}
 	}
 }
 
 static void hidg_disable(struct usb_function *f)
 {
+	int i=0;
 	struct f_hidg *hidg = func_to_hidg(f);
 
 	usb_ep_disable(hidg->in_ep);
@@ -892,9 +927,11 @@ static void hidg_disable(struct usb_function *f)
 	hidg->out_ep->driver_data = NULL;
 #endif
 
-	if (hidg->minor == FIRST_HID_MINOR)
-	{
+	if (hidg->minor == FIRST_HID_MINOR) {
 		hidg_bulk_disable_eps(hidg);
+		for(i=0; i < BULK_ENDPOINTS; i++) {
+			hidg->bulk_eps[i]->driver_data = NULL;
+		}
 	}
 }
 
@@ -956,14 +993,31 @@ static int hidg_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 			hidg->out_req->context  = hidg;
 
 			status = usb_ep_queue(hidg->out_ep, hidg->out_req, GFP_ATOMIC);
+			if (status < 0) {
+				ERROR(cdev, "Queue HID out req FAILED!\n");
+				goto fail;
+			}
 		}
 	}
 #endif
 
-	if(hidg->minor == FIRST_HID_MINOR && alt == 1) {
-		/* enable, submit all the requests on bulk out endpoints */
-		hidg_bulk_enable_eps(f, hidg);
-		hidg_bulk_submit_reqs(hidg);
+	if(hidg->minor == FIRST_HID_MINOR) {
+		/* restart bulk endpoints */
+		hidg_bulk_disable_eps(hidg);
+		if (alt == 1) {
+			/* enable, submit all the requests on bulk out */
+			status = hidg_bulk_enable_eps(f, hidg);
+			if (status < 0) {
+				ERROR(cdev, "Enable bulk eps FAILED!\n");
+				goto fail;
+			}
+
+			status = hidg_bulk_submit_reqs(hidg);
+			if (status < 0) {
+				goto fail;
+				ERROR(cdev, "Submit bulk reqs FAILED!\n");
+			}
+		}
 	}
 
 fail:
@@ -1070,8 +1124,6 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 		i = 0;
 		while(bulk_descs[i] != NULL)
 		{
-			int j = 0;
-
 			ep = usb_ep_autoconfig(c->cdev->gadget, bulk_descs[i]);
 			if (!ep)
 				goto fail;
@@ -1080,20 +1132,6 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 			hidg->bulk_eps[i] = ep;
 
 			INIT_LIST_HEAD(&(hidg->bulk_reqs[i]));
-			/* preallocate bulk reqs for endpoints */
-			for(j = 0; j < REQ_COUNT; j++)
-			{
-				struct usb_request *req =
-					usb_ep_alloc_request(hidg->bulk_eps[i], GFP_KERNEL);
-
-				if(!req)
-					goto fail;
-
-				req->context = (void*)i;
-				req->complete = hidg_bulk_complete;
-
-				list_add(&req->list, &(hidg->bulk_reqs[i]));
-			}
 			i++;
 		}
 		/* allocate buffers for out requests */
