@@ -594,7 +594,7 @@ int ubi_debugfs_init_dev(struct ubi_device *ubi)
 	d->dfs_emulate_io_failures = dent;
 
 	fname = "detailed_erase_block_info";
-	dent = debugfs_create_file(fname, S_IWUSR, d->dfs_dir, (void *)ubi_num,
+	dent = debugfs_create_file(fname, S_IRUGO, d->dfs_dir, (void *)ubi_num,
 				   &detailed_erase_block_count_fops);
 	if (IS_ERR_OR_NULL(dent))
 		goto out_remove;
