@@ -556,7 +556,7 @@ int ubi_debugfs_init_dev(struct ubi_device *ubi)
 						   mode, d->dfs_dir,
 						   (void *)ubi_num, &dfs_fops);
 
-	debugfs_create_file("detailed_erase_block_info", S_IRUSR, d->dfs_dir,
+	debugfs_create_file("detailed_erase_block_info", S_IRUGO, d->dfs_dir,
 			    (void *)ubi_num, &eraseblk_count_fops);
 
 	return 0;
