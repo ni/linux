@@ -96,6 +96,7 @@ struct pl353_nand_info {
 	void __iomem *nand_base;
 	unsigned long end_cmd_pending;
 	unsigned long end_cmd;
+	int last_read_page;
 };
 
 /*
@@ -734,6 +735,15 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 		command = NAND_CMD_READ0;
 	}
 
+	/* If we receive a READ0 for the page that we've most recently read,
+	   without an intervening command that would change the state of the
+	   NAND cache register, we can replace the READ0 with a RNDOUT. */
+	if ((command == NAND_CMD_READ0) &&
+			(xnand->last_read_page == page_addr)) {
+		command = NAND_CMD_RNDOUT;
+		page_addr = -1;
+	}
+
 	/* Get the command format */
 	for (i = 0; (pl353_nand_commands[i].start_cmd != NAND_CMD_NONE ||
 		     pl353_nand_commands[i].end_cmd != NAND_CMD_NONE); i++)
@@ -742,6 +752,11 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 
 	if (curr_cmd == NULL)
 		return;
+
+	/* We want to preserve the page address of the last READ0
+	 * when just changing the read column address. */
+	if (command != NAND_CMD_RNDOUT)
+		xnand->last_read_page = -1;
 
 	/* Clear interrupt */
 	pl353_smc_clr_nand_int();
@@ -837,6 +852,11 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 			pr_err("%s timed out\n", __func__);
 		return;
 	}
+
+	if (command == NAND_CMD_READ0)
+		/* Store the read page address so that we can detect consecutive
+		   reads of the same page and only send one read command. */
+		xnand->last_read_page = page_addr;
 }
 
 /**
@@ -1104,6 +1124,8 @@ static int pl353_nand_probe(struct platform_device *pdev)
 	pl353_nand_ecc_init(mtd, ondie_ecc_state);
 	if (nand_chip->options & NAND_BUSWIDTH_16)
 		pl353_smc_set_buswidth(PL353_SMC_MEM_WIDTH_16);
+
+	xnand->last_read_page = -1;
 
 	/* second phase scan */
 	if (nand_scan_tail(mtd)) {
