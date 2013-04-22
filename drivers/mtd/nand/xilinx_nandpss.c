@@ -764,12 +764,24 @@ static int xnandpss_read_page_swecc(struct mtd_info *mtd,
  * xnandpss_select_chip - Select the flash device
  * @mtd:	Pointer to the mtd_info structure
  * @chip:	Chip number to be selected
- *
- * This function is empty as the NAND controller handles chip select line
- * internally based on the chip address passed in command and data phase.
  **/
 static void xnandpss_select_chip(struct mtd_info *mtd, int chip)
 {
+	/* CS is automatically asserted when a command or data access is
+	   started. In this function we only need to deassert CS when the
+	   chip is no longer in use. Unfortunately, the only way we can
+	   do this is to read a byte of data from the NAND chip. */
+	if (-1 == chip) {
+		struct nand_chip *chip;
+		unsigned long data_phase_addr;
+
+		chip = (struct nand_chip *)mtd->priv;
+		data_phase_addr = (unsigned long __force)chip->IO_ADDR_R;
+		data_phase_addr |= XNANDPSS_CLEAR_CS;
+		chip->IO_ADDR_R = (void __iomem *__force)data_phase_addr;
+
+		readb(chip->IO_ADDR_R);
+	}
 	return;
 }
 
