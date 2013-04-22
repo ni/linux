@@ -123,6 +123,21 @@
 #define ONDIE_ECC_FEATURE_ADDR		0x90
 
 /*
+ * READ0 command only, for checking read status. Note that the real command
+ * here is 0x00, but we can't differentiate between READ0 where we need to
+ * send a READSTART after the address bytes, or a READ0 by itself, after
+ * a read status command to check the on-die ECC status. The high bit is
+ * written into the unused end_cmd field, so we don't need to mask it off.
+ */
+#define NAND_CMD_READ0_ONLY 0x100
+
+/*
+ * Status bits
+ */
+/* Micron rewrite-recommended */
+#define NAND_STATUS_RR 0x08
+
+/*
  * Macros for the NAND controller register read/write
  */
 #define xnandpss_read32(addr)		__raw_readl(addr)
@@ -164,6 +179,7 @@ struct xnandpss_info {
 	unsigned long		end_cmd_pending;
 	unsigned long		end_cmd;
 	int			last_read_page;
+	int			ondie_ecc_enabled;
 };
 
 /*
@@ -171,6 +187,7 @@ struct xnandpss_info {
  */
 static struct xnandpss_command_format xnandpss_commands[] __devinitdata = {
 	{NAND_CMD_READ0, NAND_CMD_READSTART, 5, XNANDPSS_CMD_PHASE},
+	{NAND_CMD_READ0_ONLY, NAND_CMD_NONE, 0, NAND_CMD_NONE},
 	{NAND_CMD_RNDOUT, NAND_CMD_RNDOUTSTART, 2, XNANDPSS_CMD_PHASE},
 	{NAND_CMD_READID, NAND_CMD_NONE, 1, NAND_CMD_NONE},
 	{NAND_CMD_STATUS, NAND_CMD_NONE, 0, NAND_CMD_NONE},
@@ -904,10 +921,23 @@ static void xnandpss_cmd_function(struct mtd_info *mtd, unsigned int command,
 			;
 	}
 
-	if (command == NAND_CMD_READ0)
+	if (command == NAND_CMD_READ0) {
+		/* If using on-die ECC, we must check the NAND status for an
+		   ECC warning or error after reading a page. */
+		if (xnand->ondie_ecc_enabled) {
+			uint8_t status;
+			xnandpss_cmd_function(mtd, NAND_CMD_STATUS, -1, -1);
+			status = chip->read_byte(mtd);
+			xnandpss_cmd_function(mtd, NAND_CMD_READ0_ONLY, -1, -1);
+			if (status & NAND_STATUS_RR)
+				++mtd->ecc_stats.corrected;
+			else if (status & NAND_STATUS_FAIL)
+				++mtd->ecc_stats.failed;
+		}
 		/* Store the read page address so that we can detect consecutive
 		   reads of the same page and only send one read command. */
 		xnand->last_read_page = page_addr;
+	}
 }
 
 /**
@@ -1018,7 +1048,6 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 	u8 maf_id, dev_id, i;
 	u8 get_feature;
 	u8 set_feature[4] = {0x08, 0x00, 0x00, 0x00};
-	int ondie_ecc_enabled = 0;
 	int ez_nand_supported = 0;
 	unsigned long ecc_cfg;
 	struct xnand_platform_data	*pdata = NULL;
@@ -1232,7 +1261,7 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 		get_feature = nand_chip->read_byte(mtd);
 
 		if (get_feature & 0x08) {
-			ondie_ecc_enabled = 1;
+			xnand->ondie_ecc_enabled = 1;
 		} else {
 			nand_chip->cmdfunc(mtd, NAND_CMD_SET_FEATURES,
 						ONDIE_ECC_FEATURE_ADDR, -1);
@@ -1246,14 +1275,14 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 			get_feature = nand_chip->read_byte(mtd);
 
 			if (get_feature & 0x08)
-				ondie_ecc_enabled = 1;
+				xnand->ondie_ecc_enabled = 1;
 		}
 	} else if ((nand_chip->onfi_version == 23) &&
 				(nand_chip->onfi_params.features & (1 << 9))) {
 		ez_nand_supported = 1;
 	}
 
-	if (ondie_ecc_enabled || ez_nand_supported) {
+	if (xnand->ondie_ecc_enabled || ez_nand_supported) {
 		/* bypass the controller ECC block */
 		ecc_cfg = xnandpss_read32(xnand->smc_regs +
 			XSMCPSS_ECC_MEMCFG_OFFSET(XSMCPSS_ECC_IF1_OFFSET));
@@ -1283,7 +1312,7 @@ static int __devinit xnandpss_probe(struct platform_device *pdev)
 			nand_chip->ecc.size /= nand_chip->onfi_params.programs_per_page;
 
 		/* On-Die ECC spare bytes offset 8 is used for ECC codes */
-		if (ondie_ecc_enabled) {
+		if (xnand->ondie_ecc_enabled) {
 			nand_chip->ecc.layout = &ondie_nand_oob_64;
 			/* Use the BBT pattern descriptors */
 			nand_chip->bbt_td = &bbt_main_descr;
