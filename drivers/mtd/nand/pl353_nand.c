@@ -65,6 +65,20 @@ static inline void pl353_nand_write32(void __iomem *addr, u32 val)
 {
 	writel_relaxed((val), (addr));
 }
+ /*
+  * READ0 command only, for checking read status. Note that the real command
+  * here is 0x00, but we can't differentiate between READ0 where we need to
+  * send a READSTART after the address bytes, or a READ0 by itself, after
+  * a read status command to check the on-die ECC status. The high bit is
+  * written into the unused end_cmd field, so we don't need to mask it off.
+  */
+#define NAND_CMD_READ0_ONLY 0x100
+
+/*
+ * Status bits
+ */
+/* Micron rewrite-recommended */
+#define NAND_STATUS_RR 0x08
 
 /**
  * struct pl353_nand_command_format - Defines NAND flash command format
@@ -97,6 +111,7 @@ struct pl353_nand_info {
 	unsigned long end_cmd_pending;
 	unsigned long end_cmd;
 	int last_read_page;
+	int ondie_ecc_enabled;
 };
 
 /*
@@ -104,6 +119,7 @@ struct pl353_nand_info {
  */
 static const struct pl353_nand_command_format pl353_nand_commands[] = {
 	{NAND_CMD_READ0, NAND_CMD_READSTART, 5, PL353_NAND_CMD_PHASE},
+	{NAND_CMD_READ0_ONLY, NAND_CMD_NONE, 0, NAND_CMD_NONE},
 	{NAND_CMD_RNDOUT, NAND_CMD_RNDOUTSTART, 2, PL353_NAND_CMD_PHASE},
 	{NAND_CMD_READID, NAND_CMD_NONE, 1, NAND_CMD_NONE},
 	{NAND_CMD_STATUS, NAND_CMD_NONE, 0, NAND_CMD_NONE},
@@ -857,11 +873,28 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 		return;
 	}
 
-	if (command == NAND_CMD_READ0)
+	if (command == NAND_CMD_READ0) {
+		/* If using on-die ECC, we must check the NAND status for an
+		 * ECC warning or error after reading a page.
+		 */
+		if (xnand->ondie_ecc_enabled) {
+			uint8_t status;
+
+			pl353_nand_cmd_function(mtd, NAND_CMD_STATUS, -1, -1);
+			status = chip->read_byte(mtd);
+			pl353_nand_cmd_function(mtd, NAND_CMD_READ0_ONLY, -1,
+						-1);
+			if (status & NAND_STATUS_RR)
+				++mtd->ecc_stats.corrected;
+			else if (status & NAND_STATUS_FAIL)
+				++mtd->ecc_stats.failed;
+		}
+
 		/* Store the read page address so that we can detect consecutive
 		 * reads of the same page and only send one read command.
 		 */
 		xnand->last_read_page = page_addr;
+	}
 }
 
 /**
