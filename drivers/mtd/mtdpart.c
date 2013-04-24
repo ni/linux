@@ -347,6 +347,15 @@ static int part_block_markbad(struct mtd_info *mtd, loff_t ofs)
 	return res;
 }
 
+static int part_max_bad_blocks (struct mtd_info *mtd, loff_t ofs, size_t len)
+{
+	struct mtd_part *part = PART(mtd);
+
+	if ((len + ofs) > mtd->size)
+		return -EINVAL;
+	return part->master->max_bad_blocks(part->master, ofs + part->offset, len);
+}
+
 static inline void free_partition(struct mtd_part *p)
 {
 	kfree(p->mtd.name);
@@ -463,6 +472,8 @@ static struct mtd_part *allocate_partition(struct mtd_info *master,
 		slave->mtd.block_isbad = part_block_isbad;
 	if (master->block_markbad)
 		slave->mtd.block_markbad = part_block_markbad;
+	if (master->max_bad_blocks)
+		slave->mtd.max_bad_blocks = part_max_bad_blocks;
 	slave->mtd.erase = part_erase;
 	slave->master = master;
 	slave->offset = part->offset;

@@ -252,6 +252,7 @@ struct mtd_info {
 	/* Bad block management functions */
 	int (*block_isbad) (struct mtd_info *mtd, loff_t ofs);
 	int (*block_markbad) (struct mtd_info *mtd, loff_t ofs);
+	int (*max_bad_blocks) (struct mtd_info *mtd, loff_t ofs, size_t len);
 
 	struct notifier_block reboot_notifier;  /* default mode before reboot */
 
