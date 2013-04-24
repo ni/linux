@@ -42,13 +42,6 @@ config MTD_UBI_BEB_RESERVE
 	  eraseblocks (e.g. NOR flash), this value is ignored and nothing is
 	  reserved. Leave the default value if unsure.
 
-config MTD_UBI_BEB_RESERVE_ONFI
-	bool "Determine reserved eraseblocks for bad eraseblocks handling"
-	help
-	   If enabled, UBI will try to use ONFI to determine the number of
-	   eraseblocks to reserve for bad eraseblocks handling. If ONFI is
-	   not present, UBI will fall back to MTD_UBI_BEB_RESERVE.
-
 config MTD_UBI_GLUEBI
 	tristate "MTD devices emulation driver (gluebi)"
 	help
