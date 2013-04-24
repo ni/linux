@@ -800,37 +800,3 @@ int mtd_is_partition(struct mtd_info *mtd)
 	return ispart;
 }
 EXPORT_SYMBOL_GPL(mtd_is_partition);
-
-struct mtd_info *mtd_partition_master(struct mtd_info *mtd)
-{
-	struct mtd_part *part;
-	struct mtd_info *master = NULL;
-
-	mutex_lock(&mtd_partitions_mutex);
-	list_for_each_entry(part, &mtd_partitions, list)
-		if (&part->mtd == mtd) {
-			master = part->master;
-			break;
-		}
-	mutex_unlock(&mtd_partitions_mutex);
-
-	return master;
-}
-EXPORT_SYMBOL_GPL(mtd_partition_master);
-
-uint64_t mtd_partition_offset(struct mtd_info *mtd)
-{
-	struct mtd_part *part;
-	uint64_t offset = 0;
-
-	mutex_lock(&mtd_partitions_mutex);
-	list_for_each_entry(part, &mtd_partitions, list)
-		if (&part->mtd == mtd) {
-			offset = part->offset;
-			break;
-		}
-	mutex_unlock(&mtd_partitions_mutex);
-
-	return offset;
-}
-EXPORT_SYMBOL_GPL(mtd_partition_offset);
