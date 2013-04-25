@@ -57,12 +57,16 @@ static int __devinit sdhci_zynq_probe(struct platform_device *pdev)
 	ret = sdhci_pltfm_register(pdev, &sdhci_zynq_pdata);
 	if (ret == 0) {
 		prop = of_get_property(np, "xlnx,has-cd", NULL);
+		host = platform_get_drvdata(pdev);
 		if (prop == NULL) {
-			host = platform_get_drvdata(pdev);
 			host->quirks |= SDHCI_QUIRK_BROKEN_CARD_DETECTION;
-		} else if (!(u32) be32_to_cpup(prop))  {
-			host = platform_get_drvdata(pdev);
+		} else if (!(u32) be32_to_cpup(prop)) {
 			host->quirks |= SDHCI_QUIRK_BROKEN_CARD_DETECTION;
+		}
+
+		prop = of_get_property(np, "xlnx,has-cpc", NULL);
+		if (prop != NULL && ((u32) be32_to_cpup(prop))) {
+			host->mmc->caps |= MMC_CAP_POWER_OFF_CARD;
 		}
 	} else
 		printk("sdhci platform registration failed\n");
