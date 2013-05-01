@@ -772,15 +772,15 @@ static void xnandpss_select_chip(struct mtd_info *mtd, int chip)
 	   chip is no longer in use. Unfortunately, the only way we can
 	   do this is to read a byte of data from the NAND chip. */
 	if (-1 == chip) {
-		struct nand_chip *chip;
+		struct nand_chip *nand_chip;
 		unsigned long data_phase_addr;
 
-		chip = (struct nand_chip *)mtd->priv;
-		data_phase_addr = (unsigned long __force)chip->IO_ADDR_R;
+		nand_chip = (struct nand_chip *)mtd->priv;
+		data_phase_addr = (unsigned long __force)nand_chip->IO_ADDR_R;
 		data_phase_addr |= XNANDPSS_CLEAR_CS;
-		chip->IO_ADDR_R = (void __iomem *__force)data_phase_addr;
+		nand_chip->IO_ADDR_R = (void __iomem *__force)data_phase_addr;
 
-		readb(chip->IO_ADDR_R);
+		readb(nand_chip->IO_ADDR_R);
 	}
 	return;
 }
