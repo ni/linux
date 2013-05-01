@@ -65,75 +65,45 @@ char *softirq_to_name[NR_SOFTIRQS] = {
 
 #ifdef CONFIG_NO_HZ
 # ifdef CONFIG_PREEMPT_RT_FULL
-
-struct softirq_runner {
-	struct task_struct *runner[NR_SOFTIRQS];
-};
-
-static DEFINE_PER_CPU(struct softirq_runner, softirq_runners);
-
-static inline void softirq_set_runner(unsigned int sirq)
-{
-	struct softirq_runner *sr = &__get_cpu_var(softirq_runners);
-
-	sr->runner[sirq] = current;
-}
-
-static inline void softirq_clr_runner(unsigned int sirq)
-{
-	struct softirq_runner *sr = &__get_cpu_var(softirq_runners);
-
-	sr->runner[sirq] = NULL;
-}
-
 /*
- * On preempt-rt a softirq running context might be blocked on a
- * lock. There might be no other runnable task on this CPU because the
- * lock owner runs on some other CPU. So we have to go into idle with
- * the pending bit set. Therefor we need to check this otherwise we
- * warn about false positives which confuses users and defeats the
- * whole purpose of this test.
+ * On preempt-rt a softirq might be blocked on a lock. There might be
+ * no other runnable task on this CPU because the lock owner runs on
+ * some other CPU. So we have to go into idle with the pending bit
+ * set. Therefor we need to check this otherwise we warn about false
+ * positives which confuses users and defeats the whole purpose of
+ * this test.
  *
  * This code is called with interrupts disabled.
  */
 void softirq_check_pending_idle(void)
 {
 	static int rate_limit;
-	struct softirq_runner *sr = &__get_cpu_var(softirq_runners);
-	u32 warnpending, pending = local_softirq_pending();
+	u32 warnpending = 0, pending = local_softirq_pending();
 
 	if (rate_limit >= 10)
 		return;
 
-	warnpending = pending;
-
-	while (pending) {
+	if (pending) {
 		struct task_struct *tsk;
-		int i = __ffs(pending);
 
-		pending &= ~(1 << i);
-
-		tsk = sr->runner[i];
+		tsk = __get_cpu_var(ksoftirqd);
 		/*
 		 * The wakeup code in rtmutex.c wakes up the task
 		 * _before_ it sets pi_blocked_on to NULL under
 		 * tsk->pi_lock. So we need to check for both: state
 		 * and pi_blocked_on.
 		 */
-		if (tsk) {
-			raw_spin_lock(&tsk->pi_lock);
-			if (tsk->pi_blocked_on || tsk->state == TASK_RUNNING) {
-				/* Clear all bits pending in that task */
-				warnpending &= ~(tsk->softirqs_raised);
-				warnpending &= ~(1 << i);
-			}
-			raw_spin_unlock(&tsk->pi_lock);
-		}
+		raw_spin_lock(&tsk->pi_lock);
+
+		if (!tsk->pi_blocked_on && !(tsk->state == TASK_RUNNING))
+			warnpending = 1;
+
+		raw_spin_unlock(&tsk->pi_lock);
 	}
 
 	if (warnpending) {
 		printk(KERN_ERR "NOHZ: local_softirq_pending %02x\n",
-		       warnpending);
+		       pending);
 		rate_limit++;
 	}
 }
@@ -152,10 +122,6 @@ void softirq_check_pending_idle(void)
 	}
 }
 # endif
-
-#else /* !NO_HZ */
-static inline void softirq_set_runner(unsigned int sirq) { }
-static inline void softirq_clr_runner(unsigned int sirq) { }
 #endif
 
 /*
@@ -504,7 +470,6 @@ static void do_current_softirqs(int need_rcu_bh_qs)
 		 */
 		lock_softirq(i);
 		local_irq_disable();
-		softirq_set_runner(i);
 		/*
 		 * Check with the local_softirq_pending() bits,
 		 * whether we need to process this still or if someone
@@ -515,7 +480,6 @@ static void do_current_softirqs(int need_rcu_bh_qs)
 			set_softirq_pending(pending & ~mask);
 			do_single_softirq(i, need_rcu_bh_qs);
 		}
-		softirq_clr_runner(i);
 		unlock_softirq(i);
 		WARN_ON(current->softirq_nestcnt != 1);
 	}
