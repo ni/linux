@@ -606,7 +606,7 @@ void thread_do_softirq(void)
 	}
 }
 
-static void do_raise_softirq_irqoff(unsigned int nr)
+void __raise_softirq_irqoff(unsigned int nr)
 {
 	trace_softirq_raise(nr);
 	or_softirq_pending(1UL << nr);
@@ -623,19 +623,12 @@ static void do_raise_softirq_irqoff(unsigned int nr)
 		__this_cpu_read(ksoftirqd)->softirqs_raised |= (1U << nr);
 }
 
-void __raise_softirq_irqoff(unsigned int nr)
-{
-	do_raise_softirq_irqoff(nr);
-	if (!in_irq() && !current->softirq_nestcnt)
-		wakeup_softirqd();
-}
-
 /*
  * This function must run with irqs disabled!
  */
 void raise_softirq_irqoff(unsigned int nr)
 {
-	do_raise_softirq_irqoff(nr);
+	__raise_softirq_irqoff(nr);
 
 	/*
 	 * If we're in an hard interrupt we let irq return code deal
@@ -655,6 +648,11 @@ void raise_softirq_irqoff(unsigned int nr)
 	 */
 	if (!current->softirq_nestcnt)
 		wakeup_softirqd();
+}
+
+void do_raise_softirq_irqoff(unsigned int nr)
+{
+	raise_softirq_irqoff(nr);
 }
 
 static inline int ksoftirqd_softirq_pending(void)
