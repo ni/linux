@@ -3033,9 +3033,11 @@ int netif_rx_ni(struct sk_buff *skb)
 {
 	int err;
 
-	local_bh_disable();
+	migrate_disable();
 	err = netif_rx(skb);
-	local_bh_enable();
+	if (local_softirq_pending())
+		thread_do_softirq();
+	migrate_enable();
 
 	return err;
 }
