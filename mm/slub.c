@@ -2038,7 +2038,7 @@ static void flush_all(struct kmem_cache *s)
 static inline int node_match(struct kmem_cache_cpu *c, int node)
 {
 #ifdef CONFIG_NUMA
-	if (!c->page || (node != NUMA_NO_NODE && c->node != node))
+	if (node != NUMA_NO_NODE && c->node != node)
 		return 0;
 #endif
 	return 1;
