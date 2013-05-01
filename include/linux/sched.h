@@ -1607,7 +1607,6 @@ struct task_struct {
 #ifdef CONFIG_PREEMPT_RT_BASE
 	struct rcu_head put_rcu;
 	int softirq_nestcnt;
-	unsigned int softirqs_raised;
 #endif
 #if defined CONFIG_PREEMPT_RT_FULL && defined CONFIG_HIGHMEM
 	int kmap_idx;
