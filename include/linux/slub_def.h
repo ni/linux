@@ -52,7 +52,7 @@ struct kmem_cache_cpu {
 };
 
 struct kmem_cache_node {
-	raw_spinlock_t list_lock;	/* Protect partial list and nr_partial */
+	spinlock_t list_lock;	/* Protect partial list and nr_partial */
 	unsigned long nr_partial;
 	struct list_head partial;
 #ifdef CONFIG_SLUB_DEBUG
