@@ -100,15 +100,20 @@ void softirq_check_pending_idle(void)
 {
 	static int rate_limit;
 	struct softirq_runner *sr = &__get_cpu_var(softirq_runners);
-	u32 warnpending = local_softirq_pending();
-	int i;
+	u32 warnpending, pending = local_softirq_pending();
 
 	if (rate_limit >= 10)
 		return;
 
-	for (i = 0; i < NR_SOFTIRQS; i++) {
-		struct task_struct *tsk = sr->runner[i];
+	warnpending = pending;
 
+	while (pending) {
+		struct task_struct *tsk;
+		int i = __ffs(pending);
+
+		pending &= ~(1 << i);
+
+		tsk = sr->runner[i];
 		/*
 		 * The wakeup code in rtmutex.c wakes up the task
 		 * _before_ it sets pi_blocked_on to NULL under
