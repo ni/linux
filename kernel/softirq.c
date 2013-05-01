@@ -383,6 +383,7 @@ static inline void ksoftirqd_clr_sched_params(void) { }
  * On RT we serialize softirq execution with a cpu local lock
  */
 static DEFINE_LOCAL_IRQ_LOCK(local_softirq_lock);
+static DEFINE_PER_CPU(struct task_struct *, local_softirq_runner);
 static int ksoftirqd_pri = 1;
 
 static void __do_softirq_common(int need_rcu_bh_qs);
@@ -438,9 +439,22 @@ void _local_bh_enable(void)
 }
 EXPORT_SYMBOL(_local_bh_enable);
 
+/* For tracing */
+int notrace __in_softirq(void)
+{
+	if (__get_cpu_var(local_softirq_lock).owner == current)
+		return __get_cpu_var(local_softirq_lock).nestcnt;
+	return 0;
+}
+
 int in_serving_softirq(void)
 {
-	return current->flags & PF_IN_SOFTIRQ;
+	int res;
+
+	preempt_disable();
+	res = __get_cpu_var(local_softirq_runner) == current;
+	preempt_enable();
+	return res;
 }
 EXPORT_SYMBOL(in_serving_softirq);
 
@@ -458,7 +472,7 @@ static void __do_softirq_common(int need_rcu_bh_qs)
 	/* Reset the pending bitmask before enabling irqs */
 	set_softirq_pending(0);
 
-	current->flags |= PF_IN_SOFTIRQ;
+	__get_cpu_var(local_softirq_runner) = current;
 
 	lockdep_softirq_enter();
 
@@ -469,7 +483,7 @@ static void __do_softirq_common(int need_rcu_bh_qs)
 		wakeup_softirqd();
 
 	lockdep_softirq_exit();
-	current->flags &= ~PF_IN_SOFTIRQ;
+	__get_cpu_var(local_softirq_runner) = NULL;
 
 	current->softirq_nestcnt--;
 }
