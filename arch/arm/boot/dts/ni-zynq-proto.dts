@@ -52,6 +52,12 @@
 			reg = <0xf8007000 0x100>;
 		};
 
+		xadcps@f8007100 {
+			compatible = "xlnx,ps7-xadc-1.00.a";
+			reg = <0xf8007100 0x20>;
+			interrupts = <0 7 0>;
+		};
+
 		timer@0xf8001000 {
 			clock-frequency-timer0 = <111111000>;
 			clock-frequency-timer1 = <111111000>;
