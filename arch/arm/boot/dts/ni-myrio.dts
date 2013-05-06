@@ -70,9 +70,9 @@
 			clock = <50000000>;
 		};
 
-		fpgaperipheral@0 {
+		fpgaperipheral@f8007000 {
 			compatible = "fpgaperipheral";
-			reg = <0xf8007000 0x1000>;
+			reg = <0xf8007000 0x100>;
 		};
 
 		timer@0xf8001000 {
@@ -175,12 +175,6 @@
 				compatible = "nizynqcpld";
 				reg = <0x40>;
 			};
-		};
-
-		devcfg@f8007000 {
-			compatible = "xlnx,ps7-dev-cfg-1.00.a";
-			reg = <0xf8007000 0x1000>;
-			interrupts = <0 8 0>;
 		};
 	};
 };
