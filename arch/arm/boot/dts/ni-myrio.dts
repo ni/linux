@@ -34,6 +34,7 @@
 			compatible = "xlnx,ps7-sdhci-1.00.a";
 			reg = <0xE0100000 0x1000>;
 			xlnx,has-cd = <0x1>;
+			xlnx,has-cpc = <0x1>;
 			interrupts = <0 24 0>;
 			clock-frequency = <100000000>;
 
