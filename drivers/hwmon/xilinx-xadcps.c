@@ -521,12 +521,76 @@ static SENSOR_DEVICE_ATTR(vccbram_max, S_IRUGO, xadc_read_vcc, \
  *for VPVN  = 16, REG_VPVN
  *for VAUXi =  i, REG_VAUX0 + i
  */
+static SENSOR_DEVICE_ATTR_2(ad0, S_IRUGO, xadc_read_v, \
+        NULL, 0, REG_VAUX0 + 0);
+static SENSOR_DEVICE_ATTR_2(ad1, S_IRUGO, xadc_read_v, \
+        NULL, 1, REG_VAUX0 + 1);
+static SENSOR_DEVICE_ATTR_2(ad2, S_IRUGO, xadc_read_v, \
+        NULL, 2, REG_VAUX0 + 2);
+static SENSOR_DEVICE_ATTR_2(ad3, S_IRUGO, xadc_read_v, \
+        NULL, 3, REG_VAUX0 + 3);
+static SENSOR_DEVICE_ATTR_2(ad4, S_IRUGO, xadc_read_v, \
+        NULL, 4, REG_VAUX0 + 4);
+static SENSOR_DEVICE_ATTR_2(ad5, S_IRUGO, xadc_read_v, \
+        NULL, 5, REG_VAUX0 + 5);
+static SENSOR_DEVICE_ATTR_2(ad6, S_IRUGO, xadc_read_v, \
+        NULL, 6, REG_VAUX0 + 6);
+static SENSOR_DEVICE_ATTR_2(ad7, S_IRUGO, xadc_read_v, \
+        NULL, 7, REG_VAUX0 + 7);
+static SENSOR_DEVICE_ATTR_2(ad8, S_IRUGO, xadc_read_v, \
+        NULL, 8, REG_VAUX0 + 8);
+static SENSOR_DEVICE_ATTR_2(ad9, S_IRUGO, xadc_read_v, \
+        NULL, 9, REG_VAUX0 + 9);
+static SENSOR_DEVICE_ATTR_2(ad10, S_IRUGO, xadc_read_v, \
+        NULL, 10, REG_VAUX0 + 10);
+static SENSOR_DEVICE_ATTR_2(ad11, S_IRUGO, xadc_read_v, \
+        NULL, 11, REG_VAUX0 + 11);
+static SENSOR_DEVICE_ATTR_2(ad12, S_IRUGO, xadc_read_v, \
+        NULL, 12, REG_VAUX0 + 12);
+static SENSOR_DEVICE_ATTR_2(ad13, S_IRUGO, xadc_read_v, \
+        NULL, 13, REG_VAUX0 + 13);
+static SENSOR_DEVICE_ATTR_2(ad14, S_IRUGO, xadc_read_v, \
+        NULL, 14, REG_VAUX0 + 14);
+static SENSOR_DEVICE_ATTR_2(ad15, S_IRUGO, xadc_read_v, \
+        NULL, 15, REG_VAUX0 + 15);
 static SENSOR_DEVICE_ATTR_2(v, S_IRUGO, xadc_read_v, \
         NULL, 16, REG_VPVN);
 /*channel number, offset from REG_SEQ_xxx_0
  *for VPVN  = 16, 0
  *for VAUXi =  i, 1
  */
+static SENSOR_DEVICE_ATTR_2(ad0_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 0, 1);
+static SENSOR_DEVICE_ATTR_2(ad1_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 1, 1);
+static SENSOR_DEVICE_ATTR_2(ad2_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 2, 1);
+static SENSOR_DEVICE_ATTR_2(ad3_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 3, 1);
+static SENSOR_DEVICE_ATTR_2(ad4_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 4, 1);
+static SENSOR_DEVICE_ATTR_2(ad5_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 5, 1);
+static SENSOR_DEVICE_ATTR_2(ad6_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 6, 1);
+static SENSOR_DEVICE_ATTR_2(ad7_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 7, 1);
+static SENSOR_DEVICE_ATTR_2(ad8_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 8, 1);
+static SENSOR_DEVICE_ATTR_2(ad9_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 9, 1);
+static SENSOR_DEVICE_ATTR_2(ad10_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 10, 1);
+static SENSOR_DEVICE_ATTR_2(ad11_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 11, 1);
+static SENSOR_DEVICE_ATTR_2(ad12_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 12, 1);
+static SENSOR_DEVICE_ATTR_2(ad13_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 13, 1);
+static SENSOR_DEVICE_ATTR_2(ad14_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 14, 1);
+static SENSOR_DEVICE_ATTR_2(ad15_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
+        xadc_write_vmode, 15, 1);
 static SENSOR_DEVICE_ATTR_2(v_mode, S_IWUSR|S_IRUGO, xadc_read_vmode, \
         xadc_write_vmode, 16, 0);
 #ifdef DEBUG
@@ -552,7 +616,39 @@ static struct attribute *xadc_attr[] = {
 	&sensor_dev_attr_vccbram.dev_attr.attr,
 	&sensor_dev_attr_vccbram_min.dev_attr.attr,
 	&sensor_dev_attr_vccbram_max.dev_attr.attr,
+	&sensor_dev_attr_ad0.dev_attr.attr,
+	&sensor_dev_attr_ad1.dev_attr.attr,
+	&sensor_dev_attr_ad2.dev_attr.attr,
+	&sensor_dev_attr_ad3.dev_attr.attr,
+	&sensor_dev_attr_ad4.dev_attr.attr,
+	&sensor_dev_attr_ad5.dev_attr.attr,
+	&sensor_dev_attr_ad6.dev_attr.attr,
+	&sensor_dev_attr_ad7.dev_attr.attr,
+	&sensor_dev_attr_ad8.dev_attr.attr,
+	&sensor_dev_attr_ad9.dev_attr.attr,
+	&sensor_dev_attr_ad10.dev_attr.attr,
+	&sensor_dev_attr_ad11.dev_attr.attr,
+	&sensor_dev_attr_ad12.dev_attr.attr,
+	&sensor_dev_attr_ad13.dev_attr.attr,
+	&sensor_dev_attr_ad14.dev_attr.attr,
+	&sensor_dev_attr_ad15.dev_attr.attr,
 	&sensor_dev_attr_v.dev_attr.attr,
+	&sensor_dev_attr_ad0_mode.dev_attr.attr,
+	&sensor_dev_attr_ad1_mode.dev_attr.attr,
+	&sensor_dev_attr_ad2_mode.dev_attr.attr,
+	&sensor_dev_attr_ad3_mode.dev_attr.attr,
+	&sensor_dev_attr_ad4_mode.dev_attr.attr,
+	&sensor_dev_attr_ad5_mode.dev_attr.attr,
+	&sensor_dev_attr_ad6_mode.dev_attr.attr,
+	&sensor_dev_attr_ad7_mode.dev_attr.attr,
+	&sensor_dev_attr_ad8_mode.dev_attr.attr,
+	&sensor_dev_attr_ad9_mode.dev_attr.attr,
+	&sensor_dev_attr_ad10_mode.dev_attr.attr,
+	&sensor_dev_attr_ad11_mode.dev_attr.attr,
+	&sensor_dev_attr_ad12_mode.dev_attr.attr,
+	&sensor_dev_attr_ad13_mode.dev_attr.attr,
+	&sensor_dev_attr_ad14_mode.dev_attr.attr,
+	&sensor_dev_attr_ad15_mode.dev_attr.attr,
 	&sensor_dev_attr_v_mode.dev_attr.attr,
 	NULL
 };
