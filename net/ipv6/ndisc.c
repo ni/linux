@@ -737,8 +737,9 @@ static int pndisc_is_router(const void *pkey,
 
 static void ndisc_recv_ns(struct sk_buff *skb)
 {
-	struct nd_msg msg;
-	struct ipv6hdr hdr;
+	struct nd_msg *msg = (struct nd_msg *)skb_transport_header(skb);
+	const struct in6_addr *saddr = &ipv6_hdr(skb)->saddr;
+	const struct in6_addr *daddr = &ipv6_hdr(skb)->daddr;
 	u8 *lladdr = NULL;
 	u32 ndoptlen = skb->tail - (skb->transport_header +
 				    offsetof(struct nd_msg, opt));
@@ -747,14 +748,11 @@ static void ndisc_recv_ns(struct sk_buff *skb)
 	struct inet6_ifaddr *ifp;
 	struct inet6_dev *idev = NULL;
 	struct neighbour *neigh;
-	int dad;
+	int dad = ipv6_addr_any(saddr);
 	int inc;
 	int is_router = -1;
 
-	memcpy(&msg, skb_transport_header(skb), sizeof(msg));
-	memcpy(&hdr, ipv6_hdr(skb), sizeof(hdr));
-	dad = ipv6_addr_any(&hdr.saddr);
-	if (ipv6_addr_is_multicast(&msg.target)) {
+	if (ipv6_addr_is_multicast(&msg->target)) {
 		ND_PRINTK2(KERN_WARNING
 			   "ICMPv6 NS: multicast target address");
 		return;
@@ -765,16 +763,16 @@ static void ndisc_recv_ns(struct sk_buff *skb)
 	 * DAD has to be destined for solicited node multicast address.
 	 */
 	if (dad &&
-	    !(hdr.daddr.s6_addr32[0] == htonl(0xff020000) &&
-	      hdr.daddr.s6_addr32[1] == htonl(0x00000000) &&
-	      hdr.daddr.s6_addr32[2] == htonl(0x00000001) &&
-	      hdr.daddr.s6_addr [12] == 0xff )) {
+	    !(daddr->s6_addr32[0] == htonl(0xff020000) &&
+	      daddr->s6_addr32[1] == htonl(0x00000000) &&
+	      daddr->s6_addr32[2] == htonl(0x00000001) &&
+	      daddr->s6_addr [12] == 0xff )) {
 		ND_PRINTK2(KERN_WARNING
 			   "ICMPv6 NS: bad DAD packet (wrong destination)\n");
 		return;
 	}
 
-	if (!ndisc_parse_options(msg.opt, ndoptlen, &ndopts)) {
+	if (!ndisc_parse_options(msg->opt, ndoptlen, &ndopts)) {
 		ND_PRINTK2(KERN_WARNING
 			   "ICMPv6 NS: invalid ND options\n");
 		return;
@@ -800,9 +798,9 @@ static void ndisc_recv_ns(struct sk_buff *skb)
 		}
 	}
 
-	inc = ipv6_addr_is_multicast(&hdr.daddr);
+	inc = ipv6_addr_is_multicast(daddr);
 
-	ifp = ipv6_get_ifaddr(dev_net(dev), &msg.target, dev, 1);
+	ifp = ipv6_get_ifaddr(dev_net(dev), &msg->target, dev, 1);
 	if (ifp) {
 
 		if (ifp->flags & (IFA_F_TENTATIVE|IFA_F_OPTIMISTIC)) {
@@ -850,10 +848,10 @@ static void ndisc_recv_ns(struct sk_buff *skb)
 			return;
 		}
 
-		if (ipv6_chk_acast_addr(net, dev, &msg.target) ||
+		if (ipv6_chk_acast_addr(net, dev, &msg->target) ||
 		    (idev->cnf.forwarding &&
 		     (net->ipv6.devconf_all->proxy_ndp || idev->cnf.proxy_ndp) &&
-		     (is_router = pndisc_is_router(&msg.target, dev)) >= 0)) {
+		     (is_router = pndisc_is_router(&msg->target, dev)) >= 0)) {
 			if (!(NEIGH_CB(skb)->flags & LOCALLY_ENQUEUED) &&
 			    skb->pkt_type != PACKET_HOST &&
 			    inc != 0 &&
@@ -878,7 +876,7 @@ static void ndisc_recv_ns(struct sk_buff *skb)
 		is_router = !!idev->cnf.forwarding;
 
 	if (dad) {
-		ndisc_send_na(dev, NULL, &in6addr_linklocal_allnodes, &msg.target,
+		ndisc_send_na(dev, NULL, &in6addr_linklocal_allnodes, &msg->target,
 			      is_router, 0, (ifp != NULL), 1);
 		goto out;
 	}
@@ -892,14 +890,14 @@ static void ndisc_recv_ns(struct sk_buff *skb)
 	 *	update / create cache entry
 	 *	for the source address
 	 */
-	neigh = __neigh_lookup(&nd_tbl, &hdr.saddr, dev,
+	neigh = __neigh_lookup(&nd_tbl, saddr, dev,
 			       !inc || lladdr || !dev->addr_len);
 	if (neigh)
 		neigh_update(neigh, lladdr, NUD_STALE,
 			     NEIGH_UPDATE_F_WEAK_OVERRIDE|
 			     NEIGH_UPDATE_F_OVERRIDE);
 	if (neigh || !dev->header_ops) {
-		ndisc_send_na(dev, neigh, &hdr.saddr, &msg.target,
+		ndisc_send_na(dev, neigh, saddr, &msg->target,
 			      is_router,
 			      1, (ifp != NULL && inc), inc);
 		if (neigh)

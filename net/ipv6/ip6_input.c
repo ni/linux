@@ -57,7 +57,7 @@ inline int ip6_rcv_finish( struct sk_buff *skb)
 
 int ipv6_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, struct net_device *orig_dev)
 {
-	struct ipv6hdr hdr;
+	const struct ipv6hdr *hdr;
 	u32 		pkt_len;
 	struct inet6_dev *idev;
 	struct net *net = dev_net(skb->dev);
@@ -94,12 +94,12 @@ int ipv6_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt
 	 */
 	IP6CB(skb)->iif = skb_dst(skb) ? ip6_dst_idev(skb_dst(skb))->dev->ifindex : dev->ifindex;
 
-	if (unlikely(!pskb_may_pull(skb, sizeof(hdr))))
+	if (unlikely(!pskb_may_pull(skb, sizeof(*hdr))))
 		goto err;
 
-	memcpy(&hdr, ipv6_hdr(skb), sizeof(hdr));
+	hdr = ipv6_hdr(skb);
 
-	if (hdr.version != 6)
+	if (hdr->version != 6)
 		goto err;
 
 	/*
@@ -108,7 +108,7 @@ int ipv6_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt
 	 * of loopback must be dropped.
 	 */
 	if (!(dev->flags & IFF_LOOPBACK) &&
-	    ipv6_addr_loopback(&hdr.daddr))
+	    ipv6_addr_loopback(&hdr->daddr))
 		goto err;
 
 	/*
@@ -116,16 +116,16 @@ int ipv6_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt
 	 * Multicast addresses must not be used as source addresses in IPv6
 	 * packets or appear in any Routing header.
 	 */
-	if (ipv6_addr_is_multicast(&hdr.saddr))
+	if (ipv6_addr_is_multicast(&hdr->saddr))
 		goto err;
 
-	skb->transport_header = skb->network_header + sizeof(hdr);
+	skb->transport_header = skb->network_header + sizeof(*hdr);
 	IP6CB(skb)->nhoff = offsetof(struct ipv6hdr, nexthdr);
 
-	pkt_len = ntohs(hdr.payload_len);
+	pkt_len = ntohs(hdr->payload_len);
 
 	/* pkt_len may be zero if Jumbo payload option is present */
-	if (pkt_len || hdr.nexthdr != NEXTHDR_HOP) {
+	if (pkt_len || hdr->nexthdr != NEXTHDR_HOP) {
 		if (pkt_len + sizeof(struct ipv6hdr) > skb->len) {
 			IP6_INC_STATS_BH(net,
 					 idev, IPSTATS_MIB_INTRUNCATEDPKTS);
@@ -135,10 +135,10 @@ int ipv6_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt
 			IP6_INC_STATS_BH(net, idev, IPSTATS_MIB_INHDRERRORS);
 			goto drop;
 		}
-		memcpy(&hdr, ipv6_hdr(skb), sizeof(hdr));
+		hdr = ipv6_hdr(skb);
 	}
 
-	if (hdr.nexthdr == NEXTHDR_HOP) {
+	if (hdr->nexthdr == NEXTHDR_HOP) {
 		if (ipv6_parse_hopopts(skb) < 0) {
 			IP6_INC_STATS_BH(net, idev, IPSTATS_MIB_INHDRERRORS);
 			rcu_read_unlock();
@@ -194,7 +194,7 @@ resubmit:
 		int ret;
 
 		if (ipprot->flags & INET6_PROTO_FINAL) {
-			struct ipv6hdr hdr;
+			const struct ipv6hdr *hdr;
 
 			/* Free reference early: we don't need it any more,
 			   and it may hold ip_conntrack module loaded
@@ -203,10 +203,10 @@ resubmit:
 
 			skb_postpull_rcsum(skb, skb_network_header(skb),
 					   skb_network_header_len(skb));
-			memcpy(&hdr, ipv6_hdr(skb), sizeof(hdr));
-			if (ipv6_addr_is_multicast(&hdr.daddr) &&
-			    !ipv6_chk_mcast_addr(skb->dev, &hdr.daddr,
-			    &hdr.saddr) &&
+			hdr = ipv6_hdr(skb);
+			if (ipv6_addr_is_multicast(&hdr->daddr) &&
+			    !ipv6_chk_mcast_addr(skb->dev, &hdr->daddr,
+			    &hdr->saddr) &&
 			    !ipv6_is_mld(skb, nexthdr))
 				goto discard;
 		}

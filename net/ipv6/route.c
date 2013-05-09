@@ -57,7 +57,6 @@
 #include <net/netlink.h>
 
 #include <asm/uaccess.h>
-#include <asm/unaligned.h>
 
 #ifdef CONFIG_SYSCTL
 #include <linux/sysctl.h>
@@ -869,22 +868,19 @@ static struct rt6_info *ip6_pol_route_input(struct net *net, struct fib6_table *
 
 void ip6_route_input(struct sk_buff *skb)
 {
-	struct ipv6hdr iph;
-	struct net *net;
+	const struct ipv6hdr *iph = ipv6_hdr(skb);
+	struct net *net = dev_net(skb->dev);
 	int flags = RT6_LOOKUP_F_HAS_SADDR;
-	struct flowi6 fl6;
+	struct flowi6 fl6 = {
+		.flowi6_iif = skb->dev->ifindex,
+		.daddr = iph->daddr,
+		.saddr = iph->saddr,
+		.flowlabel = (* (__be32 *) iph)&IPV6_FLOWINFO_MASK,
+		.flowi6_mark = skb->mark,
+		.flowi6_proto = iph->nexthdr,
+	};
 
-	memcpy(&iph, ipv6_hdr(skb), sizeof(iph));
-	net = dev_net(skb->dev);
-
-	fl6.flowi6_iif = skb->dev->ifindex;
-	fl6.daddr = iph.daddr;
-	fl6.saddr = iph.saddr;
-	fl6.flowlabel = (* (__be32 *) &iph)&IPV6_FLOWINFO_MASK;
-	fl6.flowi6_mark = skb->mark;
-	fl6.flowi6_proto = iph.nexthdr;
-
-	if (rt6_need_strict(&iph.daddr) && skb->dev->type != ARPHRD_PIMREG)
+	if (rt6_need_strict(&iph->daddr) && skb->dev->type != ARPHRD_PIMREG)
 		flags |= RT6_LOOKUP_F_IFACE;
 
 	skb_dst_set(skb, fib6_rule_lookup(net, &fl6, flags, ip6_pol_route_input));
