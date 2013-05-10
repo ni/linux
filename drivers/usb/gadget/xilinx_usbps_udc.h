@@ -24,7 +24,9 @@
 
 #include <linux/usb/xilinx_usbps_otg.h>
 
+#if 0
 #define XILINX_UDC_BUG_WORKAROUND
+#endif
 
 /* ### define USB registers here
  */
