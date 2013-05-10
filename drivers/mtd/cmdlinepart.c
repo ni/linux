@@ -337,7 +337,8 @@ static int parse_cmdline_partitions(struct mtd_info *master,
 				else
 				  offset = part->parts[i].offset;
 				if (part->parts[i].size == SIZE_REMAINING)
-				  part->parts[i].size = master->size - offset;
+				  part->parts[i].size = master->size - offset -
+							CONFIG_MTD_RESERVE_END;
 				if (offset + part->parts[i].size > master->size)
 				{
 					printk(KERN_WARNING ERRP
