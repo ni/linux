@@ -110,6 +110,30 @@ config MTD_CMDLINE_PARTS
 
 	  If unsure, say 'N'.
 
+config MTD_RESERVE_END
+	int "Reserved space at the end of an all remaining space partition"
+	depends on MTD_CMDLINE_PARTS = "y"
+	default 0
+	---help---
+	  Specify an amount of reserved space at the end of the last MTD
+	  partition when the size is specified with '-' to denote all
+	  remaining space.
+
+	  This can be useful if, for example, the BBT is stored at the end
+	  of the flash, and you don't want those blocks counted as part of
+	  the last MTD partition. This is less heavyweight than reserving
+	  the BBT blocks with a separate MTD partition. The BBT marks its
+	  own blocks as bad blocks, which prevents an MTD driver such as
+	  UBI from getting an accurate count of the actual bad blocks in
+	  the MTD partition that contains the BBT.
+
+	  The value is specified in bytes. As an example, a typical BBT
+	  reserves four erase blocks, and a typical erase block size is
+	  128kB. To reserve that much space at the end of the flash, the
+	  value for this config option would be 524288.
+
+	  If unsure, use the default value of zero.
+
 config MTD_AFS_PARTS
 	tristate "ARM Firmware Suite partition parsing"
 	depends on ARM
