@@ -365,7 +365,8 @@ static int parse_cmdline_partitions(struct mtd_info *master,
 			offset = part->parts[i].offset;
 
 		if (part->parts[i].size == SIZE_REMAINING)
-			part->parts[i].size = master->size - offset;
+			part->parts[i].size = master->size - offset -
+					      CONFIG_MTD_RESERVE_END;
 
 		if (offset + part->parts[i].size > master->size) {
 			pr_warn("%s: partitioning exceeds flash size, truncating\n",
