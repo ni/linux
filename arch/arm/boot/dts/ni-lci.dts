@@ -39,7 +39,7 @@
                         clock-frequency = <100000000>;
                         wl12xx: wl12xx@0 {
                                   compatible = "ti,wl12xx_sdio";
-                                  /* GPIO48 */
+                                  /* GPIO15 */
                                   interrupts = <15 0>;
                                   interrupt-parent = <&gpio>;
                         };
@@ -153,7 +153,7 @@
 			gpio1-settings  = "level-low";
 
 			/* GPIO15 (MIO15) */
-			gpio15-label     = "wake_interrupt";
+			gpio15-label     = "wifi_interrupt";
 			gpio15-direction = "input";
 			gpio15-settings  = "level-low";
 		};
