@@ -476,6 +476,9 @@ struct xusbps_udc {
 	u32 ep0_dir;		/* Endpoint zero direction: can be
 				   USB_DIR_IN or USB_DIR_OUT */
 	u8 device_address;	/* Device USB address */
+
+	struct timer_list irq_timer; /* irq workaround timer */
+	spinlock_t irq_watchdog_lock; /* irq workaround lock */
 };
 
 /*-------------------------------------------------------------------------*/
