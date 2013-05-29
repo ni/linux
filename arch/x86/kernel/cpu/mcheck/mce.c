@@ -1291,7 +1291,8 @@ static enum hrtimer_restart mce_timer_fn(struct hrtimer *timer)
 	__this_cpu_write(mce_next_interval, iv);
 	/* Might have become 0 after CMCI storm subsided */
 	if (iv) {
-		hrtimer_forward_now(timer, ns_to_ktime(jiffies_to_usecs(iv)));
+		hrtimer_forward_now(timer, ns_to_ktime(
+					jiffies_to_usecs(iv) * 1000ULL));
 		return HRTIMER_RESTART;
 	}
 	return HRTIMER_NORESTART;
@@ -1319,7 +1320,7 @@ void mce_timer_kick(unsigned long interval)
 		}
 	} else {
 		hrtimer_start_range_ns(t,
-				ns_to_ktime(jiffies_to_usecs(interval) * 1000),
+			ns_to_ktime(jiffies_to_usecs(interval) * 1000ULL),
 				0, HRTIMER_MODE_REL_PINNED);
 	}
 	if (interval < iv)
@@ -1641,7 +1642,7 @@ static void mce_start_timer(unsigned int cpu, struct hrtimer *t)
 	if (mca_cfg.ignore_ce || !iv)
 		return;
 
-	hrtimer_start_range_ns(t, ns_to_ktime(jiffies_to_usecs(iv) * 1000),
+	hrtimer_start_range_ns(t, ns_to_ktime(jiffies_to_usecs(iv) * 1000ULL),
 			0, HRTIMER_MODE_REL_PINNED);
 }
 
