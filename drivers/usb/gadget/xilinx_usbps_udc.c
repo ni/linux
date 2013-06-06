@@ -684,6 +684,11 @@ static void xusbps_queue_td(struct xusbps_ep *ep, struct xusbps_req *req)
 		lastreq->tail->next_td_ptr =
 			cpu_to_le32(req->head->td_dma & DTD_ADDR_MASK);
 		wmb();
+
+		temp = req->head->td_dma & DTD_ADDR_MASK;
+		if(ACCESS_ONCE(lastreq->tail->next_td_ptr) != cpu_to_le32(temp))
+			printk(KERN_ERR "Failed to write next DTD!\n");
+
 		/* Read prime bit, if 1 goto done */
 		if (xusbps_readl(&dr_regs->endpointprime) & bitmask)
 			goto out;
@@ -722,6 +727,15 @@ static void xusbps_queue_td(struct xusbps_ep *ep, struct xusbps_req *req)
 
 	/* Ensure that updates to the QH will occure before priming. */
 	wmb();
+
+	temp = req->head->td_dma & EP_QUEUE_HEAD_NEXT_POINTER_MASK;
+	if(ACCESS_ONCE(dQH->next_dtd_ptr) != cpu_to_le32(temp))
+		printk(KERN_ERR "Failed to write first DTD!\n");
+
+	temp = cpu_to_le32(EP_QUEUE_HEAD_STATUS_ACTIVE
+			| EP_QUEUE_HEAD_STATUS_HALT);
+	if((ACCESS_ONCE(dQH->size_ioc_int_sts) & temp) != 0)
+		printk(KERN_ERR "Failed to clear active and halt!\n");
 
 	/* Prime endpoint by writing 1 to ENDPTPRIME */
 	temp = ep_is_in(ep)
