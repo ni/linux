@@ -81,7 +81,7 @@ struct eth_dev {
 
 #define RX_EXTRA	20	/* bytes guarding against rx overflows */
 
-#define DEFAULT_QLEN	1	/* double buffering by default */
+#define DEFAULT_QLEN	2	/* double buffering by default */
 
 
 #ifdef CONFIG_USB_GADGET_DUALSPEED
