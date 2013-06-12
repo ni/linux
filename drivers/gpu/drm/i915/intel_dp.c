@@ -3046,7 +3046,7 @@ static bool intel_edp_init_connector(struct intel_dp *intel_dp,
 	return true;
 }
 
-void
+bool
 intel_dp_init_connector(struct intel_digital_port *intel_dig_port,
 			struct intel_connector *intel_connector)
 {
@@ -3158,7 +3158,7 @@ intel_dp_init_connector(struct intel_digital_port *intel_dig_port,
 	intel_dp_i2c_init(intel_dp, intel_connector, name);
 
 	if (!intel_edp_init_connector(intel_dp, intel_connector))
-		return;
+		return false;
 
 	intel_dp_add_properties(intel_dp, connector);
 
@@ -3170,6 +3170,8 @@ intel_dp_init_connector(struct intel_digital_port *intel_dig_port,
 		u32 temp = I915_READ(PEG_BAND_GAP_DATA);
 		I915_WRITE(PEG_BAND_GAP_DATA, (temp & ~0xf) | 0xd);
 	}
+
+	return true;
 }
 
 void
