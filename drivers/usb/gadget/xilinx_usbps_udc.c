@@ -2557,6 +2557,7 @@ static int __init struct_udc_setup(struct xusbps_udc *udc,
 	udc->resume_state = USB_STATE_NOTATTACHED;
 	udc->usb_state = USB_STATE_POWERED;
 	udc->ep0_dir = 0;
+	udc->vbus_active = 1;
 	udc->remote_wakeup = 0;	/* default to 0 on reset */
 
 	return 0;
