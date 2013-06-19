@@ -990,6 +990,12 @@ config USB_G_LCI
 	  This gadget provites mass storage and a switchable HID/Bulk interface
 	  for communication.
 
+config USB_G_LCI_RNDIS
+	bool "LCI Composite Gadget - RNDIS support"
+	depends on USB_G_LCI
+	help
+	  Add an RNDIS ethernet interface to the LCI gadget.
+
 config USB_G_DBGP
 	tristate "EHCI Debug Device Gadget"
 	help

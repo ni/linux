@@ -34,6 +34,15 @@
 #include "f_mass_storage.c"
 #include "usbstring.c"
 
+#ifdef CONFIG_USB_G_LCI_RNDIS
+
+#define USB_ETH_RNDIS
+#include "f_rndis.c"
+#include "rndis.c"
+#include "u_ether.c"
+
+#endif
+
 static void lci_cleanup(void);
 static int lci_unbind(struct usb_composite_dev*);
 
@@ -305,10 +314,19 @@ static void hid_unregister(void)
 
 /*****************************************************************************/
 
+#ifdef CONFIG_USB_G_LCI_RNDIS
+u8 macaddr[ETH_ALEN];
+#endif
+
 static int __init lci_bind_config(struct usb_configuration *c)
 {
 	struct hidg_func_node *e;
 	int func = 0, status = 0;
+
+#ifdef CONFIG_USB_G_LCI_RNDIS
+	status = rndis_bind_config(c, macaddr);
+	if(status) return status;
+#endif
 
 	list_for_each_entry(e, &hidg_func_list, node) {
 		status = hidg_bind_config(c, e->func, func++);
@@ -333,6 +351,12 @@ static int __init lci_bind(struct usb_composite_dev *cdev)
 	if (num_hid_interfaces != ARRAY_SIZE(lci_hid_plat_device)) {
 		return -ENODEV;
 	}
+
+#ifdef CONFIG_USB_G_LCI_RNDIS
+	//Setup ether
+	status = gether_setup(cdev->gadget, macaddr);
+	if (status < 0) return status;
+#endif
 
 	//Setup HID
 	status = ghid_setup(cdev->gadget, num_hid_interfaces);
