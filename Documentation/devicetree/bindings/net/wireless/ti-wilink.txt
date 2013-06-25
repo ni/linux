@@ -1,0 +1,46 @@
+TI WiLink Wireless Modules Device Tree Bindings
+===============================================
+
+The WiLink modules provide wireless connectivity, such as WLAN,
+Bluetooth, FM and NFC.
+
+There are several different modules available, which can be grouped by
+their generation: WiLink6, WiLink7 and WiLink8.  WiLink4 is not
+currently supported with device tree.
+
+Currently, only the WLAN portion of the modules is supported with
+device tree.
+
+Required properties:
+--------------------
+
+- compatible: should be "ti,wilink6", "ti,wilink7" or "ti,wilink8"
+- interrupt-parent: the interrupt controller
+- interrupts: out-of-band WLAN interrupt
+	See the interrupt controller's bindings documentation for
+	detailed definition.
+
+Optional properties:
+--------------------
+
+- refclock: the internal WLAN reference clock frequency (required for
+  WiLink6 and WiLink7; not used for WiLink8).  Must be one of the
+  following:
+	0 = 19.2 MHz
+	1 = 26.0 MHz
+	2 = 38.4 MHz
+	3 = 52.0 MHz
+	4 = 38.4 MHz, XTAL
+	5 = 26.0 MHz, XTAL
+
+- tcxoclock: the internal WLAN TCXO clock frequency (required for
+  WiLink7 not used for WiLink6 and WiLink8).  Must be one of the
+  following:
+	0 = 19.200 MHz
+	1 = 26.000 MHz
+	2 = 38.400 MHz
+	3 = 52.000 MHz
+	4 = 16.368 MHz
+	5 = 32.736 MHz
+	6 = 16.800 MHz
+	7 = 33.600 MHz
