@@ -521,6 +521,8 @@ invalid:
 			w_value, w_index, w_length);
 		req->zero = (value < w_length);
 		req->length = value;
+		req->context = rndis;
+
 		value = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
 		if (value < 0)
 			ERROR(cdev, "rndis response on err %d\n", value);
