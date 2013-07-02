@@ -930,6 +930,11 @@ static int wl128x_boot_clk(struct wl1271 *wl, int *selected_clock)
 	u16 sys_clk_cfg;
 	int ret;
 
+	if ((priv->ref_clock < 0) || (priv->tcxo_clock < 0)) {
+		wl1271_error("Missing fref and/or tcxo clock settings\n");
+		return -EINVAL;
+	}
+
 	/* For XTAL-only modes, FREF will be used after switching from TCXO */
 	if (priv->ref_clock == WL12XX_REFCLOCK_26_XTAL ||
 	    priv->ref_clock == WL12XX_REFCLOCK_38_XTAL) {
@@ -978,6 +983,11 @@ static int wl127x_boot_clk(struct wl1271 *wl)
 	u32 pause;
 	u32 clk;
 	int ret;
+
+	if (priv->ref_clock < 0) {
+		wl1271_error("Missing fref clock settings\n");
+		return -EINVAL;
+	}
 
 	if (WL127X_PG_GET_MAJOR(wl->hw_pg_ver) < 3)
 		wl->quirks |= WLCORE_QUIRK_END_OF_TRANSACTION;
@@ -1767,7 +1777,7 @@ static int wl12xx_setup(struct wl1271 *wl)
 	wlcore_set_ht_cap(wl, IEEE80211_BAND_5GHZ, &wl12xx_ht_cap);
 	wl12xx_conf_init(wl);
 
-	if (!fref_param) {
+	if (!fref_param && (pdata->ref_clock_freq > 0)) {
 		priv->ref_clock = wl12xx_get_clock_idx(wl12xx_refclock_table,
 						       pdata->ref_clock_freq,
 						       pdata->ref_clock_xtal);
@@ -1778,6 +1788,8 @@ static int wl12xx_setup(struct wl1271 *wl)
 
 			return priv->ref_clock;
 		}
+	} else if (!fref_param) {
+		priv->ref_clock = -EINVAL;
 	} else {
 		if (!strcmp(fref_param, "19.2"))
 			priv->ref_clock = WL12XX_REFCLOCK_19;
@@ -1795,7 +1807,7 @@ static int wl12xx_setup(struct wl1271 *wl)
 			wl1271_error("Invalid fref parameter %s", fref_param);
 	}
 
-	if (!tcxo_param) {
+	if (!fref_param && (pdata->tcxo_clock_freq > 0)) {
 		priv->tcxo_clock = wl12xx_get_clock_idx(wl12xx_tcxoclock_table,
 							pdata->tcxo_clock_freq,
 							true);
@@ -1805,7 +1817,9 @@ static int wl12xx_setup(struct wl1271 *wl)
 
 			return priv->tcxo_clock;
 		}
-	} else {
+	} else if (!fref_param) {
+		priv->tcxo_clock = -EINVAL;
+	}else {
 		if (!strcmp(tcxo_param, "19.2"))
 			priv->tcxo_clock = WL12XX_TCXOCLOCK_19_2;
 		else if (!strcmp(tcxo_param, "26"))

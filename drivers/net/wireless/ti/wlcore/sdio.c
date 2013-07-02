@@ -252,20 +252,16 @@ static struct wl12xx_platform_data *wlcore_get_pdata_from_of(struct device *dev)
 	for_each_matching_node(clock_node, wlcore_sdio_of_clk_match_table)
 		of_fixed_clk_setup(clock_node);
 
-	/* TODO: make sure we have this when needed (ie. for WL6 and WL7) */
 	glue->refclock = of_clk_get_by_name(np, "refclock");
 	if (IS_ERR(glue->refclock)) {
-		dev_err(dev, "couldn't find refclock on the device tree\n");
 		glue->refclock = NULL;
 	} else {
 		clk_prepare_enable(glue->refclock);
 		pdata->ref_clock_freq = clk_get_rate(glue->refclock);
 	}
 
-	/* TODO: make sure we have this when needed (ie. for WL7) */
 	glue->tcxoclock = of_clk_get_by_name(np, "tcxoclock");
 	if (IS_ERR(glue->tcxoclock)) {
-		dev_err(dev, "couldn't find tcxoclock on the device tree\n");
 		glue->tcxoclock = NULL;
 	} else {
 		clk_prepare_enable(glue->tcxoclock);
