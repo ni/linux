@@ -34,6 +34,7 @@
 #include <linux/wl12xx.h>
 #include <linux/pm_runtime.h>
 #include <linux/printk.h>
+#include <linux/clk-provider.h>
 
 #include "wlcore.h"
 #include "wl12xx_80211.h"
@@ -214,10 +215,15 @@ static struct wl1271_if_operations sdio_ops = {
 	.set_block_size = wl1271_sdio_set_block_size,
 };
 
+static const struct of_device_id wlcore_sdio_of_clk_match_table[] = {
+	{ .compatible = "ti,wilink-clock" },
+};
+
 static struct wl12xx_platform_data *wlcore_get_pdata_from_of(struct device *dev)
 {
 	struct wl12xx_platform_data *pdata;
 	struct device_node *np = dev->of_node;
+	struct device_node *clock_node;
 
 	if (!np) {
 		np = of_find_matching_node(NULL, dev->driver->of_match_table);
@@ -240,6 +246,9 @@ static struct wl12xx_platform_data *wlcore_get_pdata_from_of(struct device *dev)
 		dev_err(dev, "can't get interrupt gpio from the device tree\n");
 		goto out_free;
 	}
+
+	for_each_matching_node(clock_node, wlcore_sdio_of_clk_match_table)
+		of_fixed_clk_setup(clock_node);
 
 	goto out;
 
