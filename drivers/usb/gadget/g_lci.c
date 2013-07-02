@@ -9,13 +9,29 @@
 #include <linux/usb/g_hid.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
+#include <linux/moduleparam.h>
 #include <linux/platform_device.h>
+#include <linux/stat.h>
 #include <linux/utsname.h>
 
 /*-------------------------------------------------------------------------*/
 
-#define DRIVER_DESC     "National Instruments LCI"
+#define DRIVER_DESC     "National Instruments LCI gadget"
 #define DRIVER_VERSION	"0.1"
+
+/* USB strings */
+static char *manufacturer = "National Instruments";
+static char *product = "VB-8012";
+
+module_param(manufacturer, charp, S_IRUGO);
+module_param(product, charp, S_IRUGO);
+
+/* Mass Storage inquiry strings */
+static char *fsg_manuf = "NI";
+static char *fsg_prod = "VB-8012";
+
+module_param(fsg_manuf, charp, S_IRUGO);
+module_param(fsg_prod, charp, S_IRUGO);
 
 /*-------------------------------------------------------------------------*/
 
@@ -63,7 +79,7 @@ static struct usb_device_descriptor lci_device_descriptor = {
 };
 
 static struct usb_configuration lci_configuration = {
-	.label			= DRIVER_DESC,
+	.label			= 0,
 	.bConfigurationValue	= 1,
 	.bmAttributes		= USB_CONFIG_ATT_SELFPOWER,
 };
@@ -71,11 +87,9 @@ static struct usb_configuration lci_configuration = {
 #define STRING_MANUFACTURER_IDX		0
 #define STRING_PRODUCT_IDX		1
 
-static char manufacturer[50];
-
 static struct usb_string strings_dev[] = {
-	[STRING_MANUFACTURER_IDX].s = manufacturer,
-	[STRING_PRODUCT_IDX].s = DRIVER_DESC,
+	[STRING_MANUFACTURER_IDX].s = 0,
+	[STRING_PRODUCT_IDX].s = 0,
 	{  } /* end of list */
 };
 
@@ -227,6 +241,9 @@ static int msg_add_to_config(struct usb_configuration *c)
 
 	fsg_config_from_params(&config, &mod_data);
 	config.ops = &ops;
+	/* vendor must be 8 chars, product 16 or less */
+	config.vendor_name = fsg_manuf;
+	config.product_name = fsg_prod;
 
 	retp = fsg_common_init(&common, c->cdev, &config);
 	if (IS_ERR(retp))	return PTR_ERR(retp);
@@ -354,38 +371,38 @@ static int __init lci_bind(struct usb_composite_dev *cdev)
 
 #ifdef CONFIG_USB_G_LCI_RNDIS
 	//Setup ether
-	status = gether_setup(cdev->gadget, macaddr);
+	status = gether_setup(gadget, macaddr);
 	if (status < 0) return status;
 #endif
 
 	//Setup HID
-	status = ghid_setup(cdev->gadget, num_hid_interfaces);
+	status = ghid_setup(gadget, num_hid_interfaces);
 	if (status < 0) return status;
 
 	//Setup HID bulk mode
-	status = ghid_bulk_setup(cdev->gadget);
+	status = ghid_bulk_setup(gadget);
 	if (status < 0) return status;
 
 	//Write manufacturer string
-	snprintf(manufacturer, sizeof manufacturer, "%s %s with %s",
-			init_utsname()->sysname, init_utsname()->release,
-			gadget->name);
 	status = usb_string_id(cdev);
 	if (status < 0) return status;
+	strings_dev[STRING_MANUFACTURER_IDX].s = manufacturer;
 	strings_dev[STRING_MANUFACTURER_IDX].id = status;
 	lci_device_descriptor.iManufacturer = status;
 
 	//Write product string
 	status = usb_string_id(cdev);
 	if (status < 0) return status;
+	strings_dev[STRING_PRODUCT_IDX].s = product;
 	strings_dev[STRING_PRODUCT_IDX].id = status;
 	lci_device_descriptor.iProduct = status;
 
 	//Add configuration to device
+	lci_configuration.label = product;
 	status = usb_add_config(cdev, &lci_configuration, lci_bind_config);
 	if (status < 0) return status;
 
-	dev_info(&cdev->gadget->dev, DRIVER_DESC ", version: " DRIVER_VERSION "\n");
+	dev_info(&gadget->dev, DRIVER_DESC ", version: " DRIVER_VERSION "\n");
 
 	set_bit(0, &lci_registered);
 	return 0;
