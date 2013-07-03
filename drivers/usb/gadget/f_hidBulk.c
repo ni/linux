@@ -342,6 +342,7 @@ static ssize_t f_hidg_read(struct file *file, char __user *buffer,
 	struct f_hidg	*hidg     = file->private_data;
 	char		*tmp_buff = NULL;
 	unsigned long	flags;
+	int		status = 0;
 
 	if (!count)
 		return 0;
@@ -368,12 +369,24 @@ static ssize_t f_hidg_read(struct file *file, char __user *buffer,
 	count = min_t(unsigned, count, hidg->set_report_length);
 	tmp_buff = hidg->set_report_buff;
 	hidg->set_report_buff = NULL;
+	hidg->set_report_length = 0;
 
 	spin_unlock_irqrestore(&hidg->spinlock, flags);
 
 #ifdef USE_INTR_OUT
+	if(hidg->out_req->status != 0)
+	{
+		kfree(tmp_buff);
+		return hidg->out_req->status;
+	}
+
 	/* resubmit this request since the read is done */
-	usb_ep_queue(hidg->out_ep, hidg->out_req, GFP_ATOMIC);
+	status = usb_ep_queue(hidg->out_ep, hidg->out_req, GFP_ATOMIC);
+	if (status != 0)
+	{
+		kfree(tmp_buff);
+		return status;
+	}
 #endif
 
 	if (tmp_buff != NULL) {
@@ -676,7 +689,6 @@ static void hidg_set_report_complete(struct usb_ep *ep, struct usb_request *req)
 
 	if (req->status != 0 || req->buf == NULL || req->actual == 0) {
 		ERROR(hidg->func.config->cdev, "%s FAILED\n", __func__);
-		return;
 	}
 
 	spin_lock(&hidg->spinlock);
