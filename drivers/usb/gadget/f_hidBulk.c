@@ -29,7 +29,7 @@
 #define USE_INTR_OUT
 
 //How many requests to keep outstanding
-#define REQ_COUNT 1
+#define REQ_COUNT 10
 
 //The minor number of the first hid interface - the one that switches
 //to bulk.
@@ -79,6 +79,7 @@ struct f_hidg {
 	/* endpoints for bulk mode */
 	struct usb_ep			*bulk_eps[BULK_ENDPOINTS];
 	struct list_head		bulk_reqs[BULK_ENDPOINTS];
+	struct list_head		done_bulk_reqs[BULK_ENDPOINTS];
 	spinlock_t			bulk_spinlock;
 	wait_queue_head_t		bulk_queues[BULK_ENDPOINTS];
 };
@@ -549,25 +550,30 @@ static ssize_t f_hidg_bulk_read(struct file *file, char __user *buffer,
 			if(req->status < 0)
 			{
 				actual = req->status;
-				req->status = 0;
 
-				status = usb_ep_queue(ep, req, GFP_ATOMIC);
-				if(status == 0)
-					list_del(&req->list);
+				/* we don't want to keep seeing this req */
+				list_del(&req->list);
+				list_add_tail(&req->list,
+					&hidg->done_bulk_reqs[index]);
 				goto out;
 			}
 
-			copy_to_user(buffer, req->buf, req->actual);
+			copy_to_user(buffer + actual, req->buf, req->actual);
 			actual += req->actual;
 
 			status = usb_ep_queue(ep, req, GFP_ATOMIC);
-			if(status == 0)
-				list_del(&req->list);
-			else
+			list_del(&req->list);
+
+			if(status != 0)
 			{
 				actual = status;
+				list_add_tail(&req->list,
+					&hidg->done_bulk_reqs[index]);
 				goto out;
 			}
+
+			if(actual >= count)
+				goto out;
 		}
 
 		if (actual <= 0) {
@@ -714,7 +720,11 @@ static void hidg_bulk_complete(struct usb_ep *ep, struct usb_request *req)
 	struct f_hidg *hidg = ep->driver_data;
 	int index = (int)req->context;
 
+	spin_lock(&hidg->bulk_spinlock);
+
 	list_add_tail(&req->list, &(hidg->bulk_reqs[index]));
+
+	spin_unlock(&hidg->bulk_spinlock);
 
 	wake_up(&(hidg->bulk_queues[index]));
 }
@@ -891,11 +901,22 @@ static int hidg_bulk_submit_reqs(struct f_hidg *hidg)
 {
 	int i, status;
 	struct usb_request *req, *safe_req;
+	unsigned long flags;
+	
+	spin_lock_irqsave(&hidg->bulk_spinlock, flags);
 
 	for(i=0; i < BULK_ENDPOINTS; i++) {
+
+		/* move retired reqs back to the active list */
+		list_for_each_entry_safe(req, safe_req,
+					&(hidg->done_bulk_reqs[i]), list)
+		{
+			list_del(&req->list);
+			list_add_tail(&req->list, &hidg->bulk_reqs[i]);
+		}
 		
 		list_for_each_entry_safe(req, safe_req, 
-					 &(hidg->bulk_reqs[i]), list)
+					&(hidg->bulk_reqs[i]), list)
 		{
 			req->status	= 0;
 			req->zero	= 0;
@@ -921,8 +942,12 @@ static int hidg_bulk_submit_reqs(struct f_hidg *hidg)
 			}
 		}
 	}
+
+	spin_unlock_irqrestore(&hidg->bulk_spinlock, flags);
 	return 0;
+
 fail:
+	spin_unlock_irqrestore(&hidg->bulk_spinlock, flags);
 	return status;
 }
 
@@ -936,6 +961,7 @@ static void hidg_bulk_disable_eps(struct f_hidg *hidg)
 			usb_ep_disable(hidg->bulk_eps[i]);
 	}
 }
+
 
 static void hidg_disable(struct usb_function *f)
 {
@@ -1154,6 +1180,7 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 			hidg->bulk_eps[i] = ep;
 
 			INIT_LIST_HEAD(&(hidg->bulk_reqs[i]));
+			INIT_LIST_HEAD(&(hidg->done_bulk_reqs[i]));
 			i++;
 		}
 	}
