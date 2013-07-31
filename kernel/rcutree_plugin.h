@@ -2036,7 +2036,7 @@ static int rcu_nocb_needs_gp(struct rcu_state *rsp)
  */
 static void rcu_nocb_gp_cleanup(struct rcu_state *rsp, struct rcu_node *rnp)
 {
-	wake_up_all(&rnp->nocb_gp_wq[rnp->completed & 0x1]);
+	swait_wake_all(&rnp->nocb_gp_wq[rnp->completed & 0x1]);
 }
 
 /*
@@ -2054,8 +2054,8 @@ static void rcu_nocb_gp_set(struct rcu_node *rnp, int nrq)
 
 static void rcu_init_one_nocb(struct rcu_node *rnp)
 {
-	init_waitqueue_head(&rnp->nocb_gp_wq[0]);
-	init_waitqueue_head(&rnp->nocb_gp_wq[1]);
+	init_swait_head(&rnp->nocb_gp_wq[0]);
+	init_swait_head(&rnp->nocb_gp_wq[1]);
 }
 
 /* Is the specified CPU a no-CPUs CPU? */
@@ -2095,7 +2095,7 @@ static void __call_rcu_nocb_enqueue(struct rcu_data *rdp,
 		return;
 	len = atomic_long_read(&rdp->nocb_q_count);
 	if (old_rhpp == &rdp->nocb_head) {
-		wake_up(&rdp->nocb_wq); /* ... only if queue was empty ... */
+		swait_wake(&rdp->nocb_wq); /* ... only if queue was empty ... */
 		rdp->qlen_last_fqs_check = 0;
 	} else if (len > rdp->qlen_last_fqs_check + qhimark) {
 		wake_up_process(t); /* ... or if many callbacks queued. */
@@ -2185,7 +2185,7 @@ static void rcu_nocb_wait_gp(struct rcu_data *rdp)
 	 */
 	trace_rcu_future_gp(rnp, rdp, c, "StartWait");
 	for (;;) {
-		wait_event_interruptible(
+		swait_event_interruptible(
 			rnp->nocb_gp_wq[c & 0x1],
 			(d = ULONG_CMP_GE(ACCESS_ONCE(rnp->completed), c)));
 		if (likely(d))
@@ -2213,7 +2213,7 @@ static int rcu_nocb_kthread(void *arg)
 	for (;;) {
 		/* If not polling, wait for next batch of callbacks. */
 		if (!rcu_nocb_poll)
-			wait_event_interruptible(rdp->nocb_wq, rdp->nocb_head);
+			swait_event_interruptible(rdp->nocb_wq, rdp->nocb_head);
 		list = ACCESS_ONCE(rdp->nocb_head);
 		if (!list) {
 			schedule_timeout_interruptible(1);
@@ -2263,7 +2263,7 @@ static int rcu_nocb_kthread(void *arg)
 static void __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
 {
 	rdp->nocb_tail = &rdp->nocb_head;
-	init_waitqueue_head(&rdp->nocb_wq);
+	init_swait_head(&rdp->nocb_wq);
 }
 
 /* Create a kthread for each RCU flavor for each no-CBs CPU. */
