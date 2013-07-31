@@ -28,6 +28,7 @@
 #include <linux/cpumask.h>
 #include <linux/seqlock.h>
 #include <linux/irq_work.h>
+#include <linux/wait-simple.h>
 
 /*
  * Define shape of hierarchy based on NR_CPUS, CONFIG_RCU_FANOUT, and
@@ -200,7 +201,7 @@ struct rcu_node {
 				/*  This can happen due to race conditions. */
 #endif /* #ifdef CONFIG_RCU_BOOST */
 #ifdef CONFIG_RCU_NOCB_CPU
-	wait_queue_head_t nocb_gp_wq[2];
+	struct swait_head nocb_gp_wq[2];
 				/* Place for rcu_nocb_kthread() to wait GP. */
 #endif /* #ifdef CONFIG_RCU_NOCB_CPU */
 	int need_future_gp[2];
@@ -334,7 +335,7 @@ struct rcu_data {
 	atomic_long_t nocb_q_count_lazy; /*  (approximate). */
 	int nocb_p_count;		/* # CBs being invoked by kthread */
 	int nocb_p_count_lazy;		/*  (approximate). */
-	wait_queue_head_t nocb_wq;	/* For nocb kthreads to sleep on. */
+	struct swait_head nocb_wq;	/* For nocb kthreads to sleep on. */
 	struct task_struct *nocb_kthread;
 	bool nocb_defer_wakeup;		/* Defer wakeup of nocb_kthread. */
 #endif /* #ifdef CONFIG_RCU_NOCB_CPU */

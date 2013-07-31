@@ -1977,7 +1977,7 @@ static int rcu_nocb_needs_gp(struct rcu_state *rsp)
  */
 static void rcu_nocb_gp_cleanup(struct rcu_state *rsp, struct rcu_node *rnp)
 {
-	wake_up_all(&rnp->nocb_gp_wq[rnp->completed & 0x1]);
+	swait_wake_all(&rnp->nocb_gp_wq[rnp->completed & 0x1]);
 }
 
 /*
@@ -1995,8 +1995,8 @@ static void rcu_nocb_gp_set(struct rcu_node *rnp, int nrq)
 
 static void rcu_init_one_nocb(struct rcu_node *rnp)
 {
-	init_waitqueue_head(&rnp->nocb_gp_wq[0]);
-	init_waitqueue_head(&rnp->nocb_gp_wq[1]);
+	init_swait_head(&rnp->nocb_gp_wq[0]);
+	init_swait_head(&rnp->nocb_gp_wq[1]);
 }
 
 /* Is the specified CPU a no-CPUs CPU? */
@@ -2041,7 +2041,7 @@ static void __call_rcu_nocb_enqueue(struct rcu_data *rdp,
 	len = atomic_long_read(&rdp->nocb_q_count);
 	if (old_rhpp == &rdp->nocb_head) {
 		if (!irqs_disabled_flags(flags)) {
-			wake_up(&rdp->nocb_wq); /* ... if queue was empty ... */
+			swait_wake(&rdp->nocb_wq); /* ... if queue was empty ... */
 			trace_rcu_nocb_wake(rdp->rsp->name, rdp->cpu,
 					    TPS("WakeEmpty"));
 		} else {
@@ -2145,7 +2145,7 @@ static void rcu_nocb_wait_gp(struct rcu_data *rdp)
 	 */
 	trace_rcu_future_gp(rnp, rdp, c, TPS("StartWait"));
 	for (;;) {
-		wait_event_interruptible(
+		swait_event_interruptible(
 			rnp->nocb_gp_wq[c & 0x1],
 			(d = ULONG_CMP_GE(ACCESS_ONCE(rnp->completed), c)));
 		if (likely(d))
@@ -2176,7 +2176,7 @@ static int rcu_nocb_kthread(void *arg)
 		if (!rcu_nocb_poll) {
 			trace_rcu_nocb_wake(rdp->rsp->name, rdp->cpu,
 					    TPS("Sleep"));
-			wait_event_interruptible(rdp->nocb_wq, rdp->nocb_head);
+			swait_event_interruptible(rdp->nocb_wq, rdp->nocb_head);
 			/* Memory barrier provide by xchg() below. */
 		} else if (firsttime) {
 			firsttime = 0;
@@ -2250,7 +2250,7 @@ static void do_nocb_deferred_wakeup(struct rcu_data *rdp)
 	if (!rcu_nocb_need_deferred_wakeup(rdp))
 		return;
 	ACCESS_ONCE(rdp->nocb_defer_wakeup) = false;
-	wake_up(&rdp->nocb_wq);
+	swait_wake(&rdp->nocb_wq);
 	trace_rcu_nocb_wake(rdp->rsp->name, rdp->cpu, TPS("DeferredWakeEmpty"));
 }
 
@@ -2258,7 +2258,7 @@ static void do_nocb_deferred_wakeup(struct rcu_data *rdp)
 static void __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
 {
 	rdp->nocb_tail = &rdp->nocb_head;
-	init_waitqueue_head(&rdp->nocb_wq);
+	init_swait_head(&rdp->nocb_wq);
 }
 
 /* Create a kthread for each RCU flavor for each no-CBs CPU. */
