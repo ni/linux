@@ -651,7 +651,7 @@ static ssize_t f_hidg_bulk_write(struct file *file, const char __user *buffer,
 	copy_from_user(req->buf, buffer, count);
 
 	req->status   = 0;
-	req->zero     = 0;
+	req->zero     = 1;
 	req->length   = count;
 
 	status = usb_ep_queue(ep, req, GFP_ATOMIC);
