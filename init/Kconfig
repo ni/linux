@@ -1534,6 +1534,7 @@ choice
 
 config SLAB
 	bool "SLAB"
+	depends on !PREEMPT_RT_FULL
 	help
 	  The regular slab allocator that is established and known to work
 	  well in all environments. It organizes cache hot objects in
