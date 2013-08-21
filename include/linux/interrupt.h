@@ -217,6 +217,7 @@ extern void resume_device_irqs(void);
  * @irq:		Interrupt to which notification applies
  * @kref:		Reference count, for internal use
  * @work:		Work item, for internal use
+ * @list:		List item for deferred callbacks
  * @notify:		Function to be called on change.  This will be
  *			called in process context.
  * @release:		Function to be called on release.  This will be
@@ -228,6 +229,7 @@ struct irq_affinity_notify {
 	unsigned int irq;
 	struct kref kref;
 	struct work_struct work;
+	struct list_head list;
 	void (*notify)(struct irq_affinity_notify *, const cpumask_t *mask);
 	void (*release)(struct kref *ref);
 };
