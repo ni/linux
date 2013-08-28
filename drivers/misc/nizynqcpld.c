@@ -1034,6 +1034,47 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 	},
 };
 
+static struct nizynqcpld_led_desc sol_leds[] = {
+	{
+		.name			= "nizynqcpld:user1:green",
+		.addr			= DOSX_LED,
+		.bit			= 1 << 5,
+	},
+	{
+		.name			= "nizynqcpld:status:yellow",
+		.addr			= DOSX_LED,
+		.bit			= 1 << 2,
+		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
+		/* write byte 1 first */
+		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1,
+		.max_brightness		= 0xffff,
+	},
+	{
+		.name			= "nizynqcpld:eth1:green",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 3,
+		.default_trigger	= "e000b000:01:100Mb",
+	},
+	{
+		.name			= "nizynqcpld:eth1:yellow",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 2,
+		.default_trigger	= "e000b000:01:Gb",
+	},
+	{
+		.name			= "nizynqcpld:eth0:green",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 1,
+		.default_trigger	= "e000b000:00:100Mb",
+	},
+	{
+		.name			= "nizynqcpld:eth0:yellow",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 0,
+		.default_trigger	= "e000b000:00:Gb",
+	},
+};
+
 static struct nizynqcpld_watchdog_desc dosxv4_watchdog_desc = {
 	.watchdog_period_ns	= 24000,
 };
@@ -1109,6 +1150,20 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.switch_addr		= DOSX_DEBUGSWITCH,
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 		.wifi_sw_addr		= MYRIO_WIFISWCTRL_ADDR,
+	},
+	/* Sol CPLD */
+	{
+		.attrs			= dosequis6_attrs,
+		.supported_version	= 1,
+		.supported_product	= 3,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
+		.led_descs		= sol_leds,
+		.num_led_descs		= ARRAY_SIZE(sol_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= DOSX_DEBUGSWITCH,
+		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 };
 
