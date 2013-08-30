@@ -1430,6 +1430,9 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 	int ret, irq;
 	u8 i;
 	u32 sr;
+#ifdef CONFIG_OF
+	const unsigned int *prop;
+#endif
 
 	i2c = devm_kzalloc(&pdev->dev, sizeof(*i2c), GFP_KERNEL);
 	if (!i2c)
@@ -1460,6 +1463,18 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 	i2c->adap.dev.of_node = pdev->dev.of_node;
 	snprintf(i2c->adap.name, sizeof(i2c->adap.name),
 		 DRIVER_NAME " %s", pdev->name);
+
+	/* a bus number of -1 means dynamically assign, default to that if
+	 * bus-id isn't specified in the device tree
+	 */
+	i2c->adap.nr = -1;
+#ifdef CONFIG_OF
+	prop = of_get_property(pdev->dev.of_node, "bus-id", NULL);
+	if (prop)
+		i2c->adap.nr = be32_to_cpup(prop);
+#endif
+
+	xiic_reinit(i2c);
 
 	mutex_init(&i2c->lock);
 	spin_lock_init(&i2c->atomic_lock);
@@ -1514,7 +1529,7 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 	}
 
 	/* add i2c adapter to i2c tree */
-	ret = i2c_add_adapter(&i2c->adap);
+	ret = i2c_add_numbered_adapter(&i2c->adap);
 	if (ret) {
 		xiic_deinit(i2c);
 		goto err_pm_disable;
