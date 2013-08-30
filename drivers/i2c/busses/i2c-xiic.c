@@ -728,6 +728,9 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 	int ret, irq;
 	u8 i;
 	u32 sr;
+#ifdef CONFIG_OF
+	const unsigned int *prop;
+#endif
 
 	i2c = devm_kzalloc(&pdev->dev, sizeof(*i2c), GFP_KERNEL);
 	if (!i2c)
@@ -750,6 +753,14 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 	i2c_set_adapdata(&i2c->adap, i2c);
 	i2c->adap.dev.parent = &pdev->dev;
 	i2c->adap.dev.of_node = pdev->dev.of_node;
+
+#ifdef CONFIG_OF
+	prop = of_get_property(pdev->dev.of_node, "bus-id", NULL);
+	if (prop)
+		i2c->adap.nr = be32_to_cpup(prop);
+#endif
+
+	xiic_reinit(i2c);
 
 	spin_lock_init(&i2c->lock);
 	init_waitqueue_head(&i2c->wait);
