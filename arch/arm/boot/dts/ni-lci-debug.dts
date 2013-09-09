@@ -63,6 +63,34 @@
 			reg = < 0xf8001000 0x1000 >;
 		};
 
+		eth@e000b000 {
+			compatible = "xlnx,ps7-ethernet-1.00.a";
+			reg = <0xe000b000 0x1000>;
+			interrupts = <0 22 0>;
+			phy-handle = <&phy0>;
+			xlnx,slcr-div0-1000Mbps = <12>;
+			xlnx,slcr-div0-100Mbps = <12>;
+			xlnx,slcr-div0-10Mbps = <12>;
+			xlnx,slcr-div1-1000Mbps = <1>;
+			xlnx,slcr-div1-100Mbps = <5>;
+			xlnx,slcr-div1-10Mbps = <50>;
+			xlnx,mdc-clk-div = <3>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+
+			phy0: phy@0 {
+				compatible = "marvell,88e1512";
+				device_type = "ethernet-phy";
+				reg = <0x0>;
+				/* Interrupt on GPIO1 */
+				interrupts = <1 0>;
+				interrupt-parent = <&gpio>;
+				/* Page 3, Register 16, LED[2:0] Function
+				   Control Register */
+				leds = <0x1881>;
+			};
+		};
+
 		nand@e1000000 {
 			compatible = "xlnx,ps7-nand-1.00.a";
 			reg = <0xE1000000 0x1000000 0xE000E000 0x1000>;
