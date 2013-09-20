@@ -1276,7 +1276,6 @@ static void __cpuinit cpuup_canceled(long cpu)
 			free_block(cachep, nc->entry, nc->avail, node);
 
 		if (!cpumask_empty(mask)) {
-			local_spin_unlock_irq(slab_lock, &n->list_lock);
 			unlock_l3_and_free_delayed(&n->list_lock);
 			goto free_array_cache;
 		}
@@ -1291,7 +1290,6 @@ static void __cpuinit cpuup_canceled(long cpu)
 		alien = n->alien;
 		n->alien = NULL;
 
-		local_spin_unlock_irq(slab_lock, &n->list_lock);
 		unlock_l3_and_free_delayed(&n->list_lock);
 
 		kfree(shared);
