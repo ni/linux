@@ -223,18 +223,17 @@ static int xwdtps_open(struct inode *inode, struct file *file)
  * @inode: inode of device.
  * @file: file handle to device.
  *
- * Stops the watchdog and clears the busy flag.
- * Returns 0 on success, -ENOTSUPP when the nowayout is enabled.
+ * Stops the watchdog if nowayout is not set and clears the busy flag.
+ * Returns 0 on success.
  **/
 static int xwdtps_close(struct inode *inode, struct file *file)
 {
 	if (!nowayout) {
 		/* Disable the watchdog */
 		xwdtps_stop();
-		clear_bit(0, &(wdt->busy));
-		return 0;
 	}
-	return -ENOTSUPP;
+	clear_bit(0, &(wdt->busy));
+	return 0;
 }
 
 /**
