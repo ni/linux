@@ -147,9 +147,7 @@ static struct hid_descriptor hidg_desc = {
 	/*.desc[0].wDescriptorLenght	= DYNAMIC */
 };
 
-/* High-Speed Support */
-
-static struct usb_endpoint_descriptor hidg_hs_in_ep_desc = {
+static struct usb_endpoint_descriptor hidg_in_ep_desc = {
 	.bLength		= USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType	= USB_DT_ENDPOINT,
 	.bEndpointAddress	= USB_DIR_IN,
@@ -162,7 +160,7 @@ static struct usb_endpoint_descriptor hidg_hs_in_ep_desc = {
 };
 
 #ifdef USE_INTR_OUT
-static struct usb_endpoint_descriptor hidg_hs_out_ep_desc = {
+static struct usb_endpoint_descriptor hidg_out_ep_desc = {
 	.bLength		= USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType	= USB_DT_ENDPOINT,
 	.bEndpointAddress	= USB_DIR_OUT,
@@ -246,12 +244,12 @@ static struct usb_endpoint_descriptor hidg_bulk_ep_descs[] = {
 #define ALT_INTF_DESC_INDEX 	4
 #define BULK_EP_DESCS_INDEX	5
 
-static struct usb_descriptor_header *hidg_hs_descriptors[] = {
+static struct usb_descriptor_header *hidg_descriptors[] = {
 	(struct usb_descriptor_header *)&hidg_interface_desc,
 	(struct usb_descriptor_header *)&hidg_desc,
-	(struct usb_descriptor_header *)&hidg_hs_in_ep_desc,
+	(struct usb_descriptor_header *)&hidg_in_ep_desc,
 #ifdef USE_INTR_OUT
-	(struct usb_descriptor_header *)&hidg_hs_out_ep_desc,
+	(struct usb_descriptor_header *)&hidg_out_ep_desc,
 #endif
 	(struct usb_descriptor_header *)&hidg_bulk_interface_desc,
 	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0],
@@ -265,70 +263,12 @@ static struct usb_descriptor_header *hidg_hs_descriptors[] = {
 	NULL,
 };
 
-static struct usb_descriptor_header *hidg_hs_empty_descriptors[] = {
+static struct usb_descriptor_header *hidg_empty_descriptors[] = {
 	(struct usb_descriptor_header *)&hidg_interface_desc,
 	(struct usb_descriptor_header *)&hidg_desc,
-	(struct usb_descriptor_header *)&hidg_hs_in_ep_desc,
+	(struct usb_descriptor_header *)&hidg_in_ep_desc,
 #ifdef USE_INTR_OUT
-	(struct usb_descriptor_header *)&hidg_hs_out_ep_desc,
-#endif
-	(struct usb_descriptor_header *)&hidg_empty_interface_desc,
-	NULL,
-};
-
-/* Full-Speed Support */
-
-static struct usb_endpoint_descriptor hidg_fs_in_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_IN,
-	.bmAttributes		= USB_ENDPOINT_XFER_INT,
-	/*.wMaxPacketSize	= DYNAMIC */
-	.bInterval		= 1, /* FIXME: Add this field in the
-				       * HID gadget configuration?
-				       * (struct hidg_func_descriptor)
-				       */
-};
-
-#ifdef USE_INTR_OUT
-static struct usb_endpoint_descriptor hidg_fs_out_ep_desc = {
-	.bLength		= USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType	= USB_DT_ENDPOINT,
-	.bEndpointAddress	= USB_DIR_OUT,
-	.bmAttributes		= USB_ENDPOINT_XFER_INT,
-	/*.wMaxPacketSize	= DYNAMIC */
-	.bInterval		= 1, /* FIXME: Add this field in the
-				       * HID gadget configuration?
-				       * (struct hidg_func_descriptor)
-				       */
-};
-#endif
-
-static struct usb_descriptor_header *hidg_fs_descriptors[] = {
-	(struct usb_descriptor_header *)&hidg_interface_desc,
-	(struct usb_descriptor_header *)&hidg_desc,
-	(struct usb_descriptor_header *)&hidg_fs_in_ep_desc,
-#ifdef USE_INTR_OUT
-	(struct usb_descriptor_header *)&hidg_fs_out_ep_desc,
-#endif
-	(struct usb_descriptor_header *)&hidg_bulk_interface_desc,
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[0],
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[1],
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[2],
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[3],
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[4],
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[5],
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[6],
-	(struct usb_descriptor_header *)&hidg_bulk_ep_descs[7],
-	NULL,
-};
-
-static struct usb_descriptor_header *hidg_fs_empty_descriptors[] = {
-	(struct usb_descriptor_header *)&hidg_interface_desc,
-	(struct usb_descriptor_header *)&hidg_desc,
-	(struct usb_descriptor_header *)&hidg_fs_in_ep_desc,
-#ifdef USE_INTR_OUT
-	(struct usb_descriptor_header *)&hidg_fs_out_ep_desc,
+	(struct usb_descriptor_header *)&hidg_out_ep_desc,
 #endif
 	(struct usb_descriptor_header *)&hidg_empty_interface_desc,
 	NULL,
@@ -825,9 +765,9 @@ static void hidg_bulk_set_maxpacket(struct f_hidg *hidg)
 {
 	int i = BULK_EP_DESCS_INDEX;
 
-	while(hidg_hs_descriptors[i] != NULL) {
+	while(hidg_descriptors[i] != NULL) {
 		struct usb_endpoint_descriptor* ep_desc =
-			(struct usb_endpoint_descriptor*)hidg_hs_descriptors[i];
+			(struct usb_endpoint_descriptor*)hidg_descriptors[i];
 
 		ep_desc->wMaxPacketSize = 
 			min_t(short, hidg->report_length, 512);
@@ -1127,14 +1067,14 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 
 	/* allocate instance-specific endpoints */
 	status = -ENODEV;
-	ep = usb_ep_autoconfig(c->cdev->gadget, &hidg_fs_in_ep_desc);
+	ep = usb_ep_autoconfig(c->cdev->gadget, &hidg_in_ep_desc);
 	if (!ep)
 		goto fail;
 	ep->driver_data = c->cdev;	/* claim */
 	hidg->in_ep = ep;
 
 #ifdef USE_INTR_OUT
-	ep = usb_ep_autoconfig(c->cdev->gadget, &hidg_fs_out_ep_desc);
+	ep = usb_ep_autoconfig(c->cdev->gadget, &hidg_out_ep_desc);
 	if (!ep)
 		goto fail;
 	ep->driver_data = c->cdev;
@@ -1166,11 +1106,9 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 	/* set descriptor dynamic values */
 	hidg_interface_desc.bInterfaceSubClass = hidg->bInterfaceSubClass;
 	hidg_interface_desc.bInterfaceProtocol = hidg->bInterfaceProtocol;
-	hidg_hs_in_ep_desc.wMaxPacketSize = cpu_to_le16(min_t(short, hidg->report_length, 512));
-	hidg_fs_in_ep_desc.wMaxPacketSize = cpu_to_le16(min_t(short, hidg->report_length, 64));
+	hidg_in_ep_desc.wMaxPacketSize = cpu_to_le16(min_t(short, hidg->report_length, 64));
 #ifdef USE_INTR_OUT
-	hidg_hs_out_ep_desc.wMaxPacketSize = cpu_to_le16(min_t(short, hidg->report_length, 512));
-	hidg_fs_out_ep_desc.wMaxPacketSize = cpu_to_le16(min_t(short, hidg->report_length, 64));
+	hidg_out_ep_desc.wMaxPacketSize = cpu_to_le16(min_t(short, hidg->report_length, 64));
 #endif
 	hidg_desc.desc[0].bDescriptorType = HID_DT_REPORT;
 	hidg_desc.desc[0].wDescriptorLength =
@@ -1183,7 +1121,7 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 		/* high and low speed use the same bulk descriptors */
 		struct usb_endpoint_descriptor **bulk_descs = 
 			(struct usb_endpoint_descriptor **)
-			   &hidg_hs_descriptors[BULK_EP_DESCS_INDEX];
+			   &hidg_descriptors[BULK_EP_DESCS_INDEX];
 
 		i = 0;
 		while(bulk_descs[i] != NULL)
@@ -1205,28 +1143,22 @@ static int __init hidg_bind(struct usb_configuration *c, struct usb_function *f)
 
 	/* copy descriptors */
 	if(hidg->minor == FIRST_HID_MINOR)
-		f->descriptors = usb_copy_descriptors(hidg_fs_descriptors);
+		f->descriptors = usb_copy_descriptors(hidg_descriptors);
 	else
-		f->descriptors = usb_copy_descriptors(hidg_fs_empty_descriptors);
+		f->descriptors = usb_copy_descriptors(hidg_empty_descriptors);
 
 	if (!f->descriptors)
 		goto fail;
 
 	if (gadget_is_dualspeed(c->cdev->gadget)) {
-		hidg_hs_in_ep_desc.bEndpointAddress =
-			hidg_fs_in_ep_desc.bEndpointAddress;
-#ifdef USE_INTR_OUT
-		hidg_hs_out_ep_desc.bEndpointAddress =
-			hidg_fs_out_ep_desc.bEndpointAddress;
-#endif
 		/* usb_ep_autoconfig sets max packet to 64 for fs */
 		if(hidg->minor == FIRST_HID_MINOR) {
 			hidg_bulk_set_maxpacket(hidg);
 		}
 		if(hidg->minor == FIRST_HID_MINOR)
-			f->hs_descriptors = usb_copy_descriptors(hidg_hs_descriptors);
+			f->hs_descriptors = usb_copy_descriptors(hidg_descriptors);
 		else
-			f->hs_descriptors = usb_copy_descriptors(hidg_hs_empty_descriptors);
+			f->hs_descriptors = usb_copy_descriptors(hidg_empty_descriptors);
 
 		if (!f->hs_descriptors)
 			goto fail;
