@@ -957,8 +957,10 @@ static void hidg_bulk_disable_eps(struct f_hidg *hidg)
 
 	/* note that disable synchronously completes outstanding reqs */
 	for(i=0; i < BULK_ENDPOINTS; i++) {
-		if(hidg->bulk_eps[i]->driver_data != NULL)
+		if(hidg->bulk_eps[i]->driver_data != NULL) {
 			usb_ep_disable(hidg->bulk_eps[i]);
+			hidg->bulk_eps[i]->driver_data = NULL;
+		}
 	}
 }
 
@@ -994,8 +996,10 @@ static int hidg_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 
 	if (hidg->in_ep != NULL) {
 		/* restart endpoint */
-		if (hidg->in_ep->driver_data != NULL)
+		if (hidg->in_ep->driver_data != NULL) {
 			usb_ep_disable(hidg->in_ep);
+			hidg->in_ep->driver_data = NULL;
+		}
 
 		if(alt == 0) {
 			status = config_ep_by_speed(f->config->cdev->gadget, f,
@@ -1016,8 +1020,10 @@ static int hidg_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 #ifdef USE_INTR_OUT
 	if(hidg->out_ep != NULL) {
 		/* restart endpoint */
-		if(hidg->out_ep->driver_data != NULL)
+		if(hidg->out_ep->driver_data != NULL) {
 			usb_ep_disable(hidg->out_ep);
+			hidg->out_ep->driver_data = NULL;
+		}
 
 		if (alt == 0) {
 			status = config_ep_by_speed(f->config->cdev->gadget, f,
@@ -1071,6 +1077,16 @@ static int hidg_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 
 fail:
 	return status;
+}
+
+static int hidg_get_alt(struct usb_function *f, unsigned interface)
+{
+	struct f_hidg *hidg = func_to_hidg(f);
+
+	if (hidg->in_ep->driver_data && hidg->out_ep->driver_data)
+		return 0;
+	else
+		return 1;
 }
 
 const struct file_operations f_hidg_fops = {
@@ -1398,6 +1414,7 @@ int __init hidg_bind_config(struct usb_configuration *c,
 	hidg->func.bind    = hidg_bind;
 	hidg->func.unbind  = hidg_unbind;
 	hidg->func.set_alt = hidg_set_alt;
+	hidg->func.get_alt = hidg_get_alt;
 	hidg->func.disable = hidg_disable;
 	hidg->func.setup   = hidg_setup;
 
