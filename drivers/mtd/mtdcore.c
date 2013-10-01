@@ -298,6 +298,42 @@ static ssize_t mtd_ecc_step_size_show(struct device *dev,
 }
 static DEVICE_ATTR(ecc_step_size, S_IRUGO, mtd_ecc_step_size_show, NULL);
 
+static ssize_t mtd_ecc_corrected_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mtd_info *mtd = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", mtd->ecc_stats.corrected);
+}
+static DEVICE_ATTR(ecc_corrected, S_IRUGO, mtd_ecc_corrected_show, NULL);
+
+static ssize_t mtd_ecc_failed_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mtd_info *mtd = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", mtd->ecc_stats.failed);
+}
+static DEVICE_ATTR(ecc_failed, S_IRUGO, mtd_ecc_failed_show, NULL);
+
+static ssize_t mtd_ecc_badblocks_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mtd_info *mtd = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", mtd->ecc_stats.badblocks);
+}
+static DEVICE_ATTR(ecc_badblocks, S_IRUGO, mtd_ecc_badblocks_show, NULL);
+
+static ssize_t mtd_ecc_bbtblocks_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mtd_info *mtd = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", mtd->ecc_stats.bbtblocks);
+}
+static DEVICE_ATTR(ecc_bbtblocks, S_IRUGO, mtd_ecc_bbtblocks_show, NULL);
+
 static struct attribute *mtd_attrs[] = {
 	&dev_attr_type.attr,
 	&dev_attr_flags.attr,
@@ -311,6 +347,10 @@ static struct attribute *mtd_attrs[] = {
 	&dev_attr_ecc_strength.attr,
 	&dev_attr_ecc_step_size.attr,
 	&dev_attr_bitflip_threshold.attr,
+	&dev_attr_ecc_corrected.attr,
+	&dev_attr_ecc_failed.attr,
+	&dev_attr_ecc_badblocks.attr,
+	&dev_attr_ecc_bbtblocks.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(mtd);
