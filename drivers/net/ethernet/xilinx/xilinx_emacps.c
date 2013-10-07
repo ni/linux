@@ -79,14 +79,14 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 /* Number of receive buffer bytes as a unit, this is HW setup */
 #define XEMACPS_RX_BUF_UNIT	64
 
-/* Transmit and receive descriptor counts. The values are chosen to use a full
-   page of memory. When allocating coherent DMA memory, it gives you full pages
-   regardless of how much you ask for. We share a page between the transmit and
-   receive descriptors. Descriptors are 8 bytes and a page is 4096 bytes which
-   gives us 512 descriptors. We only need 64 transmit descriptors, which leaves
-   448 receive descriptors. */
-#define XEMACPS_SEND_BD_CNT	64
-#define XEMACPS_RECV_BD_CNT	448
+/* Transmit and receive descriptor counts. The values are chosen to use full
+   pages of memory. When allocating coherent DMA memory, it gives you full pages
+   regardless of how much you ask for. We share two pages between the transmit
+   and receive descriptors. Descriptors are 8 bytes and a page is 4096 bytes
+   which gives us 1024 descriptors. We split it evenly, 512 transmit descriptors
+   and 512 receive descriptors. */
+#define XEMACPS_SEND_BD_CNT	512
+#define XEMACPS_RECV_BD_CNT	512
 
 #define XEMACPS_NAPI_WEIGHT	64
 
