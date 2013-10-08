@@ -2206,10 +2206,6 @@ static netdev_tx_t xemacps_start_xmit(struct sk_buff *skb,
 
 	xemacps_tx_clean(lp);
 
-	/* Realistically, I don't think we should ever get here. In the testing
-	   I've done, I saw a maximum of 14 transmit packets in use at the same
-	   time. I manually shortened the transmit ring to make sure this code
-	   path is tested. */
 	if (unlikely(lp->tx_bd_freecnt == 0)) {
 		netif_stop_queue(ndev);
 		lp->tx_task_start_jiffies = jiffies;
