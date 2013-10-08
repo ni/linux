@@ -2156,15 +2156,26 @@ static void xemacps_tx_task(struct work_struct *work)
 	struct net_local *lp =
 		container_of(work, struct net_local, tx_task.work);
 	int cleaned;
+	int free;
+	unsigned long flags;
 
 	netif_tx_lock(lp->ndev);
 	cleaned = xemacps_tx_clean(lp);
+	free = lp->tx_bd_freecnt;
 	netif_tx_unlock(lp->ndev);
 
-	if (cleaned)
+	if (cleaned) {
 		/* Start it back up. */
-		netif_start_queue(lp->ndev);
-	else if (time_after(jiffies, lp->tx_task_start_jiffies + HZ)) {
+		if (free < XEMACPS_SEND_BD_CNT) {
+			spin_lock_irqsave(&lp->nwctrl_lock, flags);
+			xemacps_write(lp->baseaddr, XEMACPS_NWCTRL_OFFSET,
+				      (lp->nwctrl_base |
+				       XEMACPS_NWCTRL_STARTTX_MASK));
+			wmb();
+			spin_unlock_irqrestore(&lp->nwctrl_lock, flags);
+		}
+		netif_wake_queue(lp->ndev);
+	} else if (time_after(jiffies, lp->tx_task_start_jiffies + HZ)) {
 		/* Realistically, I don't know what circumstances could lead
 		   to this, since in my testing we clean some descriptors the
 		   first time through and restart the transmit queue. */
