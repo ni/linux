@@ -7,7 +7,7 @@ pnmtologo
 bin2c
 unifdef
 ihex2fw
-recordmcount
+*recordmcount
 docproc
 sortextable
 asn1_compiler
