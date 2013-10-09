@@ -12,5 +12,16 @@ hostprogs-y	:= fixdep
 hostprogs-$(CONFIG_BUILD_BIN2C)     += bin2c
 always		:= $(hostprogs-y)
 
+ifneq ($(CROSS_COMPILE),)
+TGTPRE		:= $(notdir $(CROSS_COMPILE))
+tgtfixdep	:= $(TGTPRE)fixdep
+
+always += $(tgtfixdep)
+
+$(obj)/$(tgtfixdep) : $(src)/fixdep.c
+	$(Q)$(CC) $(TGT_EXTRACFLAGS) $(CFLAGS) -o $@ $<
+endif
+
 # fixdep is needed to compile other host programs
 $(addprefix $(obj)/,$(filter-out fixdep,$(always))): $(obj)/fixdep
+

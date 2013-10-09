@@ -22,6 +22,16 @@ HOSTCFLAGS_asn1_compiler.o = -I$(srctree)/include
 
 always		:= $(hostprogs-y) $(hostprogs-m)
 
+# Only attempt to build the target-runnable
+ifneq ($(strip $(CROSS_COMPILE)),)
+TGTPRE		:= $(notdir $(CROSS_COMPILE))
+tgtrecordmcount := $(TGTPRE)recordmcount
+always += $(tgtrecordmcount)
+
+$(obj)/$(tgtrecordmcount) : $(src)/recordmcount.c
+	$(Q)$(CC) $(TGT_EXTRACFLAGS) $(CFLAGS) -o $@ $<
+endif
+
 # The following hostprogs-y programs are only build on demand
 hostprogs-y += unifdef docproc
 
