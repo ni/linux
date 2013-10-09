@@ -6,7 +6,7 @@ kallsyms
 pnmtologo
 unifdef
 ihex2fw
-recordmcount
+*recordmcount
 docproc
 check-lc_ctype
 sortextable

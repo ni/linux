@@ -44,6 +44,28 @@ $(obj)/file2alias.o: $(obj)/$(devicetable-offsets-file)
 quiet_cmd_elfconfig = MKELF   $@
       cmd_elfconfig = $(obj)/mk_elfconfig < $< > $@
 
+ifneq ($(CROSS_COMPILE),)
+TGTPRE := $(notdir $(CROSS_COMPILE))
+tgtmodpost	:= $(TGTPRE)modpost
+
+always += $(tgtmodpost)
+
+ifeq ($(KBUILD_SRC),)
+KBUILD_SRC=$(CURDIR)
+endif
+
+ifeq ($(KBUILD_OUTPUT),)
+KBUILD_OUTPUT=$(CURDIR)
+endif
+
+$(patsubst %,$(obj)/$(TGTPRE)%,$(modpost-objs)): $(KBUILD_SRC)/$(src)/$(TGTPRE)elfconfig.h | $(obj)/modpost
+	$(Q)cp -f $(KBUILD_SRC)/$(src)/$(TGTPRE)elfconfig.h $(KBUILD_OUTPUT)/$(obj)/elfconfig.h
+	$(Q)$(CC) $(TGT_EXTRACFLAGS) $(CFLAGS) -I$(KBUILD_OUTPUT)/$(obj)  -c -o $@ $(KBUILD_SRC)/$(subst $(TGTPRE),,$(subst .o,.c,$@))
+
+$(obj)/$(tgtmodpost) : $(patsubst %,$(obj)/$(TGTPRE)%,$(modpost-objs))
+	$(Q)$(CC) $(TGT_EXTRACFLAGS) $(CFLAGS) -o $@ $^
+endif
+
 $(obj)/elfconfig.h: $(obj)/empty.o $(obj)/mk_elfconfig FORCE
 	$(call if_changed,elfconfig)
 
