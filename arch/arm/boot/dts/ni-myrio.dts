@@ -35,6 +35,11 @@
 			gpio24-label     = "wdt_interrupt";
 			gpio24-direction = "input";
 			gpio24-settings  = "edge-falling";
+
+			/* GPIO25 (MIO25) */
+			gpio25-label     = "wifi_btn_interrupt";
+			gpio25-direction = "input";
+			gpio25-settings  = "edge-falling";
 		};
 
 		i2c0: i2c@e0004000 {
