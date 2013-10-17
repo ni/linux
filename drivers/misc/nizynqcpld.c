@@ -1151,6 +1151,20 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 		.wifi_sw_addr		= MYRIO_WIFISWCTRL_ADDR,
 	},
+	/* Tecate */
+	{
+		.attrs			= dosequis6_attrs,
+		.supported_version	= 1,
+		.supported_product	= 2,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
+		.led_descs		= sol_leds,
+		.num_led_descs		= ARRAY_SIZE(sol_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= DOSX_DEBUGSWITCH,
+		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
+	},
 	/* Sol CPLD */
 	{
 		.attrs			= dosequis6_attrs,
