@@ -24,6 +24,8 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
+#include <linux/of_irq.h>
+#include <linux/input.h>
 
 #define NIZYNQCPLD_VERSION		0x00
 #define NIZYNQCPLD_PRODUCT		0x1D
@@ -62,6 +64,13 @@
 #define DOSX_WATCHDOG_MAX_COUNTER	0x00FFFFFF
 #define DOSX_WATCHDOG_COUNTER_BYTES	3
 
+#define MYRIO_WIFISWCTRL_ADDR		0x0A
+#define MYRIO_WIFISWCTRL_STATE		0x01
+#define MYRIO_WIFISWCTRL_ENPUSHIRQ	0x08
+#define MYRIO_WIFISWCTRL_PUSHIRQ	0x80
+#define MYRIO_WIFISWCTRL_ENRELIRQ	0x04
+#define MYRIO_WIFISWCTRL_RELIRQ		0x40
+
 struct nizynqcpld_led_desc {
 	const char *name;
 	const char *default_trigger;
@@ -98,6 +107,13 @@ struct nizynqcpld_watchdog {
 	bool expired;
 };
 
+struct myrio_wifi_sw {
+	struct input_dev *idev;
+	struct work_struct deferred_work;
+	bool irq_registered;
+	int  irq;
+};
+
 struct nizynqcpld_desc {
 	const struct attribute **attrs;
 	u8 supported_version;
@@ -110,6 +126,7 @@ struct nizynqcpld_desc {
 	u8 scratch_sr_addr;
 	u8 switch_addr;
 	u8 watchdog_addr;
+	u8 wifi_sw_addr;
 };
 
 struct nizynqcpld {
@@ -120,6 +137,7 @@ struct nizynqcpld {
 	struct i2c_client *client;
 	struct mutex lock;
 	struct ni_zynq_board_reset reset;
+	struct myrio_wifi_sw wifi_sw;
 };
 
 static int nizynqcpld_write(struct nizynqcpld *cpld, u8 reg, u8 data);
@@ -1090,8 +1108,157 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
 		.switch_addr		= DOSX_DEBUGSWITCH,
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
+		.wifi_sw_addr		= MYRIO_WIFISWCTRL_ADDR,
 	},
 };
+
+static void wifi_sw_work_func(struct work_struct *work)
+{
+	struct myrio_wifi_sw *wifi_sw =
+		container_of(work, struct myrio_wifi_sw, deferred_work);
+	struct nizynqcpld *cpld =
+		container_of(wifi_sw, struct nizynqcpld, wifi_sw);
+	u8 data;
+	int err;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, cpld->desc->wifi_sw_addr, &data);
+	nizynqcpld_unlock(cpld);
+
+	if (err) {
+		dev_err(&cpld->client->dev,
+			"error %d reading wifi_sw control register\n", err);
+		return;
+	}
+
+	/* check the interrupt flags and clear them */
+	if (data & (MYRIO_WIFISWCTRL_PUSHIRQ | MYRIO_WIFISWCTRL_RELIRQ)) {
+		nizynqcpld_lock(cpld);
+		err = nizynqcpld_write(cpld, cpld->desc->wifi_sw_addr, data);
+		nizynqcpld_unlock(cpld);
+
+		if (err) {
+			dev_err(&cpld->client->dev,
+				"err %d clearing wifi_sw irq flag\n", err);
+			return;
+		}
+	}
+
+	input_event(wifi_sw->idev,
+		    EV_KEY, BTN_0, !!(data & MYRIO_WIFISWCTRL_STATE));
+	input_sync(wifi_sw->idev);
+}
+
+static irqreturn_t wifi_sw_hnd(int irq, void *irq_data)
+{
+	struct myrio_wifi_sw *wifi_sw = (struct myrio_wifi_sw *)irq_data;
+	schedule_work(&wifi_sw->deferred_work);
+
+	return IRQ_HANDLED;
+}
+
+static int wifi_sw_open(struct input_dev *dev)
+{
+	int err;
+	struct myrio_wifi_sw *wifi_sw = input_get_drvdata(dev);
+	struct nizynqcpld *cpld =
+		container_of(wifi_sw, struct nizynqcpld, wifi_sw);
+
+	err = request_threaded_irq(wifi_sw->irq,
+				   NULL, wifi_sw_hnd, 0, "wifi_sw", wifi_sw);
+	if (err) {
+		dev_err(&cpld->client->dev,
+			"error %d registering irq handle for wifi_sw\n", err);
+	}
+
+	wifi_sw->irq_registered = !err;
+	return err;
+}
+
+static void wifi_sw_close(struct input_dev *dev)
+{
+	struct myrio_wifi_sw *wifi_sw = input_get_drvdata(dev);
+
+	if (wifi_sw->irq_registered)
+		free_irq(wifi_sw->irq, wifi_sw_hnd);
+}
+
+static int myrio_wifi_sw_init(struct nizynqcpld *cpld)
+{
+	u8 data;
+	int err = 0;
+	struct input_dev *input;
+
+	if (!cpld->desc->wifi_sw_addr)
+		goto wifi_sw_init_exit;
+
+	INIT_WORK(&cpld->wifi_sw.deferred_work, wifi_sw_work_func);
+	cpld->wifi_sw.irq = irq_of_parse_and_map(cpld->client->dev.of_node, 1);
+
+	/* ensure that the interrupt was mapped */
+	if (!cpld->wifi_sw.irq)
+		goto wifi_sw_init_exit;
+
+	/* enable interrupts */
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, cpld->desc->wifi_sw_addr, &data);
+
+	if (!err) {
+		data |= (MYRIO_WIFISWCTRL_ENPUSHIRQ |
+			 MYRIO_WIFISWCTRL_ENRELIRQ);
+		err = nizynqcpld_write(cpld, cpld->desc->wifi_sw_addr, data);
+	}
+	nizynqcpld_unlock(cpld);
+
+	if (err) {
+		dev_err(&cpld->client->dev,
+			"error %d enabling wifi_sw irq\n", err);
+		goto wifi_sw_init_exit;
+	}
+
+	input = input_allocate_device();
+	cpld->wifi_sw.idev = input;
+
+	if (!input) {
+		dev_err(&cpld->client->dev,
+			"error %d allocating input device for wifi_sw\n", err);
+		goto wifi_sw_init_exit;
+	}
+
+	input->name = "wifi_btn";
+	input->phys = "wifi_btn/wifibtn";
+	input->open  = wifi_sw_open;
+	input->close = wifi_sw_close;
+	input_set_capability(input, EV_KEY, BTN_0);
+	input_set_drvdata(input, &cpld->wifi_sw);
+
+	err = input_register_device(cpld->wifi_sw.idev);
+
+	/* report initial state	*/
+	wifi_sw_work_func(&cpld->wifi_sw.deferred_work);
+
+	if (err) {
+		dev_err(&cpld->client->dev,
+			"error %d registering input device for wifi_sw\n", err);
+		goto wifi_sw_init_exit_register;
+	}
+
+	return err;
+
+wifi_sw_init_exit_register:
+	input_free_device(cpld->wifi_sw.idev);
+
+wifi_sw_init_exit:
+	return err;
+}
+
+static void myrio_wifi_sw_uninit(struct nizynqcpld *cpld)
+{
+	if (cpld->desc->wifi_sw_addr) {
+		input_unregister_device(cpld->wifi_sw.idev);
+		input_free_device(cpld->wifi_sw.idev);
+	}
+}
 
 static int nizynqcpld_probe(struct i2c_client *client,
 			    const struct i2c_device_id *id)
@@ -1160,6 +1327,9 @@ static int nizynqcpld_probe(struct i2c_client *client,
 			goto err_led;
 	}
 
+	/* don't care about errors */
+	myrio_wifi_sw_init(cpld);
+
 	err = sysfs_create_files(&cpld->dev->kobj, desc->attrs);
 	if (err) {
 		dev_err(cpld->dev, "could not register attrs for device.\n");
@@ -1199,6 +1369,7 @@ static int nizynqcpld_probe(struct i2c_client *client,
 err_watchdog_register:
 	sysfs_remove_files(&client->dev.kobj, desc->attrs);
 err_sysfs_create_files:
+	myrio_wifi_sw_uninit(cpld);
 err_led:
 	while (i--)
 		nizynqcpld_led_unregister(&cpld->leds[i]);
@@ -1226,6 +1397,9 @@ static int nizynqcpld_remove(struct i2c_client *client)
 	for (i = desc->num_led_descs - 1; i; --i)
 		nizynqcpld_led_unregister(&cpld->leds[i]);
 	kfree(cpld->leds);
+
+	myrio_wifi_sw_uninit(cpld);
+
 	kfree(cpld);
 	return 0;
 }
