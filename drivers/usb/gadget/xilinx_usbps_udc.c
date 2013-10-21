@@ -522,6 +522,12 @@ static int xusbps_ep_enable(struct usb_ep *_ep,
 			(unsigned char) (desc->bmAttributes
 					& USB_ENDPOINT_XFERTYPE_MASK));
 
+	/* Clear the stall bit */
+	dr_ep_change_stall((unsigned char) ep_index(ep),
+			(unsigned char) ((desc->bEndpointAddress & USB_DIR_IN)
+                                        ? USB_SEND : USB_RECV),
+			0);
+
 	spin_unlock_irqrestore(&udc->lock, flags);
 	retval = 0;
 
