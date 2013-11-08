@@ -1429,13 +1429,13 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 	__free_memcg_kmem_pages(page, order);
 }
 
-static void free_delayed(struct kmem_cache *s, struct list_head *h)
+static void free_delayed(struct list_head *h)
 {
 	while(!list_empty(h)) {
 		struct page *page = list_first_entry(h, struct page, lru);
 
 		list_del(&page->lru);
-		__free_slab(s, page);
+		__free_slab(page->slab_cache, page);
 	}
 }
 
@@ -2008,7 +2008,7 @@ static void put_cpu_partial(struct kmem_cache *s, struct page *page, int drain)
 				list_splice_init(&f->list, &tofree);
 				raw_spin_unlock(&f->lock);
 				local_irq_restore(flags);
-				free_delayed(s, &tofree);
+				free_delayed(&tofree);
 				oldpage = NULL;
 				pobjects = 0;
 				pages = 0;
@@ -2084,7 +2084,7 @@ static void flush_all(struct kmem_cache *s)
 		raw_spin_lock_irq(&f->lock);
 		list_splice_init(&f->list, &tofree);
 		raw_spin_unlock_irq(&f->lock);
-		free_delayed(s, &tofree);
+		free_delayed(&tofree);
 	}
 }
 
@@ -2332,7 +2332,7 @@ out:
 	list_splice_init(&f->list, &tofree);
 	raw_spin_unlock(&f->lock);
 	local_irq_restore(flags);
-	free_delayed(s, &tofree);
+	free_delayed(&tofree);
 	return freelist;
 
 new_slab:
