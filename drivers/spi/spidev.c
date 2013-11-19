@@ -33,6 +33,7 @@
 #include <linux/compat.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/acpi.h>
 
 #include <linux/spi/spi.h>
 #include <linux/spi/spidev.h>
@@ -650,11 +651,19 @@ static const struct of_device_id spidev_dt_ids[] = {
 
 MODULE_DEVICE_TABLE(of, spidev_dt_ids);
 
+static struct acpi_device_id spidev_acpi_match[] = {
+	{ "AUTH2750", 0 },
+	{ "SPI1001", 0 },
+	{},
+};
+MODULE_DEVICE_TABLE(acpi, spidev_acpi_match);
+
 static struct spi_driver spidev_spi_driver = {
 	.driver = {
 		.name =		"spidev",
 		.owner =	THIS_MODULE,
 		.of_match_table = of_match_ptr(spidev_dt_ids),
+		.acpi_match_table = ACPI_PTR(spidev_acpi_match),
 	},
 	.probe =	spidev_probe,
 	.remove =	spidev_remove,
