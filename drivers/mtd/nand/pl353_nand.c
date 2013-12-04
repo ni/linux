@@ -397,6 +397,22 @@ static int pl353_nand_read_page_raw(struct mtd_info *mtd,
 	return 0;
 }
 
+static int pl353_nand_read_subpage_raw(struct mtd_info *mtd,
+				    struct nand_chip *chip, uint32_t data_offs,
+				    uint32_t readlen, uint8_t *buf, int page)
+{
+	if (data_offs != 0) {
+		chip->cmdfunc(mtd, NAND_CMD_RNDOUT, data_offs, -1);
+		buf += data_offs;
+	}
+
+	/* readlen must be a multiple of 4. */
+	readlen = (((readlen + 3) >> 2) << 2);
+
+	chip->read_buf(mtd, buf, readlen);
+	return 0;
+}
+
 /**
  * pl353_nand_write_page_raw - [Intern] raw page write function
  * @mtd:		Pointer to the mtd info structure
@@ -408,7 +424,8 @@ static int pl353_nand_read_page_raw(struct mtd_info *mtd,
  */
 static int pl353_nand_write_page_raw(struct mtd_info *mtd,
 				    struct nand_chip *chip,
-				    const uint8_t *buf, int oob_required)
+				    const uint8_t *buf,
+				    int oob_required, int page)
 {
 	unsigned long data_phase_addr;
 	uint8_t *p;
@@ -431,6 +448,25 @@ static int pl353_nand_write_page_raw(struct mtd_info *mtd,
 }
 
 /**
+ * pl353_nand_write_subpage_raw - [Intern] raw subpage write function
+ * @mtd:        mtd info structure
+ * @chip:       nand chip info structure
+ * @column:     column address of subpage within the page
+ * @data_len:   data length
+ * @data_buf:   data buffer
+ * @oob_required: must write chip->oob_poi to OOB
+ *
+ */
+static int pl353_nand_write_subpage_raw(struct mtd_info *mtd,
+				     struct nand_chip *chip, uint32_t offset,
+				     uint32_t data_len, const uint8_t *data_buf,
+				     int oob_required, int page)
+{
+	return pl353_nand_write_page_raw(mtd, chip, data_buf, oob_required,
+					 page);
+}
+
+/**
  * nand_write_page_hwecc - Hardware ECC based page write function
  * @mtd:		Pointer to the mtd info structure
  * @chip:		Pointer to the NAND chip info structure
@@ -443,7 +479,7 @@ static int pl353_nand_write_page_raw(struct mtd_info *mtd,
  */
 static int pl353_nand_write_page_hwecc(struct mtd_info *mtd,
 				    struct nand_chip *chip, const uint8_t *buf,
-				    int oob_required)
+				    int oob_required, int page)
 {
 	int i, eccsize = chip->ecc.size;
 	int eccsteps = chip->ecc.steps;
@@ -504,7 +540,7 @@ static int pl353_nand_write_page_hwecc(struct mtd_info *mtd,
  */
 static int pl353_nand_write_page_swecc(struct mtd_info *mtd,
 				    struct nand_chip *chip, const uint8_t *buf,
-				    int oob_required)
+				    int oob_required, int page)
 {
 	int i, eccsize = chip->ecc.size;
 	int eccbytes = chip->ecc.bytes;
@@ -520,7 +556,7 @@ static int pl353_nand_write_page_swecc(struct mtd_info *mtd,
 	for (i = 0; i < chip->ecc.total; i++)
 		chip->oob_poi[eccpos[i]] = ecc_calc[i];
 
-	chip->ecc.write_page_raw(mtd, chip, buf, 1);
+	chip->ecc.write_page_raw(mtd, chip, buf, 1, page);
 
 	return 0;
 }
@@ -945,8 +981,19 @@ static void pl353_nand_ecc_init(struct mtd_info *mtd, int ondie_ecc_state)
 		nand_chip->ecc.bytes = 0;
 		nand_chip->ecc.layout = &ondie_nand_oob_64;
 		nand_chip->ecc.read_page = pl353_nand_read_page_raw;
+		nand_chip->ecc.read_subpage = pl353_nand_read_subpage_raw;
 		nand_chip->ecc.write_page = pl353_nand_write_page_raw;
+		nand_chip->ecc.write_subpage = pl353_nand_write_subpage_raw;
 		nand_chip->ecc.size = mtd->writesize;
+
+		/* NAND with on-die ECC supports subpage reads */
+		nand_chip->options |= NAND_SUBPAGE_READ;
+
+		/* NAND with on-die ECC may support subpage writes */
+		if (nand_chip->onfi_version)
+			nand_chip->ecc.size /=
+				nand_chip->onfi_params.programs_per_page;
+
 		/*
 		 * On-Die ECC spare bytes offset 8 is used for ECC codes
 		 * Use the BBT pattern descriptors
@@ -1004,7 +1051,6 @@ static int pl353_nand_probe(struct platform_device *pdev)
 	struct mtd_info *mtd;
 	struct nand_chip *nand_chip;
 	struct resource *res;
-	struct mtd_part_parser_data ppdata;
 	int ondie_ecc_state;
 
 	xnand = devm_kzalloc(&pdev->dev, sizeof(*xnand), GFP_KERNEL);
@@ -1066,9 +1112,7 @@ static int pl353_nand_probe(struct platform_device *pdev)
 		return -ENXIO;
 	}
 
-	ppdata.of_node = pdev->dev.of_node;
-
-	mtd_device_parse_register(&xnand->mtd, NULL, &ppdata, NULL, 0);
+	mtd_device_parse_register(&xnand->mtd, NULL, NULL, NULL, 0);
 
 	return 0;
 }
