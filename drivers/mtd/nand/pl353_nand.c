@@ -397,6 +397,22 @@ static int pl353_nand_read_page_raw(struct mtd_info *mtd,
 	return 0;
 }
 
+static int pl353_nand_read_subpage_raw(struct mtd_info *mtd,
+				    struct nand_chip *chip, uint32_t data_offs,
+				    uint32_t readlen, uint8_t *buf, int page)
+{
+	if (0 != data_offs) {
+		chip->cmdfunc(mtd, NAND_CMD_RNDOUT, data_offs, -1);
+		buf += data_offs;
+	}
+
+	/* readlen must be a multiple of 4. */
+	readlen = (((readlen + 3) >> 2) << 2);
+
+	chip->read_buf(mtd, buf, readlen);
+	return 0;
+}
+
 /**
  * pl353_nand_write_page_raw - [Intern] raw page write function
  * @mtd:		Pointer to the mtd info structure
@@ -428,6 +444,24 @@ static int pl353_nand_write_page_raw(struct mtd_info *mtd,
 	chip->write_buf(mtd, p, PL353_NAND_LAST_TRANSFER_LENGTH);
 
 	return 0;
+}
+
+/**
+ * pl353_nand_write_subpage_raw - [Intern] raw subpage write function
+ * @mtd:        mtd info structure
+ * @chip:       nand chip info structure
+ * @column:     column address of subpage within the page
+ * @data_len:   data length
+ * @data_buf:   data buffer
+ * @oob_required: must write chip->oob_poi to OOB
+ *
+ */
+static int pl353_nand_write_subpage_raw(struct mtd_info *mtd,
+				     struct nand_chip *chip, uint32_t offset,
+				     uint32_t data_len, const uint8_t *data_buf,
+				     int oob_required)
+{
+	return pl353_nand_write_page_raw(mtd, chip, data_buf, oob_required);
 }
 
 /**
@@ -945,8 +979,19 @@ static void pl353_nand_ecc_init(struct mtd_info *mtd, int ondie_ecc_state)
 		nand_chip->ecc.bytes = 0;
 		nand_chip->ecc.layout = &ondie_nand_oob_64;
 		nand_chip->ecc.read_page = pl353_nand_read_page_raw;
+		nand_chip->ecc.read_subpage = pl353_nand_read_subpage_raw;
 		nand_chip->ecc.write_page = pl353_nand_write_page_raw;
+		nand_chip->ecc.write_subpage = pl353_nand_write_subpage_raw;
 		nand_chip->ecc.size = mtd->writesize;
+
+		/* NAND with on-die ECC supports subpage reads */
+		nand_chip->options |= NAND_SUBPAGE_READ;
+
+		/* NAND with on-die ECC may support subpage writes */
+		if (nand_chip->onfi_version)
+			nand_chip->ecc.size /=
+				nand_chip->onfi_params.programs_per_page;
+
 		/*
 		 * On-Die ECC spare bytes offset 8 is used for ECC codes
 		 * Use the BBT pattern descriptors
