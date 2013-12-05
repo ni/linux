@@ -553,8 +553,8 @@ static void do_current_softirqs(int need_rcu_bh_qs)
 
 static void __local_bh_disable(void)
 {
-	migrate_disable();
-	current->softirq_nestcnt++;
+	if (++current->softirq_nestcnt == 1)
+		migrate_disable();
 }
 
 void local_bh_disable(void)
@@ -580,8 +580,8 @@ static void __local_bh_enable(void)
 		do_current_softirqs(1);
 	local_irq_enable();
 
-	current->softirq_nestcnt--;
-	migrate_enable();
+	if (--current->softirq_nestcnt == 0)
+		migrate_enable();
 }
 
 void local_bh_enable(void)
@@ -605,8 +605,10 @@ EXPORT_SYMBOL(local_bh_enable_ip);
 
 void _local_bh_enable(void)
 {
-	current->softirq_nestcnt--;
-	migrate_enable();
+	if (WARN_ON(current->softirq_nestcnt == 0))
+		return;
+	if (--current->softirq_nestcnt == 0)
+		migrate_enable();
 }
 EXPORT_SYMBOL(_local_bh_enable);
 
