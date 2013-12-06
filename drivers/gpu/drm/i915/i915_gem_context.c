@@ -241,7 +241,7 @@ static int create_default_context(struct drm_i915_private *dev_priv)
 	return 0;
 
 err_unpin:
-	i915_gem_object_unpin(ctx->obj);
+	i915_gem_object_ggtt_unpin(ctx->obj);
 err_destroy:
 	i915_gem_context_unreference(ctx);
 	return ret;
@@ -300,11 +300,11 @@ void i915_gem_context_fini(struct drm_device *dev)
 	if (dev_priv->ring[RCS].last_context == dctx) {
 		/* Fake switch to NULL context */
 		WARN_ON(dctx->obj->active);
-		i915_gem_object_unpin(dctx->obj);
+		i915_gem_object_ggtt_unpin(dctx->obj);
 		i915_gem_context_unreference(dctx);
 	}
 
-	i915_gem_object_unpin(dctx->obj);
+	i915_gem_object_ggtt_unpin(dctx->obj);
 	i915_gem_context_unreference(dctx);
 	dev_priv->ring[RCS].default_context = NULL;
 	dev_priv->ring[RCS].last_context = NULL;
@@ -410,7 +410,7 @@ static int do_switch(struct i915_hw_context *to)
 	u32 hw_flags = 0;
 	int ret, i;
 
-	BUG_ON(from != NULL && from->obj != NULL && from->obj->pin_count == 0);
+	BUG_ON(from != NULL && from->obj != NULL && !i915_gem_obj_is_pinned(from->obj));
 
 	if (from == to && !to->remap_slice)
 		return 0;
@@ -436,7 +436,7 @@ static int do_switch(struct i915_hw_context *to)
 	 */
 	ret = i915_gem_object_set_to_gtt_domain(to->obj, false);
 	if (ret) {
-		i915_gem_object_unpin(to->obj);
+		i915_gem_object_ggtt_unpin(to->obj);
 		return ret;
 	}
 
@@ -448,7 +448,7 @@ static int do_switch(struct i915_hw_context *to)
 
 	ret = mi_set_context(ring, to, hw_flags);
 	if (ret) {
-		i915_gem_object_unpin(to->obj);
+		i915_gem_object_ggtt_unpin(to->obj);
 		return ret;
 	}
 
@@ -484,7 +484,7 @@ static int do_switch(struct i915_hw_context *to)
 		BUG_ON(from->obj->ring != ring);
 
 		/* obj is kept alive until the next request by its active ref */
-		i915_gem_object_unpin(from->obj);
+		i915_gem_object_ggtt_unpin(from->obj);
 		i915_gem_context_unreference(from);
 	}
 
