@@ -227,12 +227,22 @@ static LIST_HEAD(hidg_func_list);
 
 /* Mass Storage Gadget Helpers ***********************************************/
 
+static int lci_pre_eject(struct fsg_common *common,
+                         struct fsg_lun *lun, int num)
+{
+	//Per the mass storage file, returning positive means "don't eject"
+	return 1;
+}
+
+const struct fsg_operations lci_fsg_operations = {
+	.pre_eject = lci_pre_eject,
+};
+
 static int msg_add_to_config(struct usb_configuration *c)
 {
 	//Setup data structures for the file storage gadget, add it to the config
 	//with fsg_bind_config()
 
-	static const struct fsg_operations ops = {};
 	static struct fsg_common common;
 
 	struct fsg_common *retp;
@@ -240,7 +250,7 @@ static int msg_add_to_config(struct usb_configuration *c)
 	int ret;
 
 	fsg_config_from_params(&config, &mod_data);
-	config.ops = &ops;
+	config.ops = &lci_fsg_operations;
 	/* vendor must be 8 chars, product 16 or less */
 	config.vendor_name = fsg_manuf;
 	config.product_name = fsg_prod;
