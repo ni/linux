@@ -11,6 +11,7 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/capability.h>
 #include <linux/init.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -47,6 +48,9 @@ static ssize_t led_brightness_store(struct device *dev,
 	unsigned long state;
 	ssize_t ret = -EINVAL;
 
+	if (!capable(CAP_SYS_RAWIO))
+		return -EPERM;
+
 	ret = kstrtoul(buf, 10, &state);
 	if (ret)
 		return ret;
@@ -67,7 +71,7 @@ static ssize_t led_max_brightness_show(struct device *dev,
 }
 
 static struct device_attribute led_class_attrs[] = {
-	__ATTR(brightness, 0644, led_brightness_show, led_brightness_store),
+	__ATTR(brightness, 0666, led_brightness_show, led_brightness_store),
 	__ATTR(max_brightness, 0444, led_max_brightness_show, NULL),
 #ifdef CONFIG_LEDS_TRIGGERS
 	__ATTR(trigger, 0644, led_trigger_show, led_trigger_store),
