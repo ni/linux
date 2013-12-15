@@ -1220,6 +1220,7 @@ static inline int __sched
 __mutex_lock_check_stamp(struct rt_mutex *lock, struct ww_acquire_ctx *ctx)
 {
 	BUG();
+	return 0;
 }
 
 #endif
