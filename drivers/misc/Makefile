@@ -57,3 +57,4 @@ obj-$(CONFIG_XILINX_TRAFGEN)	+= xilinx_trafgen.o
 obj-y				+= mic/
 obj-$(CONFIG_GENWQE)		+= genwqe/
 obj-$(CONFIG_NI_RT_FEATURES)	+= nirtfeatures.o
+obj-$(CONFIG_NI_WATCHDOG)	+= niwatchdog.o
