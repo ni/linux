@@ -73,3 +73,4 @@ obj-$(CONFIG_NSM)		+= nsm.o
 obj-$(CONFIG_MARVELL_CN10K_DPI)	+= mrvl_cn10k_dpi.o
 obj-y				+= keba/
 obj-$(CONFIG_NI_RT_FEATURES)	+= nirtfeatures.o
+obj-$(CONFIG_NI_WATCHDOG)	+= niwatchdog.o
