@@ -58,3 +58,4 @@ obj-$(CONFIG_PVPANIC)   	+= pvpanic.o
 obj-$(CONFIG_HABANA_AI)		+= habanalabs/
 obj-$(CONFIG_XILINX_SDFEC)	+= xilinx_sdfec.o
 obj-$(CONFIG_NI_RT_FEATURES)	+= nirtfeatures.o
+obj-$(CONFIG_NI_WATCHDOG)	+= niwatchdog.o
