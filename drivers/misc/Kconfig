@@ -505,6 +505,15 @@ config NI_LED_PREFIX
 
 	  If unsure, use the default.
 
+config NI_WATCHDOG
+	bool "NI Watchdog support for NI 903x/913x"
+	depends on X86 && ACPI
+	help
+	  This driver exposes the NI Watchdog feature of NI 903x/913x Real-Time
+	  controllers.
+
+	  If unsure, say N (but it's safe to say "Y").
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
