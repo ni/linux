@@ -483,6 +483,37 @@ config OPEN_DICE
 
 	  If unsure, say N.
 
+config NI_RT_FEATURES
+	bool "NI 903x/913x support"
+	depends on X86 && ACPI
+	help
+	  This driver exposes LEDs and other features of NI 903x/913x Real-Time
+	  controllers.
+
+	  If unsure, say N (but it's safe to say "Y").
+
+config NI_LED_PREFIX
+	string "NI 903x/913x LED prefix"
+	depends on NI_RT_FEATURES
+	default "nizynqcpld"
+	help
+	  This option defines the base name of LEDs exposed by NI_RT_FEATURES.
+	  The default value maintains backwards compatibility with user-space
+	  software that was originally written for ARM (Zynq) hardware.
+
+	  If unsure, use the default.
+
+config NI_HW_REBOOT
+	bool "Hardware reboot for NI 903x/913x"
+	depends on NI_RT_FEATURES && X86_64
+	default n
+	help
+	  If enabled, when rebooting an NI 903x/913x, on-board hardware will
+	  be used to reset the system. If not enabled, the controller will do
+	  a normal ACPI reset.
+
+	  If unsure, say N.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
