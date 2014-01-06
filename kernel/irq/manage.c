@@ -34,6 +34,7 @@ early_param("threadirqs", setup_forced_irqthreads);
 # endif
 #endif
 
+static int irqthread_pri = MAX_USER_RT_PRIO/2;
 /**
  *	synchronize_irq - wait for pending IRQ handlers (on other CPUs)
  *	@irq: interrupt number to wait for
@@ -964,6 +965,18 @@ static int irq_thread(void *data)
 	return 0;
 }
 
+static __init int set_irqthread_pri(char *str)
+{
+	int pri;
+
+	get_option(&str, &pri);
+	if (pri > 0 && pri < MAX_USER_RT_PRIO)
+		irqthread_pri = pri;
+	return 0;
+}
+
+early_param("irqthread_pri", set_irqthread_pri);
+
 static void irq_setup_forced_threading(struct irqaction *new)
 {
 	if (!force_irqthreads)
@@ -1028,9 +1041,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	 */
 	if (new->thread_fn && !nested) {
 		struct task_struct *t;
-		static const struct sched_param param = {
-			.sched_priority = MAX_USER_RT_PRIO/2,
-		};
+		struct sched_param param;
+		param.sched_priority = irqthread_pri;
 
 		t = kthread_create(irq_thread, new, "irq/%d-%s", irq,
 				   new->name);
