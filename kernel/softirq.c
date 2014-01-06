@@ -29,6 +29,10 @@
 #include <linux/locallock.h>
 #include <linux/irq.h>
 
+#ifdef CONFIG_PREEMPT_RT_FULL
+#include <linux/sched/rt.h>
+#endif
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/irq.h>
 
@@ -481,6 +485,7 @@ static void ksoftirqd_clr_sched_params(unsigned int cpu, bool online) { }
  * On RT we serialize softirq execution with a cpu local lock per softirq
  */
 static DEFINE_PER_CPU(struct local_irq_lock [NR_SOFTIRQS], local_softirq_locks);
+static int ksoftirqd_pri = 1;
 
 void __init softirq_early_init(void)
 {
@@ -676,7 +681,9 @@ static inline void _local_bh_enable_nort(void) { }
 
 static inline void ksoftirqd_set_sched_params(unsigned int cpu)
 {
-	struct sched_param param = { .sched_priority = 1 };
+	struct sched_param param;
+
+	param.sched_priority = ksoftirqd_pri;
 
 	sched_setscheduler(current, SCHED_FIFO, &param);
 	/* Take over all pending softirqs when starting */
@@ -691,6 +698,18 @@ static inline void ksoftirqd_clr_sched_params(unsigned int cpu, bool online)
 
 	sched_setscheduler(current, SCHED_NORMAL, &param);
 }
+
+static __init int set_ksoftirqd_pri(char *str)
+{
+	int pri;
+
+	get_option(&str, &pri);
+	if (pri > 0 && pri < MAX_USER_RT_PRIO)
+		ksoftirqd_pri = pri;
+	return 0;
+}
+
+early_param("ksoftirqd_pri", set_ksoftirqd_pri);
 
 #endif /* PREEMPT_RT_FULL */
 /*
