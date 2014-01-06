@@ -34,6 +34,8 @@ early_param("threadirqs", setup_forced_irqthreads);
 # endif
 #endif
 
+static int irqthread_pri = MAX_USER_RT_PRIO/2;
+
 static void __synchronize_hardirq(struct irq_desc *desc)
 {
 	bool inprogress;
@@ -1072,6 +1074,18 @@ void irq_wake_thread(unsigned int irq, void *dev_id)
 }
 EXPORT_SYMBOL_GPL(irq_wake_thread);
 
+static __init int set_irqthread_pri(char *str)
+{
+	int pri;
+
+	get_option(&str, &pri);
+	if (pri > 0 && pri < MAX_USER_RT_PRIO)
+		irqthread_pri = pri;
+	return 0;
+}
+
+early_param("irqthread_pri", set_irqthread_pri);
+
 static int irq_setup_forced_threading(struct irqaction *new)
 {
 	if (!force_irqthreads)
@@ -1125,9 +1139,8 @@ static int
 setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 {
 	struct task_struct *t;
-	struct sched_param param = {
-		.sched_priority = MAX_USER_RT_PRIO/2,
-	};
+	struct sched_param param;
+	param.sched_priority = irqthread_pri;
 
 	if (!secondary) {
 		t = kthread_create(irq_thread, new, "irq/%d-%s", irq,
