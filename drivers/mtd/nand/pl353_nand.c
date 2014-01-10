@@ -59,6 +59,7 @@
 #define PL353_NAND_ECC_BUSY_TIMEOUT	(1 * HZ)
 #define PL353_NAND_DEV_BUSY_TIMEOUT	(1 * HZ)
 #define PL353_NAND_LAST_TRANSFER_LENGTH	4
+#define TIMING_MODE_FEATURE_ADDR  0x01
 
 /* Inline function for the NAND controller register write */
 static inline void pl353_nand_write32(void __iomem *addr, u32 val)
@@ -1121,6 +1122,7 @@ static int pl353_nand_probe(struct platform_device *pdev)
 	struct nand_chip *nand_chip;
 	struct resource *res;
 	int ondie_ecc_state;
+	int err = 0;
 
 	xnand = devm_kzalloc(&pdev->dev, sizeof(*xnand), GFP_KERNEL);
 	if (!xnand)
@@ -1169,6 +1171,45 @@ static int pl353_nand_probe(struct platform_device *pdev)
 	if (nand_scan_ident(mtd, 1, NULL)) {
 		dev_err(&pdev->dev, "nand_scan_ident for NAND failed\n");
 		return -ENXIO;
+	}
+
+	/* Find and set the best timing mode */
+	if (nand_chip->onfi_version) {
+		unsigned long timing_modes =
+			nand_chip->onfi_params.async_timing_mode;
+		u8 get_feature, timing_mode = find_last_bit(&timing_modes, 16);
+
+		nand_chip->cmdfunc(mtd, NAND_CMD_GET_FEATURES,
+				TIMING_MODE_FEATURE_ADDR, -1);
+		get_feature = nand_chip->read_byte(mtd);
+
+		if (timing_mode > get_feature) {
+			nand_chip->cmdfunc(mtd, NAND_CMD_SET_FEATURES,
+					TIMING_MODE_FEATURE_ADDR, -1);
+
+			writeb(timing_mode, nand_chip->IO_ADDR_W);
+			writeb(0, nand_chip->IO_ADDR_W);
+			writeb(0, nand_chip->IO_ADDR_W);
+			writeb(0, nand_chip->IO_ADDR_W);
+
+			ndelay(1000);
+
+			nand_chip->cmdfunc(mtd, NAND_CMD_GET_FEATURES,
+					TIMING_MODE_FEATURE_ADDR, -1);
+			timing_mode = nand_chip->read_byte(mtd);
+		}
+
+		pr_info("NAND device: Using ONFI timing mode %u\n",
+				timing_mode);
+
+		if (timing_mode) {
+			err = pl353_smc_set_onfi_mode(timing_mode);
+			if (err) {
+				dev_warn(&pdev->dev,
+				      "failed to set timing for ONFI mode %d\n",
+				      timing_mode);
+			}
+		}
 	}
 
 	pl353_nand_ecc_init(mtd, ondie_ecc_state);
