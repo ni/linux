@@ -98,6 +98,26 @@ struct pl353_smc_data {
 /* SMC virtual register base */
 static void __iomem *pl353_smc_base;
 
+struct pl353_smc_timing_params {
+	u32 smc_clk_freq;
+	u32 t_rc;
+	u32 t_wc;
+	u32 t_rea;
+	u32 t_wp;
+	u32 t_clr;
+	u32 t_ar;
+	u32 t_rr;
+};
+
+static struct platform_device *pdev_cached;
+static struct device_node *nand_node_cached;
+static struct pl353_smc_timing_params chip_timings[6];
+
+static void pl353_smc_init_nand_interface(struct platform_device *pdev,
+				struct device_node *nand_node,
+				int onfi_mode);
+
+
 /**
  * pl353_smc_set_buswidth - Set memory buswidth
  * @bw:	Memory buswidth (8 | 16)
@@ -111,7 +131,7 @@ int pl353_smc_set_buswidth(unsigned int bw)
 
 	writel(bw, pl353_smc_base + PL353_SMC_SET_OPMODE_OFFS);
 	writel(PL353_SMC_DC_UPT_NAND_REGS, pl353_smc_base +
-	       PL353_SMC_DIRECT_CMD_OFFS);
+			PL353_SMC_DIRECT_CMD_OFFS);
 
 	return 0;
 }
@@ -287,6 +307,29 @@ int pl353_smc_set_ecc_pg_size(unsigned int pg_sz)
 }
 EXPORT_SYMBOL_GPL(pl353_smc_set_ecc_pg_size);
 
+/**
+* pl353_smc_set_onfi_mode - Set SMC timing for NAND ONFI mode
+* @onfi_mode       ONFI mode (0-5)
+* Returns 0 on success or negative errno.
+*/
+int pl353_smc_set_onfi_mode(unsigned int onfi_mode)
+{
+	int err = 0;
+
+	/* reinitialize NAND with new ONFI mode */
+	if (!pdev_cached || !nand_node_cached) {
+		pr_err("%s: cached pointers invalid or not set!\n", __func__);
+		err = -1;
+		goto out_set_onfi_mode;
+	}
+
+	pl353_smc_init_nand_interface(pdev_cached, nand_node_cached, onfi_mode);
+
+out_set_onfi_mode:
+	return err;
+}
+EXPORT_SYMBOL_GPL(pl353_smc_set_onfi_mode);
+
 static int __maybe_unused pl353_smc_suspend(struct device *dev)
 {
 	struct pl353_smc_data *pl353_smc = dev_get_drvdata(dev);
@@ -326,11 +369,15 @@ static SIMPLE_DEV_PM_OPS(pl353_smc_dev_pm_ops, pl353_smc_suspend,
  * @nand_node:	Pointer to the pl353_nand device_node struct
  */
 static void pl353_smc_init_nand_interface(struct platform_device *pdev,
-				       struct device_node *nand_node)
+				       struct device_node *nand_node,
+				       int onfi_mode)
 {
 	u32 t_rc, t_wc, t_rea, t_wp, t_clr, t_ar, t_rr;
-	int err;
+	int err = 0;
 	unsigned long timeout = jiffies + PL353_NAND_ECC_BUSY_TIMEOUT;
+	const u32 *timing_prop;
+	int i, len = 0;
+	static int devtree_has_been_read = 0, prop_found[6];
 
 	/* nand-cycle-<X> property is refer to the NAND flash timing
 	 * mapping between dts and the NAND flash AC timing
@@ -343,44 +390,60 @@ static void pl353_smc_init_nand_interface(struct platform_device *pdev,
 	 *  t5 : t_ar
 	 *  t6 : t_rr
 	 */
-	err = of_property_read_u32(nand_node, "arm,nand-cycle-t0", &t_rc);
-	if (err) {
-		dev_warn(&pdev->dev, "arm,nand-cycle-t0 not in device tree");
-		goto default_nand_timing;
-	}
-	err = of_property_read_u32(nand_node, "arm,nand-cycle-t1", &t_wc);
-	if (err) {
-		dev_warn(&pdev->dev, "arm,nand-cycle-t1 not in device tree");
-		goto default_nand_timing;
-	}
-	err = of_property_read_u32(nand_node, "arm,nand-cycle-t2", &t_rea);
-	if (err) {
-		dev_warn(&pdev->dev, "arm,nand-cycle-t2 not in device tree");
-		goto default_nand_timing;
-	}
-	err = of_property_read_u32(nand_node, "arm,nand-cycle-t3", &t_wp);
-	if (err) {
-		dev_warn(&pdev->dev, "arm,nand-cycle-t3 not in device tree");
-		goto default_nand_timing;
-	}
-	err = of_property_read_u32(nand_node, "arm,nand-cycle-t4", &t_clr);
-	if (err) {
-		dev_warn(&pdev->dev, "arm,nand-cycle-t4 not in device tree");
-		goto default_nand_timing;
-	}
-	err = of_property_read_u32(nand_node, "arm,nand-cycle-t5", &t_ar);
-	if (err) {
-		dev_warn(&pdev->dev, "arm,nand-cycle-t5 not in device tree");
-		goto default_nand_timing;
-	}
-	err = of_property_read_u32(nand_node, "arm,nand-cycle-t6", &t_rr);
-	if (err) {
-		dev_warn(&pdev->dev, "arm,nand-cycle-t6 not in device tree");
-		goto default_nand_timing;
-	}
+	if (devtree_has_been_read)
+		goto skip_devtree_read;
 
-default_nand_timing:
-	if (err) {
+	for (i = 0; i < 6; ++i) {
+		char prop_name[16];
+
+		sprintf(prop_name, "xlnx,onfi-mode%u", i);
+
+		timing_prop = of_get_property(nand_node, prop_name, &len);
+
+		if (timing_prop && (len / sizeof(u32)) == 8) {
+			chip_timings[i].smc_clk_freq =
+				be32_to_cpup(&timing_prop[0]);
+
+			chip_timings[i].t_rc  = be32_to_cpup(&timing_prop[7]);
+			chip_timings[i].t_wc  = be32_to_cpup(&timing_prop[6]);
+			chip_timings[i].t_rea = be32_to_cpup(&timing_prop[5]);
+			chip_timings[i].t_wp  = be32_to_cpup(&timing_prop[4]);
+			chip_timings[i].t_clr = be32_to_cpup(&timing_prop[3]);
+			chip_timings[i].t_ar  = be32_to_cpup(&timing_prop[2]);
+			chip_timings[i].t_rr  = be32_to_cpup(&timing_prop[1]);
+
+			pr_info("%s: read timings for ONFI %u: clk=%u, t_rc=%u, t_wc=%u, t_rea=%u, t_wp=%u, t_clr=%u, t_ar=%u, t_rr=%u\n",
+				__func__, i, chip_timings[i].smc_clk_freq,
+				chip_timings[i].t_rc, chip_timings[i].t_wc,
+				chip_timings[i].t_rea, chip_timings[i].t_wp,
+				chip_timings[i].t_clr, chip_timings[i].t_ar,
+				chip_timings[i].t_rr);
+
+			prop_found[i] = 1;
+		} else {
+			/* No property */
+			dev_warn(&pdev->dev,
+				 "Device timing for ONFI mode %d not found in device tree!",
+				 i);
+			prop_found[i] = 0;
+		}
+	}
+	devtree_has_been_read = 1;
+
+skip_devtree_read:
+	if (prop_found[onfi_mode]) {
+		if (err)
+			dev_warn(&pdev->dev,
+				 "failed to set SMC clock frequency!");
+
+		t_rc  = chip_timings[onfi_mode].t_rc;
+		t_wc  = chip_timings[onfi_mode].t_wc;
+		t_rea = chip_timings[onfi_mode].t_rea;
+		t_wp  = chip_timings[onfi_mode].t_wp;
+		t_clr = chip_timings[onfi_mode].t_clr;
+		t_ar  = chip_timings[onfi_mode].t_ar;
+		t_rr  = chip_timings[onfi_mode].t_rr;
+	} else {
 		/* set default NAND flash timing property */
 		dev_warn(&pdev->dev, "Using default timing for");
 		dev_warn(&pdev->dev, "2Gb Numonyx MT29F2G08ABAEAWP NAND flash");
@@ -484,7 +547,9 @@ static int pl353_smc_probe(struct platform_device *pdev)
 	/* Find compatible children. Only a single child is supported */
 	for_each_available_child_of_node(of_node, child) {
 		if (of_match_node(matches_nand, child)) {
-			pl353_smc_init_nand_interface(pdev, child);
+			pdev_cached = pdev;
+			nand_node_cached = child;
+			pl353_smc_init_nand_interface(pdev, child, 0);
 			if (!matches) {
 				matches = matches_nand;
 			} else {

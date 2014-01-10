@@ -30,5 +30,6 @@ void pl353_smc_clr_nand_int(void);
 int pl353_smc_set_ecc_mode(enum pl353_smc_ecc_mode mode);
 int pl353_smc_set_ecc_pg_size(unsigned int pg_sz);
 int pl353_smc_set_buswidth(unsigned int bw);
+int pl353_smc_set_onfi_mode(unsigned int onfi_mode);
 
 #endif
