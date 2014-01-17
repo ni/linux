@@ -20,6 +20,8 @@
 static inline void led_set_brightness_async(struct led_classdev *led_cdev,
 					enum led_brightness value)
 {
+	if (led_cdev->inverted)
+		value = !value;
 	value = min(value, led_cdev->max_brightness);
 	led_cdev->brightness = value;
 
@@ -32,6 +34,8 @@ static inline int led_set_brightness_sync(struct led_classdev *led_cdev,
 {
 	int ret = 0;
 
+	if (led_cdev->inverted)
+		value = !value;
 	led_cdev->brightness = min(value, led_cdev->max_brightness);
 
 	if (!(led_cdev->flags & LED_SUSPENDED))
@@ -42,7 +46,10 @@ static inline int led_set_brightness_sync(struct led_classdev *led_cdev,
 
 static inline int led_get_brightness(struct led_classdev *led_cdev)
 {
-	return led_cdev->brightness;
+	if (led_cdev->inverted)
+		return (led_cdev->max_brightness - led_cdev->brightness);
+	else
+		return led_cdev->brightness;
 }
 
 void led_stop_software_blink(struct led_classdev *led_cdev);
