@@ -233,6 +233,7 @@ struct led_classdev {
 	 */
 	struct device		*(*hw_control_get_device)(struct led_classdev *led_cdev);
 #endif
+	u8			inverted;
 
 #ifdef CONFIG_LEDS_BRIGHTNESS_HW_CHANGED
 	int			 brightness_hw_changed;
