@@ -18,7 +18,10 @@
 
 static inline int led_get_brightness(struct led_classdev *led_cdev)
 {
-	return led_cdev->brightness;
+	if (led_cdev->inverted)
+		return (led_cdev->max_brightness - led_cdev->brightness);
+	else
+		return led_cdev->brightness;
 }
 
 void led_init_core(struct led_classdev *led_cdev);
