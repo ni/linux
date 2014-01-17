@@ -255,6 +255,9 @@ EXPORT_SYMBOL_GPL(led_set_brightness);
 void led_set_brightness_nopm(struct led_classdev *led_cdev,
 			      enum led_brightness value)
 {
+	if (led_cdev->inverted)
+		value = value ? LED_OFF : LED_FULL;
+
 	/* Use brightness_set op if available, it is guaranteed not to sleep */
 	if (!__led_set_brightness(led_cdev, value))
 		return;
@@ -282,6 +285,9 @@ int led_set_brightness_sync(struct led_classdev *led_cdev,
 {
 	if (led_cdev->blink_delay_on || led_cdev->blink_delay_off)
 		return -EBUSY;
+
+	if (led_cdev->inverted)
+		value = value ? LED_OFF : LED_FULL;
 
 	led_cdev->brightness = min(value, led_cdev->max_brightness);
 

@@ -73,6 +73,39 @@ static ssize_t max_brightness_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(max_brightness);
 
+static ssize_t inverted_show(struct device *dev, struct device_attribute *attr,
+			     char *buf)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
+	return sprintf(buf, "%u\n", led_cdev->inverted);
+}
+
+static ssize_t inverted_store(struct device *dev, struct device_attribute *attr,
+			      const char *buf, size_t size)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	u8 inverted;
+	int ret;
+
+	ret = kstrtou8(buf, 10, &inverted);
+	if (ret < 0)
+		return ret;
+
+	if (inverted > 1)
+		return -EINVAL;
+
+	led_cdev->inverted = inverted;
+
+	/* Note: The LED brightness is not immediately
+	 * updated as a result of changing the inversion.
+	 */
+
+	return size;
+}
+
+static DEVICE_ATTR_RW(inverted);
+
 #ifdef CONFIG_LEDS_TRIGGERS
 static DEVICE_ATTR(trigger, 0644, led_trigger_show, led_trigger_store);
 static struct attribute *led_trigger_attrs[] = {
@@ -87,6 +120,7 @@ static const struct attribute_group led_trigger_group = {
 static struct attribute *led_class_attrs[] = {
 	&dev_attr_brightness.attr,
 	&dev_attr_max_brightness.attr,
+	&dev_attr_inverted.attr,
 	NULL,
 };
 
