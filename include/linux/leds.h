@@ -83,6 +83,7 @@ struct led_classdev {
 	/* true if activated - deactivate routine uses it to do cleanup */
 	bool			activated;
 #endif
+	unsigned		inverted;
 };
 
 extern int led_classdev_register(struct device *parent,
