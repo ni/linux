@@ -1396,7 +1396,7 @@ static void wifi_sw_close(struct input_dev *dev)
 	struct myrio_wifi_sw *wifi_sw = input_get_drvdata(dev);
 
 	if (wifi_sw->irq_registered)
-		free_irq(wifi_sw->irq, wifi_sw_hnd);
+		free_irq(wifi_sw->irq, wifi_sw);
 }
 
 static int myrio_wifi_sw_init(struct nizynqcpld *cpld)
