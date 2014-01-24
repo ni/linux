@@ -96,3 +96,10 @@ out_unreg:
 		phy_led_trigger_unregister(&phy->phy_led_trigger[i]);
 	return err;
 }
+
+void phy_led_triggers_unregister(struct phy_device *phy)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(phy->phy_led_trigger); i++)
+		phy_led_trigger_unregister(&phy->phy_led_trigger[i]);
+}
