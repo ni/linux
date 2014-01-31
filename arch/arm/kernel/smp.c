@@ -454,11 +454,13 @@ void arch_send_call_function_single_ipi(int cpu)
 }
 
 #ifdef CONFIG_IRQ_WORK
+#ifndef CONFIG_PREEMPT_RT_FULL
 void arch_irq_work_raise(void)
 {
 	if (is_smp())
 		smp_cross_call(cpumask_of(smp_processor_id()), IPI_IRQ_WORK);
 }
+#endif
 #endif
 
 static const char *ipi_types[NR_IPI] = {
