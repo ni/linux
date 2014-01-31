@@ -20,6 +20,9 @@
 
 
 static DEFINE_PER_CPU(struct llist_head, irq_work_list);
+#ifdef CONFIG_PREEMPT_RT_FULL
+static DEFINE_PER_CPU(struct llist_head, hirq_work_list);
+#endif
 static DEFINE_PER_CPU(int, irq_work_raised);
 
 /*
@@ -48,7 +51,11 @@ static bool irq_work_claim(struct irq_work *work)
 	return true;
 }
 
+#ifdef CONFIG_PREEMPT_RT_FULL
+void arch_irq_work_raise(void)
+#else
 void __weak arch_irq_work_raise(void)
+#endif
 {
 	/*
 	 * Lame architectures will get the timer tick callback
@@ -70,8 +77,12 @@ void irq_work_queue(struct irq_work *work)
 	/* Queue the entry and raise the IPI if needed. */
 	preempt_disable();
 
-	llist_add(&work->llnode, &__get_cpu_var(irq_work_list));
-
+#ifdef CONFIG_PREEMPT_RT_FULL
+	if (work->flags & IRQ_WORK_HARD_IRQ)
+		llist_add(&work->llnode, &__get_cpu_var(hirq_work_list));
+	else
+#endif
+		llist_add(&work->llnode, &__get_cpu_var(irq_work_list));
 	/*
 	 * If the work is not "lazy" or the tick is stopped, raise the irq
 	 * work interrupt (if supported by the arch), otherwise, just wait
@@ -115,7 +126,12 @@ static void __irq_work_run(void)
 	__this_cpu_write(irq_work_raised, 0);
 	barrier();
 
-	this_list = &__get_cpu_var(irq_work_list);
+#ifdef CONFIG_PREEMPT_RT_FULL
+	if (in_irq())
+		this_list = &__get_cpu_var(hirq_work_list);
+	else
+#endif
+		this_list = &__get_cpu_var(irq_work_list);
 	if (llist_empty(this_list))
 		return;
 
