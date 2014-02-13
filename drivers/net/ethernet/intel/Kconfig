@@ -129,6 +129,17 @@ config IGB_DCA
 	  driver.  DCA is a method for warming the CPU cache before data
 	  is used, with the intent of lessening the impact of cache misses.
 
+config IGB_DEVICE_POLL
+	bool "Device polling for IGB"
+	default n
+	depends on IGB
+	select NETDEV_POLL
+	---help---
+	  Say Y if you want the ability to use polling instead of interrupts
+	  on IGB devices.
+
+	  If unsure, say N.
+
 config IGBVF
 	tristate "Intel(R) 82576 Virtual Function Ethernet support"
 	depends on PCI

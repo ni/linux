@@ -1391,6 +1391,38 @@ static int igb_request_irq(struct igb_adapter *adapter)
 	struct pci_dev *pdev = adapter->pdev;
 	int err = 0;
 
+#ifdef CONFIG_IGB_DEVICE_POLL
+	/* Try device_poll_request_irq. It will return non-zero if polling mode
+	 * is not enabled, or if it is unable to create the polling thread, in
+	 * which cases we should just go ahead and use interrupts.
+	 */
+	err = device_poll_request_irq(&adapter->device_poll);
+	if (!err) {
+		/* The device is configured to use polling, so configure it to
+		 * use legacy interrupts. It's easier to implement the polling
+		 * handler this way. The steps used are simply copied from the
+		 * cases below where both MSI-X and MSI configurations fail.
+		 */
+		igb_free_all_tx_resources(adapter);
+		igb_free_all_rx_resources(adapter);
+
+		igb_clear_interrupt_scheme(adapter);
+		err = igb_init_interrupt_scheme(adapter, false);
+		if (err)
+			goto request_done;
+
+		igb_setup_all_tx_resources(adapter);
+		igb_setup_all_rx_resources(adapter);
+		igb_configure(adapter);
+
+		igb_assign_vector(adapter->q_vector[0], 0);
+
+		igb_reset_interrupt_capability(adapter);
+		adapter->flags &= ~IGB_FLAG_HAS_MSI;
+
+		goto request_done;
+	}
+#endif
 	if (adapter->flags & IGB_FLAG_HAS_MSIX) {
 		err = igb_request_msix(adapter);
 		if (!err)
@@ -1435,6 +1467,11 @@ request_done:
 
 static void igb_free_irq(struct igb_adapter *adapter)
 {
+#ifdef CONFIG_IGB_DEVICE_POLL
+	if (device_poll_is_active(&adapter->device_poll))
+		device_poll_free_irq(&adapter->device_poll);
+	else
+#endif
 	if (adapter->flags & IGB_FLAG_HAS_MSIX) {
 		int vector = 0, i;
 
@@ -1456,6 +1493,9 @@ static void igb_irq_disable(struct igb_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 
+#ifdef CONFIG_IGB_DEVICE_POLL
+	device_poll_disable_irq(&adapter->device_poll);
+#endif
 	/* we need to be careful when disabling interrupts.  The VFs are also
 	 * mapped into these registers and so clearing the bits can cause
 	 * issues on the VF drivers so we only need to clear what we set
@@ -1506,7 +1546,27 @@ static void igb_irq_enable(struct igb_adapter *adapter)
 		wr32(E1000_IAM, IMS_ENABLE_MASK |
 				E1000_IMS_DRSTA);
 	}
+#ifdef CONFIG_IGB_DEVICE_POLL
+	device_poll_enable_irq(&adapter->device_poll);
+#endif
 }
+
+#ifdef CONFIG_IGB_DEVICE_POLL
+
+static void igb_device_poll_interrupt(struct device_poll *device_poll)
+{
+	struct net_device *netdev = to_net_dev(device_poll->device);
+	struct igb_adapter *adapter = netdev_priv(netdev);
+
+	if (IRQ_HANDLED == igb_intr(adapter->pdev->irq, adapter))
+		device_poll_disable_irq(device_poll);
+}
+
+static struct device_poll_ops igb_device_poll_ops = {
+	.interrupt = igb_device_poll_interrupt,
+};
+
+#endif
 
 static void igb_update_mng_vlan(struct igb_adapter *adapter)
 {
@@ -2532,6 +2592,20 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (hw->dev_spec._82575.mas_capable)
 		igb_init_mas(adapter);
 
+#ifdef CONFIG_IGB_DEVICE_POLL
+	adapter->device_poll.device = &netdev->dev;
+	adapter->device_poll.ops = &igb_device_poll_ops;
+
+	/* Default to using interrupts. */
+	adapter->device_poll.interval = 0;
+
+	/* Default to SCHED_FIFO priority 10. */
+	adapter->device_poll.policy = SCHED_FIFO;
+	adapter->device_poll.priority = 10;
+
+	if (netdev_poll_init(&adapter->device_poll))
+		dev_err(&pdev->dev, "failed to init netdev polling\n");
+#endif
 	/* do hw tstamp init after resetting */
 	igb_ptp_init(adapter);
 
@@ -2728,6 +2802,9 @@ static void igb_remove(struct pci_dev *pdev)
 	struct e1000_hw *hw = &adapter->hw;
 
 	pm_runtime_get_noresume(&pdev->dev);
+#ifdef CONFIG_IGB_DEVICE_POLL
+	device_poll_exit(&adapter->device_poll);
+#endif
 #ifdef CONFIG_IGB_HWMON
 	igb_sysfs_exit(adapter);
 #endif

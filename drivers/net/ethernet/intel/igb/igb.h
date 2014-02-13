@@ -42,6 +42,9 @@
 #include <linux/i2c.h>
 #include <linux/i2c-algo-bit.h>
 #include <linux/pci.h>
+#ifdef CONFIG_IGB_DEVICE_POLL
+#include <linux/netdev_poll.h>
+#endif
 
 struct igb_adapter;
 
@@ -456,6 +459,9 @@ struct igb_adapter {
 	unsigned long link_check_timeout;
 	int copper_tries;
 	struct e1000_info ei;
+#ifdef CONFIG_IGB_DEVICE_POLL
+	struct device_poll device_poll;
+#endif
 };
 
 #define IGB_FLAG_HAS_MSI		(1 << 0)
