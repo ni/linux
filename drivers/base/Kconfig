@@ -278,4 +278,7 @@ config CMA_AREAS
 
 endif
 
+config DEVICE_POLL
+	bool
+
 endmenu
