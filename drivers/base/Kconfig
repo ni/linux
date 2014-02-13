@@ -336,4 +336,7 @@ config CMA_ALIGNMENT
 
 endif
 
+config DEVICE_POLL
+	bool
+
 endmenu
