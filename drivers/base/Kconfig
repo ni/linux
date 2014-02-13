@@ -350,4 +350,7 @@ config GENERIC_ARCH_TOPOLOGY
 	  appropriate scaling, sysfs interface for changing capacity values at
 	  runtime.
 
+config DEVICE_POLL
+	bool
+
 endmenu
