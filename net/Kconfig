@@ -401,6 +401,9 @@ config LWTUNNEL
 	  tunnels like mpls. There is no netdevice associated with a light
 	  weight tunnel endpoint. Tunnel encapsulation parameters are stored
 	  with light weight tunnel state associated with fib routes.
+config NETDEV_POLL
+	bool
+	select DEVICE_POLL
 
 config DST_CACHE
 	bool
