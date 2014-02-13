@@ -71,6 +71,11 @@ struct device_poll {
 	struct dev_ext_attribute priority_attr;
 	struct attribute *attrs[4];
 	struct attribute_group attr_group;
+
+#ifdef CONFIG_DEVICE_POLL_NI_COMPAT
+	/* For backwards compatibility with NI software. */
+	struct dev_ext_attribute ni_interval_attr;
+#endif
 };
 
 int device_poll_init(struct device_poll *device_poll);

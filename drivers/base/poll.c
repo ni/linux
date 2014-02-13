@@ -84,6 +84,14 @@ static ssize_t device_poll_set_interval(struct device *dev,
 	if (kstrtoint(buf, 0, &interval) < 0)
 		return -EINVAL;
 
+#ifdef CONFIG_DEVICE_POLL_NI_COMPAT
+	/* For backwards compatibility with NI software. An interval of zero
+	 * now indicates interrupt mode. Shipping NI software can get confused
+	 * by this, so force 0 to -1.
+	 */
+	if (interval == 0)
+		interval = -1;
+#endif
 	device_poll->ops->lock(device_poll);
 	if (device_poll->interval != interval) {
 		device_poll->interval = interval;
@@ -186,6 +194,14 @@ static const DEVICE_ATTR(policy, S_IWUSR | S_IRUGO,
 static const DEVICE_ATTR(priority, S_IWUSR | S_IRUGO,
 			 device_poll_get_priority, device_poll_set_priority);
 
+#ifdef CONFIG_DEVICE_POLL_NI_COMPAT
+/* For backwards compatibility with NI software. The interval attribute had a
+ * different name, and shipping NI software looks for this other name.
+ */
+static const DEVICE_ATTR(ni_polling_interval, S_IWUSR | S_IRUGO,
+			 device_poll_get_interval, device_poll_set_interval);
+#endif
+
 /* device_poll internal functions */
 
 static int device_poll_thread(void *info)
@@ -282,6 +298,32 @@ int device_poll_init(struct device_poll *device_poll)
 	if (ret)
 		device_poll_exit(device_poll);
 
+#ifdef CONFIG_DEVICE_POLL_NI_COMPAT
+	/* For backwards compatibility with NI software. */
+
+	/* An interval of zero now indicates interrupt mode. Shipping NI
+	 * software can get confused by this, so force 0 to -1.
+	 */
+	if (device_poll->interval == 0)
+		device_poll->interval = -1;
+
+	/* The interval attribute originally had a different name and location,
+	 * and shipping NI software looks for this other name in this other
+	 * location.
+	 */
+	device_poll->ni_interval_attr.attr = dev_attr_ni_polling_interval;
+	device_poll->ni_interval_attr.var = device_poll;
+
+	if (device_poll->use_capability)
+		device_poll->ni_interval_attr.attr.attr.mode |= S_IWUGO;
+
+	sysfs_attr_init(&device_poll->ni_interval_attr.attr.attr);
+
+	ret = sysfs_create_file(&device_poll->device->kobj,
+				&device_poll->ni_interval_attr.attr.attr);
+	if (ret)
+		device_poll_exit(device_poll);
+#endif
 	return ret;
 }
 EXPORT_SYMBOL(device_poll_init);
@@ -291,6 +333,10 @@ void device_poll_exit(struct device_poll *device_poll)
 	if (!device_poll || !device_poll->device)
 		return;
 
+#ifdef CONFIG_DEVICE_POLL_NI_COMPAT
+	sysfs_remove_file(&device_poll->device->kobj,
+			  &device_poll->ni_interval_attr.attr.attr);
+#endif
 	sysfs_remove_group(&device_poll->device->kobj,
 			   &device_poll->attr_group);
 }
