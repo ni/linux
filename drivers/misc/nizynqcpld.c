@@ -432,6 +432,7 @@ static inline ssize_t nizynqcpld_switch_show(struct device *dev,
 			__ATTR(_name, 0444, nizynqcpld_switch_show, NULL), \
 	}
 
+static SWITCH_ATTR(soft_reset,  1 << 5);
 static SWITCH_ATTR(console_out, 1 << 2);
 static SWITCH_ATTR(ip_reset,    1 << 1);
 static SWITCH_ATTR(safe_mode,   1 << 0);
@@ -506,6 +507,7 @@ static const struct attribute *nizynqcpld_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_soft_reset.dev_attr.attr,
 	&dev_attr_console_out.dev_attr.attr,
 	&dev_attr_ip_reset.dev_attr.attr,
 	&dev_attr_safe_mode.dev_attr.attr,
@@ -561,6 +563,7 @@ static const struct attribute *dosequis6_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
 	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_soft_reset.dev_attr.attr,
 	&dev_attr_console_out.dev_attr.attr,
 	&dev_attr_ip_reset.dev_attr.attr,
 	&dev_attr_safe_mode.dev_attr.attr,
