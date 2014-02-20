@@ -42,6 +42,7 @@
 #define DOSX_LED			0x07
 #define DOSX_ETHERNETLED		0x08
 #define DOSX_DEBUGSWITCH		0x09
+#define DOSX_POWERSTATUS		0x0C
 #define DOSX_WATCHDOGCONTROL		0x13
 #define DOSX_WATCHDOGCOUNTER2		0x14
 #define DOSX_WATCHDOGCOUNTER1		0x15
@@ -503,6 +504,57 @@ static ssize_t nizynqcpld_bootmode_store(struct device *dev,
 static DEVICE_ATTR(bootmode, S_IRUSR|S_IWUSR, nizynqcpld_bootmode_show,
 		   nizynqcpld_bootmode_store);
 
+
+struct powerstatus_attribute {
+	struct device_attribute dev_attr;
+	u8 bit;
+};
+
+static inline ssize_t nizynqcpld_powerstatus_show(struct device *dev,
+					     struct device_attribute *attr,
+					     char *buf)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	struct powerstatus_attribute *pa =
+		container_of(attr, struct powerstatus_attribute, dev_attr);
+	int err;
+	u8 data;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, DOSX_POWERSTATUS, &data);
+	nizynqcpld_unlock(cpld);
+
+	if (err) {
+		dev_err(dev, "Error reading power status.\n");
+		return err;
+	}
+
+	return sprintf(buf, "%u\n", !!(data & pa->bit));
+}
+
+#define POWERSTATUS_ATTR(_name,_bit)							\
+	struct powerstatus_attribute dev_attr_##_name = {				\
+		.bit = _bit,							\
+		.dev_attr =							\
+			__ATTR(_name, 0444, nizynqcpld_powerstatus_show, NULL),	\
+	}
+
+static POWERSTATUS_ATTR(pwr_aux_valid,  1 << 4);
+static POWERSTATUS_ATTR(pwr_primary_in_use,  1 << 0);
+
+static const struct attribute *nizynqcpld_pwr_attrs[] = {
+	&dev_attr_bootmode.attr,
+	&dev_attr_scratch_softreset.attr,
+	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_soft_reset.dev_attr.attr,
+	&dev_attr_console_out.dev_attr.attr,
+	&dev_attr_ip_reset.dev_attr.attr,
+	&dev_attr_safe_mode.dev_attr.attr,
+	&dev_attr_pwr_aux_valid.dev_attr.attr,
+	&dev_attr_pwr_primary_in_use.dev_attr.attr,
+	NULL
+};
+
 static const struct attribute *nizynqcpld_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
@@ -558,6 +610,20 @@ static ssize_t dosequiscpld_wdmode_store(struct device *dev,
 
 static DEVICE_ATTR(watchdog_mode, S_IRUSR|S_IWUSR, dosequiscpld_wdmode_show,
 	dosequiscpld_wdmode_store);
+
+static const struct attribute *dosequis6_pwr_attrs[] = {
+	&dev_attr_bootmode.attr,
+	&dev_attr_scratch_softreset.attr,
+	&dev_attr_scratch_hardreset.attr,
+	&dev_attr_soft_reset.dev_attr.attr,
+	&dev_attr_console_out.dev_attr.attr,
+	&dev_attr_ip_reset.dev_attr.attr,
+	&dev_attr_safe_mode.dev_attr.attr,
+	&dev_attr_watchdog_mode.attr,
+	&dev_attr_pwr_aux_valid.dev_attr.attr,
+	&dev_attr_pwr_primary_in_use.dev_attr.attr,
+	NULL
+};
 
 static const struct attribute *dosequis6_attrs[] = {
 	&dev_attr_bootmode.attr,
@@ -1130,7 +1196,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
-		.attrs			= nizynqcpld_attrs,
+		.attrs			= nizynqcpld_pwr_attrs,
 		.supported_version	= 4,
 		.supported_product	= 0,
 		.watchdog_desc		= &dosxv4_watchdog_desc,
@@ -1143,7 +1209,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
-		.attrs			= nizynqcpld_attrs,
+		.attrs			= nizynqcpld_pwr_attrs,
 		.supported_version	= 5,
 		.supported_product	= 0,
 		.watchdog_desc		= &dosxv5_watchdog_desc,
@@ -1156,7 +1222,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 	},
 	/* DosEquis CPLD */
 	{
-		.attrs			= dosequis6_attrs,
+		.attrs			= dosequis6_pwr_attrs,
 		.supported_version	= 6,
 		.supported_product	= 0,
 		.watchdog_desc		= &dosxv5_watchdog_desc,
