@@ -30,7 +30,7 @@
 #define NIZYNQCPLD_VERSION		0x00
 #define NIZYNQCPLD_PRODUCT		0x1D
 
-#define PROTO_PROCESSORSTATE		0x01
+#define PROTO_PROCESSORMODE		0x01
 #define PROTO_SWITCHANDLED		0x04
 #define PROTO_ETHERNETLED		0x05
 #define PROTO_SCRATCHPADSR		0xFE
@@ -432,9 +432,9 @@ static inline ssize_t nizynqcpld_switch_show(struct device *dev,
 			__ATTR(_name, 0444, nizynqcpld_switch_show, NULL), \
 	}
 
-static SWITCH_ATTR(console_out, 1 << 7);
-static SWITCH_ATTR(ip_reset,    1 << 6);
-static SWITCH_ATTR(safe_mode,   1 << 5);
+static SWITCH_ATTR(console_out, 1 << 2);
+static SWITCH_ATTR(ip_reset,    1 << 1);
+static SWITCH_ATTR(safe_mode,   1 << 0);
 
 static const char * const bootmode_strings[] = {
 	"runtime", "safemode", "recovery",
@@ -1120,10 +1120,10 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.supported_product	= 0,
 		.led_descs		= proto_leds,
 		.num_led_descs		= ARRAY_SIZE(proto_leds),
-		.reboot_addr		= PROTO_PROCESSORSTATE,
+		.reboot_addr		= PROTO_PROCESSORMODE,
 		.scratch_hr_addr	= PROTO_SCRATCHPADHR,
 		.scratch_sr_addr	= PROTO_SCRATCHPADSR,
-		.switch_addr		= PROTO_SWITCHANDLED,
+		.switch_addr		= PROTO_PROCESSORMODE,
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
@@ -1136,7 +1136,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
-		.switch_addr		= DOSX_DEBUGSWITCH,
+		.switch_addr		= PROTO_PROCESSORMODE,
 	},
 	/* DosEquis and myRIO development CPLD */
 	{
@@ -1149,7 +1149,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
-		.switch_addr		= DOSX_DEBUGSWITCH,
+		.switch_addr		= PROTO_PROCESSORMODE,
 	},
 	/* DosEquis CPLD */
 	{
@@ -1162,7 +1162,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
-		.switch_addr		= DOSX_DEBUGSWITCH,
+		.switch_addr		= PROTO_PROCESSORMODE,
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 	/* myRIO CPLD */
@@ -1176,7 +1176,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
-		.switch_addr		= DOSX_DEBUGSWITCH,
+		.switch_addr		= PROTO_PROCESSORMODE,
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 		.wifi_sw_addr		= MYRIO_WIFISWCTRL_ADDR,
 	},
@@ -1191,7 +1191,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
-		.switch_addr		= DOSX_DEBUGSWITCH,
+		.switch_addr		= PROTO_PROCESSORMODE,
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 	/* Sol CPLD */
@@ -1205,7 +1205,7 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
-		.switch_addr		= DOSX_DEBUGSWITCH,
+		.switch_addr		= PROTO_PROCESSORMODE,
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 };
