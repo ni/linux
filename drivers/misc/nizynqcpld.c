@@ -37,6 +37,7 @@
 #define PROTO_SCRATCHPADHR		0xFF
 
 #define DOSX_PROCESSORRESET		0x02
+#define DOSX_PROCRESETSOURCE		0x04
 #define DOSX_STATUSLEDSHIFTBYTE1	0x05
 #define DOSX_STATUSLEDSHIFTBYTE0	0x06
 #define DOSX_LED			0x07
@@ -611,6 +612,38 @@ static ssize_t dosequiscpld_wdmode_store(struct device *dev,
 static DEVICE_ATTR(watchdog_mode, S_IRUSR|S_IWUSR, dosequiscpld_wdmode_show,
 	dosequiscpld_wdmode_store);
 
+
+static const char * const resetsource_strings[] = {
+	"button", "processor", "fpga", "watchdog", "software", "softoff",
+};
+
+static ssize_t nizynqcpld_resetsource_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct nizynqcpld *cpld = dev_get_drvdata(dev);
+	int err;
+	u8 tmp;
+	int i;
+
+	nizynqcpld_lock(cpld);
+	err = nizynqcpld_read(cpld, DOSX_PROCRESETSOURCE, &tmp);
+	nizynqcpld_unlock(cpld);
+
+	if (err)
+		return err;
+
+	for (i = 0; i < ARRAY_SIZE(resetsource_strings); i++) {
+		if ((1 << i) & tmp)
+			return sprintf(buf, "%s\n", resetsource_strings[i]);
+	}
+
+	return sprintf(buf, "poweron\n");
+}
+
+static DEVICE_ATTR(reset_source, S_IRUSR, nizynqcpld_resetsource_show, NULL);
+
+
 static const struct attribute *dosequis6_pwr_attrs[] = {
 	&dev_attr_bootmode.attr,
 	&dev_attr_scratch_softreset.attr,
@@ -620,6 +653,7 @@ static const struct attribute *dosequis6_pwr_attrs[] = {
 	&dev_attr_ip_reset.dev_attr.attr,
 	&dev_attr_safe_mode.dev_attr.attr,
 	&dev_attr_watchdog_mode.attr,
+	&dev_attr_reset_source.attr,
 	&dev_attr_pwr_aux_valid.dev_attr.attr,
 	&dev_attr_pwr_primary_in_use.dev_attr.attr,
 	NULL
@@ -634,6 +668,7 @@ static const struct attribute *dosequis6_attrs[] = {
 	&dev_attr_ip_reset.dev_attr.attr,
 	&dev_attr_safe_mode.dev_attr.attr,
 	&dev_attr_watchdog_mode.attr,
+	&dev_attr_reset_source.attr,
 	NULL
 };
 
