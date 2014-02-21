@@ -439,7 +439,7 @@ static SWITCH_ATTR(ip_reset,    1 << 1);
 static SWITCH_ATTR(safe_mode,   1 << 0);
 
 static const char * const bootmode_strings[] = {
-	"runtime", "safemode", "recovery",
+	"runtime", "safemode", "install",
 };
 
 static ssize_t nizynqcpld_bootmode_show(struct device *dev,
