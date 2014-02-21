@@ -463,7 +463,7 @@ show_usb2_hardware_lpm(struct device *dev, struct device_attribute *attr,
 	struct usb_device *udev = to_usb_device(dev);
 	const char *p;
 
-	if (udev->usb2_hw_lpm_enabled == 1)
+	if (udev->usb2_hw_lpm_allowed == 1)
 		p = "enabled";
 	else
 		p = "disabled";
@@ -483,8 +483,10 @@ set_usb2_hardware_lpm(struct device *dev, struct device_attribute *attr,
 
 	ret = strtobool(buf, &value);
 
-	if (!ret)
+	if (!ret) {
+		udev->usb2_hw_lpm_allowed = value;
 		ret = usb_set_usb2_hardware_lpm(udev, value);
+	}
 
 	usb_unlock_device(udev);
 
@@ -497,8 +499,62 @@ set_usb2_hardware_lpm(struct device *dev, struct device_attribute *attr,
 static DEVICE_ATTR(usb2_hardware_lpm, S_IRUGO | S_IWUSR, show_usb2_hardware_lpm,
 			set_usb2_hardware_lpm);
 
+static ssize_t
+show_usb2_lpm_l1_timeout(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	struct usb_device *udev = to_usb_device(dev);
+	return sprintf(buf, "%d\n", udev->l1_params.timeout);
+}
+
+static ssize_t
+set_usb2_lpm_l1_timeout(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct usb_device *udev = to_usb_device(dev);
+	u16 timeout;
+
+	if (kstrtou16(buf, 0, &timeout))
+		return -EINVAL;
+
+	udev->l1_params.timeout = timeout;
+
+	return count;
+}
+
+static DEVICE_ATTR(usb2_lpm_l1_timeout, S_IRUGO | S_IWUSR,
+		   show_usb2_lpm_l1_timeout, set_usb2_lpm_l1_timeout);
+
+static ssize_t
+show_usb2_lpm_besl(struct device *dev, struct device_attribute *attr,
+		   char *buf)
+{
+	struct usb_device *udev = to_usb_device(dev);
+	return sprintf(buf, "%d\n", udev->l1_params.besl);
+}
+
+static ssize_t
+set_usb2_lpm_besl(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct usb_device *udev = to_usb_device(dev);
+	u8 besl;
+
+	if (kstrtou8(buf, 0, &besl) || besl > 15)
+		return -EINVAL;
+
+	udev->l1_params.besl = besl;
+
+	return count;
+}
+
+static DEVICE_ATTR(usb2_lpm_besl, S_IRUGO | S_IWUSR,
+		   show_usb2_lpm_besl, set_usb2_lpm_besl);
+
 static struct attribute *usb2_hardware_lpm_attr[] = {
 	&dev_attr_usb2_hardware_lpm.attr,
+	&dev_attr_usb2_lpm_l1_timeout.attr,
+	&dev_attr_usb2_lpm_besl.attr,
 	NULL,
 };
 static struct attribute_group usb2_hardware_lpm_attr_group = {

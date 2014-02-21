@@ -107,6 +107,7 @@ enum drm_mode_status {
     MODE_ONE_HEIGHT,    /* only one height is supported */
     MODE_ONE_SIZE,      /* only one resolution is supported */
     MODE_NO_REDUCED,    /* monitor doesn't accept reduced blanking */
+    MODE_NO_STEREO,	/* stereo modes not supported */
     MODE_UNVERIFIED = -3, /* mode needs to reverified */
     MODE_BAD = -2,	/* unspecified reason */
     MODE_ERROR	= -1	/* error condition */
@@ -123,7 +124,8 @@ enum drm_mode_status {
 	.vscan = (vs), .flags = (f), \
 	.base.type = DRM_MODE_OBJECT_MODE
 
-#define CRTC_INTERLACE_HALVE_V 0x1 /* halve V values for interlacing */
+#define CRTC_INTERLACE_HALVE_V	(1 << 0) /* halve V values for interlacing */
+#define CRTC_STEREO_DOUBLE	(1 << 1) /* adjust timings for stereo modes */
 
 struct drm_display_mode {
 	/* Header */
@@ -154,8 +156,7 @@ struct drm_display_mode {
 	int height_mm;
 
 	/* Actual mode we give to hw */
-	int clock_index;
-	int synth_clock;
+	int crtc_clock;		/* in KHz */
 	int crtc_hdisplay;
 	int crtc_hblank_start;
 	int crtc_hblank_end;
@@ -178,6 +179,11 @@ struct drm_display_mode {
 	int vrefresh;		/* in Hz */
 	int hsync;		/* in kHz */
 };
+
+static inline bool drm_mode_is_stereo(const struct drm_display_mode *mode)
+{
+	return mode->flags & DRM_MODE_FLAG_3D_MASK;
+}
 
 enum drm_connector_status {
 	connector_status_connected = 1,
@@ -360,7 +366,8 @@ struct drm_crtc_funcs {
 	 */
 	int (*page_flip)(struct drm_crtc *crtc,
 			 struct drm_framebuffer *fb,
-			 struct drm_pending_vblank_event *event);
+			 struct drm_pending_vblank_event *event,
+			 uint32_t flags);
 
 	int (*set_property)(struct drm_crtc *crtc,
 			    struct drm_property *property, uint64_t val);
@@ -587,6 +594,7 @@ struct drm_connector {
 	int connector_type_id;
 	bool interlace_allowed;
 	bool doublescan_allowed;
+	bool stereo_allowed;
 	struct list_head modes; /* list of modes on this connector */
 
 	enum drm_connector_status status;
@@ -873,6 +881,8 @@ extern int drm_crtc_init(struct drm_device *dev,
 			 const struct drm_crtc_funcs *funcs);
 extern void drm_crtc_cleanup(struct drm_crtc *crtc);
 
+extern void drm_connector_ida_init(void);
+extern void drm_connector_ida_destroy(void);
 extern int drm_connector_init(struct drm_device *dev,
 			      struct drm_connector *connector,
 			      const struct drm_connector_funcs *funcs,
@@ -897,17 +907,19 @@ extern void drm_plane_cleanup(struct drm_plane *plane);
 
 extern void drm_encoder_cleanup(struct drm_encoder *encoder);
 
-extern char *drm_get_connector_name(struct drm_connector *connector);
-extern char *drm_get_dpms_name(int val);
-extern char *drm_get_dvi_i_subconnector_name(int val);
-extern char *drm_get_dvi_i_select_name(int val);
-extern char *drm_get_tv_subconnector_name(int val);
-extern char *drm_get_tv_select_name(int val);
+extern const char *drm_get_connector_name(const struct drm_connector *connector);
+extern const char *drm_get_connector_status_name(enum drm_connector_status status);
+extern const char *drm_get_dpms_name(int val);
+extern const char *drm_get_dvi_i_subconnector_name(int val);
+extern const char *drm_get_dvi_i_select_name(int val);
+extern const char *drm_get_tv_subconnector_name(int val);
+extern const char *drm_get_tv_select_name(int val);
 extern void drm_fb_release(struct drm_file *file_priv);
 extern int drm_mode_group_init_legacy_group(struct drm_device *dev, struct drm_mode_group *group);
 extern bool drm_probe_ddc(struct i2c_adapter *adapter);
 extern struct edid *drm_get_edid(struct drm_connector *connector,
 				 struct i2c_adapter *adapter);
+extern struct edid *drm_edid_duplicate(const struct edid *edid);
 extern int drm_add_edid_modes(struct drm_connector *connector, struct edid *edid);
 extern void drm_mode_probed_add(struct drm_connector *connector, struct drm_display_mode *mode);
 extern void drm_mode_remove(struct drm_connector *connector, struct drm_display_mode *mode);
@@ -920,7 +932,7 @@ extern void drm_mode_config_reset(struct drm_device *dev);
 extern void drm_mode_config_cleanup(struct drm_device *dev);
 extern void drm_mode_set_name(struct drm_display_mode *mode);
 extern bool drm_mode_equal(const struct drm_display_mode *mode1, const struct drm_display_mode *mode2);
-extern bool drm_mode_equal_no_clocks(const struct drm_display_mode *mode1, const struct drm_display_mode *mode2);
+extern bool drm_mode_equal_no_clocks_no_stereo(const struct drm_display_mode *mode1, const struct drm_display_mode *mode2);
 extern int drm_mode_width(const struct drm_display_mode *mode);
 extern int drm_mode_height(const struct drm_display_mode *mode);
 
@@ -994,7 +1006,7 @@ extern int drm_mode_create_tv_properties(struct drm_device *dev, int num_formats
 extern int drm_mode_create_scaling_mode_property(struct drm_device *dev);
 extern int drm_mode_create_dithering_property(struct drm_device *dev);
 extern int drm_mode_create_dirty_info_property(struct drm_device *dev);
-extern char *drm_get_encoder_name(struct drm_encoder *encoder);
+extern const char *drm_get_encoder_name(const struct drm_encoder *encoder);
 
 extern int drm_mode_connector_attach_encoder(struct drm_connector *connector,
 					     struct drm_encoder *encoder);
@@ -1094,5 +1106,6 @@ extern int drm_format_num_planes(uint32_t format);
 extern int drm_format_plane_cpp(uint32_t format, int plane);
 extern int drm_format_horz_chroma_subsampling(uint32_t format);
 extern int drm_format_vert_chroma_subsampling(uint32_t format);
+extern const char *drm_get_format_name(uint32_t format);
 
 #endif /* __DRM_CRTC_H__ */

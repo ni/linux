@@ -15,6 +15,58 @@ menuconfig X86_PLATFORM_DEVICES
 
 if X86_PLATFORM_DEVICES
 
+config MINNOWBOARD
+	tristate "MinnowBoard GPIO and LVDS support"
+	depends on LPC_SCH
+	depends on GPIO_SCH
+	depends on GPIO_PCH
+	depends on LEDS_GPIO
+	default n
+	---help---
+	  This driver configures the MinnowBoard fixed functionality GPIO lines.
+
+	  It ensures that the E6XX SUS GPIOs muxed with LVDS signals (SUS[0:2])
+	  are disabled if the LVDS_DETECT signal is asserted.
+
+	  If LED_TRIGGER* are enabled, LED0 will use the heartbeat trigger and
+	  LED1 will use the mmc0 trigger.
+
+	  The Minnow Hardware ID is read from the GPIO HWID lines and logged.
+
+	  If you have a MinnowBoard, say Y or M here.
+
+if MINNOWBOARD
+config MINNOWBOARD_GPIO
+	tristate "MinnowBoard Expansion GPIO"
+	depends on MINNOWBOARD
+	default n
+	---help---
+	  Export the EG20T (gpio-pch) lines on the expansion connector to sysfs
+	  for easy manipulation from userspace. These will be named
+	  "minnow_gpio_pch[0-7]". If LVDS is not in use, export the E6XX
+	  (gpio-sch) lines on the expansion connector to sysfs, these will be
+	  named "minnow_gpio_aux[0-4]".
+
+	  If you have a MinnowBoard, and want to experiment with the GPIO,
+	  say Y or M here.
+
+config MINNOWBOARD_KEYS
+	tristate "MinnowBoard GPIO Keys"
+	depends on MINNOWBOARD
+	depends on KEYBOARD_GPIO_POLLED
+	default n
+	---help---
+	  Configure the four buttons tied to the E6XX GPIO lines on the
+	  MinnowBoard as keys using the gpio-keys-polled platform driver. From
+	  left to right, bind them to LEFT, DOWN, UP, RIGHT, similar to the VI
+	  directional keys.
+
+	  If you have a MinnowBoard and want to use the buttons as arrow keys,
+	  say Y or M here.
+
+endif # MINNOWBOARD
+
+
 config ACER_WMI
 	tristate "Acer WMI Laptop Extras"
 	depends on ACPI

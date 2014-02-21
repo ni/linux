@@ -207,7 +207,6 @@ static const struct file_operations imx_drm_driver_fops = {
 	.unlocked_ioctl = drm_ioctl,
 	.mmap = drm_gem_cma_mmap,
 	.poll = drm_poll,
-	.fasync = drm_fasync,
 	.read = drm_read,
 	.llseek = noop_llseek,
 };
@@ -414,14 +413,14 @@ static int imx_drm_driver_load(struct drm_device *drm, unsigned long flags)
 
 	/*
 	 * enable drm irq mode.
-	 * - with irq_enabled = 1, we can use the vblank feature.
+	 * - with irq_enabled = true, we can use the vblank feature.
 	 *
 	 * P.S. note that we wouldn't use drm irq handler but
 	 *      just specific driver own one instead because
 	 *      drm framework supports only one irq handler and
 	 *      drivers can well take care of their interrupts
 	 */
-	drm->irq_enabled = 1;
+	drm->irq_enabled = true;
 
 	drm_mode_config_init(drm);
 	imx_drm_mode_config_init(drm);
@@ -441,11 +440,11 @@ static int imx_drm_driver_load(struct drm_device *drm, unsigned long flags)
 		goto err_init;
 
 	/*
-	 * with vblank_disable_allowed = 1, vblank interrupt will be disabled
+	 * with vblank_disable_allowed = true, vblank interrupt will be disabled
 	 * by drm timer once a current process gives up ownership of
 	 * vblank event.(after drm_vblank_put function is called)
 	 */
-	imxdrm->drm->vblank_disable_allowed = 1;
+	imxdrm->drm->vblank_disable_allowed = true;
 
 	ret = 0;
 
@@ -787,7 +786,7 @@ int imx_drm_remove_connector(struct imx_drm_connector *imx_drm_connector)
 }
 EXPORT_SYMBOL_GPL(imx_drm_remove_connector);
 
-static struct drm_ioctl_desc imx_drm_ioctls[] = {
+static const struct drm_ioctl_desc imx_drm_ioctls[] = {
 	/* none so far */
 };
 
@@ -801,7 +800,7 @@ static struct drm_driver imx_drm_driver = {
 	.gem_vm_ops		= &drm_gem_cma_vm_ops,
 	.dumb_create		= drm_gem_cma_dumb_create,
 	.dumb_map_offset	= drm_gem_cma_dumb_map_offset,
-	.dumb_destroy		= drm_gem_cma_dumb_destroy,
+	.dumb_destroy		= drm_gem_dumb_destroy,
 
 	.get_vblank_counter	= drm_vblank_count,
 	.enable_vblank		= imx_drm_enable_vblank,

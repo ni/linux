@@ -7,18 +7,15 @@ int drm_get_usb_dev(struct usb_interface *interface,
 		    struct drm_driver *driver)
 {
 	struct drm_device *dev;
-	struct usb_device *usbdev;
 	int ret;
 
 	DRM_DEBUG("\n");
 
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+	dev = drm_dev_alloc(driver, &interface->dev);
 	if (!dev)
 		return -ENOMEM;
 
-	usbdev = interface_to_usbdev(interface);
-	dev->usbdev = usbdev;
-	dev->dev = &interface->dev;
+	dev->usbdev = interface_to_usbdev(interface);
 
 	mutex_lock(&drm_global_mutex);
 
@@ -32,6 +29,12 @@ int drm_get_usb_dev(struct usb_interface *interface,
 	ret = drm_get_minor(dev, &dev->control, DRM_MINOR_CONTROL);
 	if (ret)
 		goto err_g1;
+
+	if (drm_core_check_feature(dev, DRIVER_RENDER) && drm_rnodes) {
+		ret = drm_get_minor(dev, &dev->render, DRM_MINOR_RENDER);
+		if (ret)
+			goto err_g11;
+	}
 
 	ret = drm_get_minor(dev, &dev->primary, DRM_MINOR_LEGACY);
 	if (ret)
@@ -62,6 +65,9 @@ int drm_get_usb_dev(struct usb_interface *interface,
 err_g3:
 	drm_put_minor(&dev->primary);
 err_g2:
+	if (dev->render)
+		drm_put_minor(&dev->render);
+err_g11:
 	drm_put_minor(&dev->control);
 err_g1:
 	kfree(dev);

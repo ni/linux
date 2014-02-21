@@ -40,6 +40,9 @@
 unsigned int drm_debug = 0;	/* 1 to enable debug output */
 EXPORT_SYMBOL(drm_debug);
 
+unsigned int drm_rnodes = 0;	/* 1 to enable experimental render nodes API */
+EXPORT_SYMBOL(drm_rnodes);
+
 unsigned int drm_vblank_offdelay = 5000;    /* Default to 5000 msecs. */
 EXPORT_SYMBOL(drm_vblank_offdelay);
 
@@ -56,11 +59,13 @@ MODULE_AUTHOR(CORE_AUTHOR);
 MODULE_DESCRIPTION(CORE_DESC);
 MODULE_LICENSE("GPL and additional rights");
 MODULE_PARM_DESC(debug, "Enable debug output");
+MODULE_PARM_DESC(rnodes, "Enable experimental render nodes API");
 MODULE_PARM_DESC(vblankoffdelay, "Delay until vblank irq auto-disable [msecs]");
 MODULE_PARM_DESC(timestamp_precision_usec, "Max. error on timestamps [usecs]");
 MODULE_PARM_DESC(timestamp_monotonic, "Use monotonic timestamps");
 
 module_param_named(debug, drm_debug, int, 0600);
+module_param_named(rnodes, drm_rnodes, int, 0600);
 module_param_named(vblankoffdelay, drm_vblank_offdelay, int, 0600);
 module_param_named(timestamp_precision_usec, drm_timestamp_precision, int, 0600);
 module_param_named(timestamp_monotonic, drm_timestamp_monotonic, int, 0600);
@@ -256,60 +261,15 @@ int drm_fill_in_dev(struct drm_device *dev,
 {
 	int retcode;
 
-	INIT_LIST_HEAD(&dev->filelist);
-	INIT_LIST_HEAD(&dev->ctxlist);
-	INIT_LIST_HEAD(&dev->vmalist);
-	INIT_LIST_HEAD(&dev->maplist);
-	INIT_LIST_HEAD(&dev->vblank_event_list);
-
-	spin_lock_init(&dev->count_lock);
-	spin_lock_init(&dev->event_lock);
-	mutex_init(&dev->struct_mutex);
-	mutex_init(&dev->ctxlist_mutex);
-
-	if (drm_ht_create(&dev->map_hash, 12)) {
-		return -ENOMEM;
-	}
-
-	/* the DRM has 6 basic counters */
-	dev->counters = 6;
-	dev->types[0] = _DRM_STAT_LOCK;
-	dev->types[1] = _DRM_STAT_OPENS;
-	dev->types[2] = _DRM_STAT_CLOSES;
-	dev->types[3] = _DRM_STAT_IOCTLS;
-	dev->types[4] = _DRM_STAT_LOCKS;
-	dev->types[5] = _DRM_STAT_UNLOCKS;
-
-	dev->driver = driver;
-
 	if (dev->driver->bus->agp_init) {
 		retcode = dev->driver->bus->agp_init(dev);
-		if (retcode)
-			goto error_out_unreg;
-	}
-
-
-
-	retcode = drm_ctxbitmap_init(dev);
-	if (retcode) {
-		DRM_ERROR("Cannot allocate memory for context bitmap.\n");
-		goto error_out_unreg;
-	}
-
-	if (driver->driver_features & DRIVER_GEM) {
-		retcode = drm_gem_init(dev);
 		if (retcode) {
-			DRM_ERROR("Cannot initialize graphics execution "
-				  "manager (GEM)\n");
-			goto error_out_unreg;
+			drm_lastclose(dev);
+			return retcode;
 		}
 	}
 
 	return 0;
-
-      error_out_unreg:
-	drm_lastclose(dev);
-	return retcode;
 }
 EXPORT_SYMBOL(drm_fill_in_dev);
 
@@ -451,22 +411,11 @@ void drm_put_dev(struct drm_device *dev)
 
 	drm_lastclose(dev);
 
-	if (drm_core_has_MTRR(dev) && drm_core_has_AGP(dev) &&
-	    dev->agp && dev->agp->agp_mtrr >= 0) {
-		int retval;
-		retval = mtrr_del(dev->agp->agp_mtrr,
-				  dev->agp->agp_info.aper_base,
-				  dev->agp->agp_info.aper_size * 1024 * 1024);
-		DRM_DEBUG("mtrr_del=%d\n", retval);
-	}
-
 	if (dev->driver->unload)
 		dev->driver->unload(dev);
 
-	if (drm_core_has_AGP(dev) && dev->agp) {
-		kfree(dev->agp);
-		dev->agp = NULL;
-	}
+	if (dev->driver->bus->agp_destroy)
+		dev->driver->bus->agp_destroy(dev);
 
 	drm_vblank_cleanup(dev);
 
@@ -478,6 +427,9 @@ void drm_put_dev(struct drm_device *dev)
 
 	if (drm_core_check_feature(dev, DRIVER_MODESET))
 		drm_put_minor(&dev->control);
+
+	if (dev->render)
+		drm_put_minor(&dev->render);
 
 	if (driver->driver_features & DRIVER_GEM)
 		drm_gem_destroy(dev);
@@ -495,6 +447,8 @@ void drm_unplug_dev(struct drm_device *dev)
 	/* for a USB device */
 	if (drm_core_check_feature(dev, DRIVER_MODESET))
 		drm_unplug_minor(dev->control);
+	if (dev->render)
+		drm_unplug_minor(dev->render);
 	drm_unplug_minor(dev->primary);
 
 	mutex_lock(&drm_global_mutex);
@@ -507,3 +461,66 @@ void drm_unplug_dev(struct drm_device *dev)
 	mutex_unlock(&drm_global_mutex);
 }
 EXPORT_SYMBOL(drm_unplug_dev);
+
+/**
+ * drm_dev_alloc - Allocate new drm device
+ * @driver: DRM driver to allocate device for
+ * @parent: Parent device object
+ *
+ * Allocate and initialize a new DRM device. No device registration is done.
+ *
+ * RETURNS:
+ * Pointer to new DRM device, or NULL if out of memory.
+ */
+struct drm_device *drm_dev_alloc(struct drm_driver *driver,
+				 struct device *parent)
+{
+	struct drm_device *dev;
+	int ret;
+
+	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+	if (!dev)
+		return NULL;
+
+	dev->dev = parent;
+	dev->driver = driver;
+
+	INIT_LIST_HEAD(&dev->filelist);
+	INIT_LIST_HEAD(&dev->ctxlist);
+	INIT_LIST_HEAD(&dev->vmalist);
+	INIT_LIST_HEAD(&dev->maplist);
+	INIT_LIST_HEAD(&dev->vblank_event_list);
+
+	spin_lock_init(&dev->count_lock);
+	spin_lock_init(&dev->event_lock);
+	mutex_init(&dev->struct_mutex);
+	mutex_init(&dev->ctxlist_mutex);
+
+	if (drm_ht_create(&dev->map_hash, 12))
+		goto err_free;
+
+	ret = drm_ctxbitmap_init(dev);
+	if (ret) {
+		DRM_ERROR("Cannot allocate memory for context bitmap.\n");
+		goto err_ht;
+	}
+
+	if (driver->driver_features & DRIVER_GEM) {
+		ret = drm_gem_init(dev);
+		if (ret) {
+			DRM_ERROR("Cannot initialize graphics execution manager (GEM)\n");
+			goto err_ctxbitmap;
+		}
+	}
+
+	return dev;
+
+err_ctxbitmap:
+	drm_ctxbitmap_cleanup(dev);
+err_ht:
+	drm_ht_remove(&dev->map_hash);
+err_free:
+	kfree(dev);
+	return NULL;
+}
+EXPORT_SYMBOL(drm_dev_alloc);

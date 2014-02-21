@@ -64,6 +64,7 @@ struct soc_camera_host {
 	struct mutex host_lock;		/* Protect pipeline modifications */
 	unsigned char nr;		/* Host number */
 	u32 capabilities;
+	struct soc_camera_device *icd;	/* Currently attached client */
 	void *priv;
 	const char *drv_name;
 	struct soc_camera_host_ops *ops;
@@ -73,6 +74,8 @@ struct soc_camera_host_ops {
 	struct module *owner;
 	int (*add)(struct soc_camera_device *);
 	void (*remove)(struct soc_camera_device *);
+	int (*clock_start)(struct soc_camera_host *);
+	void (*clock_stop)(struct soc_camera_host *);
 	/*
 	 * .get_formats() is called for each client device format, but
 	 * .put_formats() is only called once. Further, if any of the calls to

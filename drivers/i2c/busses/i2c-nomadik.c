@@ -25,7 +25,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/platform_data/i2c-nomadik.h>
 #include <linux/of.h>
-#include <linux/of_i2c.h>
 #include <linux/pinctrl/consumer.h>
 
 #define DRIVER_NAME "nmk-i2c"
@@ -974,7 +973,7 @@ static atomic_t adapter_id = ATOMIC_INIT(0);
 static int nmk_i2c_probe(struct amba_device *adev, const struct amba_id *id)
 {
 	int ret = 0;
-	struct nmk_i2c_controller *pdata = adev->dev.platform_data;
+	struct nmk_i2c_controller *pdata = dev_get_platdata(&adev->dev);
 	struct device_node *np = adev->dev.of_node;
 	struct nmk_i2c_dev	*dev;
 	struct i2c_adapter *adap;
@@ -1091,8 +1090,6 @@ static int nmk_i2c_probe(struct amba_device *adev, const struct amba_id *id)
 		dev_err(&adev->dev, "failed to add adapter\n");
 		goto err_add_adap;
 	}
-
-	of_i2c_register_devices(adap);
 
 	pm_runtime_put(&adev->dev);
 

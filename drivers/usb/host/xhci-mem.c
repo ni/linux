@@ -1763,9 +1763,7 @@ void xhci_free_command(struct xhci_hcd *xhci,
 void xhci_mem_cleanup(struct xhci_hcd *xhci)
 {
 	struct pci_dev	*pdev = to_pci_dev(xhci_to_hcd(xhci)->self.controller);
-	struct dev_info	*dev_info, *next;
 	struct xhci_cd  *cur_cd, *next_cd;
-	unsigned long	flags;
 	int size;
 	int i, j, num_ports;
 
@@ -1824,13 +1822,6 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
 
 	scratchpad_free(xhci);
 
-	spin_lock_irqsave(&xhci->lock, flags);
-	list_for_each_entry_safe(dev_info, next, &xhci->lpm_failed_devs, list) {
-		list_del(&dev_info->list);
-		kfree(dev_info);
-	}
-	spin_unlock_irqrestore(&xhci->lock, flags);
-
 	if (!xhci->rh_bw)
 		goto no_bw;
 
@@ -1860,6 +1851,7 @@ no_bw:
 	kfree(xhci->usb3_ports);
 	kfree(xhci->port_array);
 	kfree(xhci->rh_bw);
+	kfree(xhci->ext_caps);
 
 	xhci->page_size = 0;
 	xhci->page_shift = 0;
@@ -2047,7 +2039,7 @@ static void xhci_set_hc_event_deq(struct xhci_hcd *xhci)
 }
 
 static void xhci_add_in_port(struct xhci_hcd *xhci, unsigned int num_ports,
-		__le32 __iomem *addr, u8 major_revision)
+		__le32 __iomem *addr, u8 major_revision, int max_caps)
 {
 	u32 temp, port_offset, port_count;
 	int i;
@@ -2071,6 +2063,10 @@ static void xhci_add_in_port(struct xhci_hcd *xhci, unsigned int num_ports,
 	if (port_offset == 0 || (port_offset + port_count - 1) > num_ports)
 		/* WTF? "Valid values are ‘1’ to MaxPorts" */
 		return;
+
+	/* cache usb2 port capabilities */
+	if (major_revision < 0x03 && xhci->num_ext_caps < max_caps)
+		xhci->ext_caps[xhci->num_ext_caps++] = temp;
 
 	/* Check the host's USB2 LPM capability */
 	if ((xhci->hci_version == 0x96) && (major_revision != 0x03) &&
@@ -2129,10 +2125,11 @@ static void xhci_add_in_port(struct xhci_hcd *xhci, unsigned int num_ports,
  */
 static int xhci_setup_port_arrays(struct xhci_hcd *xhci, gfp_t flags)
 {
-	__le32 __iomem *addr;
-	u32 offset;
+	__le32 __iomem *addr, *tmp_addr;
+	u32 offset, tmp_offset;
 	unsigned int num_ports;
 	int i, j, port_index;
+	int cap_count = 0;
 
 	addr = &xhci->cap_regs->hcc_params;
 	offset = XHCI_HCC_EXT_CAPS(xhci_readl(xhci, addr));
@@ -2165,13 +2162,32 @@ static int xhci_setup_port_arrays(struct xhci_hcd *xhci, gfp_t flags)
 	 * See section 5.3.6 for offset calculation.
 	 */
 	addr = &xhci->cap_regs->hc_capbase + offset;
+
+	tmp_addr = addr;
+	tmp_offset = offset;
+
+	/* count extended protocol capability entries for later caching */
+	do {
+		u32 cap_id;
+		cap_id = xhci_readl(xhci, tmp_addr);
+		if (XHCI_EXT_CAPS_ID(cap_id) == XHCI_EXT_CAPS_PROTOCOL)
+			cap_count++;
+		tmp_offset = XHCI_EXT_CAPS_NEXT(cap_id);
+		tmp_addr += tmp_offset;
+	} while (tmp_offset);
+
+	xhci->ext_caps = kzalloc(sizeof(*xhci->ext_caps) * cap_count, flags);
+	if (!xhci->ext_caps)
+		return -ENOMEM;
+
 	while (1) {
 		u32 cap_id;
 
 		cap_id = xhci_readl(xhci, addr);
 		if (XHCI_EXT_CAPS_ID(cap_id) == XHCI_EXT_CAPS_PROTOCOL)
 			xhci_add_in_port(xhci, num_ports, addr,
-					(u8) XHCI_EXT_PORT_MAJOR(cap_id));
+					(u8) XHCI_EXT_PORT_MAJOR(cap_id),
+					cap_count);
 		offset = XHCI_EXT_CAPS_NEXT(cap_id);
 		if (!offset || (xhci->num_usb2_ports + xhci->num_usb3_ports)
 				== num_ports)
@@ -2264,7 +2280,6 @@ int xhci_mem_init(struct xhci_hcd *xhci, gfp_t flags)
 	u32 page_size, temp;
 	int i;
 
-	INIT_LIST_HEAD(&xhci->lpm_failed_devs);
 	INIT_LIST_HEAD(&xhci->cancel_cmd_list);
 
 	page_size = xhci_readl(xhci, &xhci->op_regs->page_size);
@@ -2448,6 +2463,8 @@ int xhci_mem_init(struct xhci_hcd *xhci, gfp_t flags)
 	for (i = 0; i < USB_MAXCHILDREN; ++i) {
 		xhci->bus_state[0].resume_done[i] = 0;
 		xhci->bus_state[1].resume_done[i] = 0;
+		/* Only the USB 2.0 completions will ever be used. */
+		init_completion(&xhci->bus_state[1].rexit_done[i]);
 	}
 
 	if (scratchpad_alloc(xhci, flags))

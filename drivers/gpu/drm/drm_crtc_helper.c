@@ -39,6 +39,10 @@
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_edid.h>
 
+MODULE_AUTHOR("David Airlie, Jesse Barnes");
+MODULE_DESCRIPTION("DRM KMS helper");
+MODULE_LICENSE("GPL and additional rights");
+
 /**
  * drm_helper_move_panel_connectors_to_head() - move panels to the front in the
  * 						connector list
@@ -76,7 +80,8 @@ static void drm_mode_validate_flag(struct drm_connector *connector,
 {
 	struct drm_display_mode *mode;
 
-	if (flags == (DRM_MODE_FLAG_DBLSCAN | DRM_MODE_FLAG_INTERLACE))
+	if (flags == (DRM_MODE_FLAG_DBLSCAN | DRM_MODE_FLAG_INTERLACE |
+		      DRM_MODE_FLAG_3D_MASK))
 		return;
 
 	list_for_each_entry(mode, &connector->modes, head) {
@@ -86,6 +91,9 @@ static void drm_mode_validate_flag(struct drm_connector *connector,
 		if ((mode->flags & DRM_MODE_FLAG_DBLSCAN) &&
 				!(flags & DRM_MODE_FLAG_DBLSCAN))
 			mode->status = MODE_NO_DBLESCAN;
+		if ((mode->flags & DRM_MODE_FLAG_3D_MASK) &&
+				!(flags & DRM_MODE_FLAG_3D_MASK))
+			mode->status = MODE_NO_STEREO;
 	}
 
 	return;
@@ -175,6 +183,8 @@ int drm_helper_probe_single_connector_modes(struct drm_connector *connector,
 		mode_flags |= DRM_MODE_FLAG_INTERLACE;
 	if (connector->doublescan_allowed)
 		mode_flags |= DRM_MODE_FLAG_DBLSCAN;
+	if (connector->stereo_allowed)
+		mode_flags |= DRM_MODE_FLAG_3D_MASK;
 	drm_mode_validate_flag(connector, mode_flags);
 
 	list_for_each_entry(mode, &connector->modes, head) {

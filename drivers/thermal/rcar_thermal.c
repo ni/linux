@@ -458,7 +458,7 @@ static int rcar_thermal_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, common);
 
-	dev_info(dev, "%d sensor proved\n", i);
+	dev_info(dev, "%d sensor probed\n", i);
 
 	return 0;
 
@@ -486,8 +486,6 @@ static int rcar_thermal_remove(struct platform_device *pdev)
 		if (rcar_has_irq_support(priv))
 			rcar_thermal_irq_disable(priv);
 	}
-
-	platform_set_drvdata(pdev, NULL);
 
 	pm_runtime_put_sync(dev);
 	pm_runtime_disable(dev);

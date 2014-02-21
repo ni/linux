@@ -66,12 +66,6 @@ int udl_dumb_create(struct drm_file *file,
 			      args->size, &args->handle);
 }
 
-int udl_dumb_destroy(struct drm_file *file, struct drm_device *dev,
-		     uint32_t handle)
-{
-	return drm_gem_handle_delete(file, handle);
-}
-
 int udl_drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	int ret;
@@ -223,8 +217,7 @@ void udl_gem_free_object(struct drm_gem_object *gem_obj)
 	if (obj->pages)
 		udl_gem_put_pages(obj);
 
-	if (gem_obj->map_list.map)
-		drm_gem_free_mmap_offset(gem_obj);
+	drm_gem_free_mmap_offset(gem_obj);
 }
 
 /* the dumb interface doesn't work with the GEM straight MMAP
@@ -247,13 +240,11 @@ int udl_gem_mmap(struct drm_file *file, struct drm_device *dev,
 	ret = udl_gem_get_pages(gobj, GFP_KERNEL);
 	if (ret)
 		goto out;
-	if (!gobj->base.map_list.map) {
-		ret = drm_gem_create_mmap_offset(obj);
-		if (ret)
-			goto out;
-	}
+	ret = drm_gem_create_mmap_offset(obj);
+	if (ret)
+		goto out;
 
-	*offset = (u64)gobj->base.map_list.hash.key << PAGE_SHIFT;
+	*offset = drm_vma_node_offset_addr(&gobj->base.vma_node);
 
 out:
 	drm_gem_object_unreference(&gobj->base);

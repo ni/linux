@@ -142,15 +142,15 @@ static void pllc2_table_rebuild(struct clk *clk)
 	/* Initialise PLLC2 frequency table */
 	for (i = 0; i < ARRAY_SIZE(pllc2_freq_table) - 2; i++) {
 		pllc2_freq_table[i].frequency = clk->parent->rate * (i + 20) * 2;
-		pllc2_freq_table[i].index = i;
+		pllc2_freq_table[i].driver_data = i;
 	}
 
 	/* This is a special entry - switching PLL off makes it a repeater */
 	pllc2_freq_table[i].frequency = clk->parent->rate;
-	pllc2_freq_table[i].index = i;
+	pllc2_freq_table[i].driver_data = i;
 
 	pllc2_freq_table[++i].frequency = CPUFREQ_TABLE_END;
-	pllc2_freq_table[i].index = i;
+	pllc2_freq_table[i].driver_data = i;
 }
 
 static unsigned long pllc2_recalc(struct clk *clk)
@@ -504,10 +504,6 @@ static struct clk_lookup lookups[] = {
 	CLKDEV_CON_ID("spu_clk", &div6_clks[DIV6_SPU]),
 	CLKDEV_CON_ID("vou_clk", &div6_clks[DIV6_VOU]),
 	CLKDEV_CON_ID("hdmi_clk", &div6_reparent_clks[DIV6_HDMI]),
-	CLKDEV_ICK_ID("dsit_clk", "sh-mipi-dsi.0", &div6_clks[DIV6_DSIT]),
-	CLKDEV_ICK_ID("dsit_clk", "sh-mipi-dsi.1", &div6_clks[DIV6_DSIT]),
-	CLKDEV_ICK_ID("dsip_clk", "sh-mipi-dsi.0", &div6_clks[DIV6_DSI0P]),
-	CLKDEV_ICK_ID("dsip_clk", "sh-mipi-dsi.1", &div6_clks[DIV6_DSI1P]),
 
 	/* MSTP32 clocks */
 	CLKDEV_DEV_ID("i2c-sh_mobile.2", &mstp_clks[MSTP001]), /* IIC2 */
@@ -574,6 +570,11 @@ static struct clk_lookup lookups[] = {
 	CLKDEV_DEV_ID("sh_keysc.0", &mstp_clks[MSTP403]), /* KEYSC */
 	CLKDEV_DEV_ID("sh_cmt.2", &mstp_clks[MSTP400]), /* CMT2 */
 
+	/* ICK */
+	CLKDEV_ICK_ID("dsit_clk", "sh-mipi-dsi.0", &div6_clks[DIV6_DSIT]),
+	CLKDEV_ICK_ID("dsit_clk", "sh-mipi-dsi.1", &div6_clks[DIV6_DSIT]),
+	CLKDEV_ICK_ID("dsip_clk", "sh-mipi-dsi.0", &div6_clks[DIV6_DSI0P]),
+	CLKDEV_ICK_ID("dsip_clk", "sh-mipi-dsi.1", &div6_clks[DIV6_DSI1P]),
 	CLKDEV_ICK_ID("hdmi", "sh_mobile_lcdc_fb.1",
 		      &div6_reparent_clks[DIV6_HDMI]),
 	CLKDEV_ICK_ID("ick", "sh-mobile-hdmi", &div6_reparent_clks[DIV6_HDMI]),

@@ -29,6 +29,7 @@
  *      Dave Airlie <airlied@linux.ie>
  *      Jesse Barnes <jesse.barnes@intel.com>
  */
+#include <linux/ctype.h>
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/export.h>
@@ -91,7 +92,7 @@ EXPORT_SYMBOL(drm_warn_on_modeset_not_all_locked);
 
 /* Avoid boilerplate.  I'm tired of typing. */
 #define DRM_ENUM_NAME_FN(fnname, list)				\
-	char *fnname(int val)					\
+	const char *fnname(int val)				\
 	{							\
 		int i;						\
 		for (i = 0; i < ARRAY_SIZE(list); i++) {	\
@@ -104,7 +105,7 @@ EXPORT_SYMBOL(drm_warn_on_modeset_not_all_locked);
 /*
  * Global properties
  */
-static struct drm_prop_enum_list drm_dpms_enum_list[] =
+static const struct drm_prop_enum_list drm_dpms_enum_list[] =
 {	{ DRM_MODE_DPMS_ON, "On" },
 	{ DRM_MODE_DPMS_STANDBY, "Standby" },
 	{ DRM_MODE_DPMS_SUSPEND, "Suspend" },
@@ -116,7 +117,7 @@ DRM_ENUM_NAME_FN(drm_get_dpms_name, drm_dpms_enum_list)
 /*
  * Optional properties
  */
-static struct drm_prop_enum_list drm_scaling_mode_enum_list[] =
+static const struct drm_prop_enum_list drm_scaling_mode_enum_list[] =
 {
 	{ DRM_MODE_SCALE_NONE, "None" },
 	{ DRM_MODE_SCALE_FULLSCREEN, "Full" },
@@ -124,7 +125,7 @@ static struct drm_prop_enum_list drm_scaling_mode_enum_list[] =
 	{ DRM_MODE_SCALE_ASPECT, "Full aspect" },
 };
 
-static struct drm_prop_enum_list drm_dithering_mode_enum_list[] =
+static const struct drm_prop_enum_list drm_dithering_mode_enum_list[] =
 {
 	{ DRM_MODE_DITHERING_OFF, "Off" },
 	{ DRM_MODE_DITHERING_ON, "On" },
@@ -134,7 +135,7 @@ static struct drm_prop_enum_list drm_dithering_mode_enum_list[] =
 /*
  * Non-global properties, but "required" for certain connectors.
  */
-static struct drm_prop_enum_list drm_dvi_i_select_enum_list[] =
+static const struct drm_prop_enum_list drm_dvi_i_select_enum_list[] =
 {
 	{ DRM_MODE_SUBCONNECTOR_Automatic, "Automatic" }, /* DVI-I and TV-out */
 	{ DRM_MODE_SUBCONNECTOR_DVID,      "DVI-D"     }, /* DVI-I  */
@@ -143,7 +144,7 @@ static struct drm_prop_enum_list drm_dvi_i_select_enum_list[] =
 
 DRM_ENUM_NAME_FN(drm_get_dvi_i_select_name, drm_dvi_i_select_enum_list)
 
-static struct drm_prop_enum_list drm_dvi_i_subconnector_enum_list[] =
+static const struct drm_prop_enum_list drm_dvi_i_subconnector_enum_list[] =
 {
 	{ DRM_MODE_SUBCONNECTOR_Unknown,   "Unknown"   }, /* DVI-I and TV-out */
 	{ DRM_MODE_SUBCONNECTOR_DVID,      "DVI-D"     }, /* DVI-I  */
@@ -153,7 +154,7 @@ static struct drm_prop_enum_list drm_dvi_i_subconnector_enum_list[] =
 DRM_ENUM_NAME_FN(drm_get_dvi_i_subconnector_name,
 		 drm_dvi_i_subconnector_enum_list)
 
-static struct drm_prop_enum_list drm_tv_select_enum_list[] =
+static const struct drm_prop_enum_list drm_tv_select_enum_list[] =
 {
 	{ DRM_MODE_SUBCONNECTOR_Automatic, "Automatic" }, /* DVI-I and TV-out */
 	{ DRM_MODE_SUBCONNECTOR_Composite, "Composite" }, /* TV-out */
@@ -164,7 +165,7 @@ static struct drm_prop_enum_list drm_tv_select_enum_list[] =
 
 DRM_ENUM_NAME_FN(drm_get_tv_select_name, drm_tv_select_enum_list)
 
-static struct drm_prop_enum_list drm_tv_subconnector_enum_list[] =
+static const struct drm_prop_enum_list drm_tv_subconnector_enum_list[] =
 {
 	{ DRM_MODE_SUBCONNECTOR_Unknown,   "Unknown"   }, /* DVI-I and TV-out */
 	{ DRM_MODE_SUBCONNECTOR_Composite, "Composite" }, /* TV-out */
@@ -176,7 +177,7 @@ static struct drm_prop_enum_list drm_tv_subconnector_enum_list[] =
 DRM_ENUM_NAME_FN(drm_get_tv_subconnector_name,
 		 drm_tv_subconnector_enum_list)
 
-static struct drm_prop_enum_list drm_dirty_info_enum_list[] = {
+static const struct drm_prop_enum_list drm_dirty_info_enum_list[] = {
 	{ DRM_MODE_DIRTY_OFF,      "Off"      },
 	{ DRM_MODE_DIRTY_ON,       "On"       },
 	{ DRM_MODE_DIRTY_ANNOTATE, "Annotate" },
@@ -184,42 +185,60 @@ static struct drm_prop_enum_list drm_dirty_info_enum_list[] = {
 
 struct drm_conn_prop_enum_list {
 	int type;
-	char *name;
-	int count;
+	const char *name;
+	struct ida ida;
 };
 
 /*
  * Connector and encoder types.
  */
 static struct drm_conn_prop_enum_list drm_connector_enum_list[] =
-{	{ DRM_MODE_CONNECTOR_Unknown, "Unknown", 0 },
-	{ DRM_MODE_CONNECTOR_VGA, "VGA", 0 },
-	{ DRM_MODE_CONNECTOR_DVII, "DVI-I", 0 },
-	{ DRM_MODE_CONNECTOR_DVID, "DVI-D", 0 },
-	{ DRM_MODE_CONNECTOR_DVIA, "DVI-A", 0 },
-	{ DRM_MODE_CONNECTOR_Composite, "Composite", 0 },
-	{ DRM_MODE_CONNECTOR_SVIDEO, "SVIDEO", 0 },
-	{ DRM_MODE_CONNECTOR_LVDS, "LVDS", 0 },
-	{ DRM_MODE_CONNECTOR_Component, "Component", 0 },
-	{ DRM_MODE_CONNECTOR_9PinDIN, "DIN", 0 },
-	{ DRM_MODE_CONNECTOR_DisplayPort, "DP", 0 },
-	{ DRM_MODE_CONNECTOR_HDMIA, "HDMI-A", 0 },
-	{ DRM_MODE_CONNECTOR_HDMIB, "HDMI-B", 0 },
-	{ DRM_MODE_CONNECTOR_TV, "TV", 0 },
-	{ DRM_MODE_CONNECTOR_eDP, "eDP", 0 },
-	{ DRM_MODE_CONNECTOR_VIRTUAL, "Virtual", 0},
+{	{ DRM_MODE_CONNECTOR_Unknown, "Unknown" },
+	{ DRM_MODE_CONNECTOR_VGA, "VGA" },
+	{ DRM_MODE_CONNECTOR_DVII, "DVI-I" },
+	{ DRM_MODE_CONNECTOR_DVID, "DVI-D" },
+	{ DRM_MODE_CONNECTOR_DVIA, "DVI-A" },
+	{ DRM_MODE_CONNECTOR_Composite, "Composite" },
+	{ DRM_MODE_CONNECTOR_SVIDEO, "SVIDEO" },
+	{ DRM_MODE_CONNECTOR_LVDS, "LVDS" },
+	{ DRM_MODE_CONNECTOR_Component, "Component" },
+	{ DRM_MODE_CONNECTOR_9PinDIN, "DIN" },
+	{ DRM_MODE_CONNECTOR_DisplayPort, "DP" },
+	{ DRM_MODE_CONNECTOR_HDMIA, "HDMI-A" },
+	{ DRM_MODE_CONNECTOR_HDMIB, "HDMI-B" },
+	{ DRM_MODE_CONNECTOR_TV, "TV" },
+	{ DRM_MODE_CONNECTOR_eDP, "eDP" },
+	{ DRM_MODE_CONNECTOR_VIRTUAL, "Virtual" },
+	{ DRM_MODE_CONNECTOR_DSI, "DSI" },
 };
 
-static struct drm_prop_enum_list drm_encoder_enum_list[] =
+static const struct drm_prop_enum_list drm_encoder_enum_list[] =
 {	{ DRM_MODE_ENCODER_NONE, "None" },
 	{ DRM_MODE_ENCODER_DAC, "DAC" },
 	{ DRM_MODE_ENCODER_TMDS, "TMDS" },
 	{ DRM_MODE_ENCODER_LVDS, "LVDS" },
 	{ DRM_MODE_ENCODER_TVDAC, "TV" },
 	{ DRM_MODE_ENCODER_VIRTUAL, "Virtual" },
+	{ DRM_MODE_ENCODER_DSI, "DSI" },
 };
 
-char *drm_get_encoder_name(struct drm_encoder *encoder)
+void drm_connector_ida_init(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(drm_connector_enum_list); i++)
+		ida_init(&drm_connector_enum_list[i].ida);
+}
+
+void drm_connector_ida_destroy(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(drm_connector_enum_list); i++)
+		ida_destroy(&drm_connector_enum_list[i].ida);
+}
+
+const char *drm_get_encoder_name(const struct drm_encoder *encoder)
 {
 	static char buf[32];
 
@@ -230,7 +249,7 @@ char *drm_get_encoder_name(struct drm_encoder *encoder)
 }
 EXPORT_SYMBOL(drm_get_encoder_name);
 
-char *drm_get_connector_name(struct drm_connector *connector)
+const char *drm_get_connector_name(const struct drm_connector *connector)
 {
 	static char buf[32];
 
@@ -241,7 +260,7 @@ char *drm_get_connector_name(struct drm_connector *connector)
 }
 EXPORT_SYMBOL(drm_get_connector_name);
 
-char *drm_get_connector_status_name(enum drm_connector_status status)
+const char *drm_get_connector_status_name(enum drm_connector_status status)
 {
 	if (status == connector_status_connected)
 		return "connected";
@@ -251,6 +270,28 @@ char *drm_get_connector_status_name(enum drm_connector_status status)
 		return "unknown";
 }
 EXPORT_SYMBOL(drm_get_connector_status_name);
+
+static char printable_char(int c)
+{
+	return isascii(c) && isprint(c) ? c : '?';
+}
+
+const char *drm_get_format_name(uint32_t format)
+{
+	static char buf[32];
+
+	snprintf(buf, sizeof(buf),
+		 "%c%c%c%c %s-endian (0x%08x)",
+		 printable_char(format & 0xff),
+		 printable_char((format >> 8) & 0xff),
+		 printable_char((format >> 16) & 0xff),
+		 printable_char((format >> 24) & 0x7f),
+		 format & DRM_FORMAT_BIG_ENDIAN ? "big" : "little",
+		 format);
+
+	return buf;
+}
+EXPORT_SYMBOL(drm_get_format_name);
 
 /**
  * drm_mode_object_get - allocate a new modeset identifier
@@ -695,6 +736,8 @@ int drm_connector_init(struct drm_device *dev,
 		       int connector_type)
 {
 	int ret;
+	struct ida *connector_ida =
+		&drm_connector_enum_list[connector_type].ida;
 
 	drm_modeset_lock_all(dev);
 
@@ -707,7 +750,12 @@ int drm_connector_init(struct drm_device *dev,
 	connector->funcs = funcs;
 	connector->connector_type = connector_type;
 	connector->connector_type_id =
-		++drm_connector_enum_list[connector_type].count; /* TODO */
+		ida_simple_get(connector_ida, 1, 0, GFP_KERNEL);
+	if (connector->connector_type_id < 0) {
+		ret = connector->connector_type_id;
+		drm_mode_object_put(dev, &connector->base);
+		goto out;
+	}
 	INIT_LIST_HEAD(&connector->probed_modes);
 	INIT_LIST_HEAD(&connector->modes);
 	connector->edid_blob_ptr = NULL;
@@ -747,6 +795,9 @@ void drm_connector_cleanup(struct drm_connector *connector)
 
 	list_for_each_entry_safe(mode, t, &connector->modes, head)
 		drm_mode_remove(connector, mode);
+
+	ida_remove(&drm_connector_enum_list[connector->connector_type].ida,
+		   connector->connector_type_id);
 
 	drm_mode_object_put(dev, &connector->base);
 	list_del(&connector->head);
@@ -1834,7 +1885,8 @@ int drm_mode_setplane(struct drm_device *dev, void *data,
 		if (fb->pixel_format == plane->format_types[i])
 			break;
 	if (i == plane->format_count) {
-		DRM_DEBUG_KMS("Invalid pixel format 0x%08x\n", fb->pixel_format);
+		DRM_DEBUG_KMS("Invalid pixel format %s\n",
+			      drm_get_format_name(fb->pixel_format));
 		ret = -EINVAL;
 		goto out;
 	}
@@ -2312,7 +2364,8 @@ static int framebuffer_check(const struct drm_mode_fb_cmd2 *r)
 
 	ret = format_check(r);
 	if (ret) {
-		DRM_DEBUG_KMS("bad framebuffer format 0x%08x\n", r->pixel_format);
+		DRM_DEBUG_KMS("bad framebuffer format %s\n",
+			      drm_get_format_name(r->pixel_format));
 		return ret;
 	}
 
@@ -3496,7 +3549,7 @@ int drm_mode_page_flip_ioctl(struct drm_device *dev,
 	}
 
 	old_fb = crtc->fb;
-	ret = crtc->funcs->page_flip(crtc, fb, e);
+	ret = crtc->funcs->page_flip(crtc, fb, e, page_flip->flags);
 	if (ret) {
 		if (page_flip->flags & DRM_MODE_PAGE_FLIP_EVENT) {
 			spin_lock_irqsave(&dev->event_lock, flags);

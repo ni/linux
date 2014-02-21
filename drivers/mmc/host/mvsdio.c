@@ -778,7 +778,7 @@ static int __init mvsd_probe(struct platform_device *pdev)
 	}
 
 	if (gpio_is_valid(gpio_card_detect)) {
-		ret = mmc_gpio_request_cd(mmc, gpio_card_detect);
+		ret = mmc_gpio_request_cd(mmc, gpio_card_detect, 0);
 		if (ret)
 			goto out;
 	} else
@@ -827,7 +827,6 @@ static int __exit mvsd_remove(struct platform_device *pdev)
 		clk_disable_unprepare(host->clk);
 	mmc_free_host(mmc);
 
-	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
 
