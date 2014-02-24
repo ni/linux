@@ -1050,28 +1050,28 @@ static const struct file_operations nizynqcpld_watchdog_misc_fops = {
 
 static struct nizynqcpld_led_desc proto_leds[] = {
 	{
-		.name			= "nizynqcpld:user1:green",
+		.name			= "nilrt:user1:green",
 		.addr			= PROTO_SWITCHANDLED,
 		.bit			= 1 << 4,
 	},
 	{
-		.name			= "nizynqcpld:user1:yellow",
+		.name			= "nilrt:user1:yellow",
 		.addr			= PROTO_SWITCHANDLED,
 		.bit			= 1 << 3,
 	},
 	{
-		.name			= "nizynqcpld:status:yellow",
+		.name			= "nilrt:status:yellow",
 		.addr			= PROTO_SWITCHANDLED,
 		.bit			= 1 << 2,
 	},
 	{
-		.name			= "nizynqcpld:eth1:green",
+		.name			= "nilrt:eth1:green",
 		.addr			= PROTO_ETHERNETLED,
 		.bit			= 1 << 1,
 		.default_trigger	= "e000b000:00:100Mb",
 	},
 	{
-		.name			= "nizynqcpld:eth1:yellow",
+		.name			= "nilrt:eth1:yellow",
 		.addr			= PROTO_ETHERNETLED,
 		.bit			= 1 << 0,
 		.default_trigger	= "e000b000:00:Gb",
@@ -1080,22 +1080,22 @@ static struct nizynqcpld_led_desc proto_leds[] = {
 
 static struct nizynqcpld_led_desc dosx_leds[] = {
 	{
-		.name			= "nizynqcpld:user1:green",
+		.name			= "nilrt:user1:green",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nizynqcpld:user1:yellow",
+		.name			= "nilrt:user1:yellow",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 4,
 	},
 	{
-		.name			= "nizynqcpld:status:red",
+		.name			= "nilrt:status:red",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 3,
 	},
 	{
-		.name			= "nizynqcpld:status:yellow",
+		.name			= "nilrt:status:yellow",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 2,
 		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
@@ -1103,35 +1103,35 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 		.max_brightness		= 0xffff,
 	},
 	{
-		.name			= "nizynqcpld:wifi:green",
+		.name			= "nilrt:wifi:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nizynqcpld:wifi:yellow",
+		.name			= "nilrt:wifi:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 4,
 	},
 	{
-		.name			= "nizynqcpld:eth1:green",
+		.name			= "nilrt:eth1:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 3,
 		.default_trigger	= "e000b000:01:100Mb",
 	},
 	{
-		.name			= "nizynqcpld:eth1:yellow",
+		.name			= "nilrt:eth1:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 2,
 		.default_trigger	= "e000b000:01:Gb",
 	},
 	{
-		.name			= "nizynqcpld:eth0:green",
+		.name			= "nilrt:eth0:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
 		.default_trigger	= "e000b000:00:100Mb",
 	},
 	{
-		.name			= "nizynqcpld:eth0:yellow",
+		.name			= "nilrt:eth0:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
 		.default_trigger	= "e000b000:00:Gb",
@@ -1140,12 +1140,12 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 
 static struct nizynqcpld_led_desc sol_leds[] = {
 	{
-		.name			= "nizynqcpld:user1:green",
+		.name			= "nilrt:user1:green",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nizynqcpld:status:yellow",
+		.name			= "nilrt:status:yellow",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 2,
 		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
@@ -1154,25 +1154,25 @@ static struct nizynqcpld_led_desc sol_leds[] = {
 		.max_brightness		= 0xffff,
 	},
 	{
-		.name			= "nizynqcpld:eth1:green",
+		.name			= "nilrt:eth1:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 3,
 		.default_trigger	= "e000b000:01:100Mb",
 	},
 	{
-		.name			= "nizynqcpld:eth1:yellow",
+		.name			= "nilrt:eth1:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 2,
 		.default_trigger	= "e000b000:01:Gb",
 	},
 	{
-		.name			= "nizynqcpld:eth0:green",
+		.name			= "nilrt:eth0:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
 		.default_trigger	= "e000b000:00:100Mb",
 	},
 	{
-		.name			= "nizynqcpld:eth0:yellow",
+		.name			= "nilrt:eth0:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
 		.default_trigger	= "e000b000:00:Gb",
@@ -1181,12 +1181,12 @@ static struct nizynqcpld_led_desc sol_leds[] = {
 
 static struct nizynqcpld_led_desc tecate_leds[] = {
 	{
-		.name			= "nizynqcpld:user1:green",
+		.name			= "nilrt:user1:green",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nizynqcpld:status:yellow",
+		.name			= "nilrt:status:yellow",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 2,
 		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
@@ -1195,13 +1195,13 @@ static struct nizynqcpld_led_desc tecate_leds[] = {
 		.max_brightness		= 0xffff,
 	},
 	{
-		.name			= "nizynqcpld:eth0:green",
+		.name			= "nilrt:eth0:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
 		.default_trigger	= "e000b000:00:100Mb",
 	},
 	{
-		.name			= "nizynqcpld:eth0:yellow",
+		.name			= "nilrt:eth0:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
 		.default_trigger	= "e000b000:00:Gb",
