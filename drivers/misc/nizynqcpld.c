@@ -1103,12 +1103,12 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 		.max_brightness		= 0xffff,
 	},
 	{
-		.name			= "nilrt:wifi:green",
+		.name			= "nilrt:wifi:primary",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nilrt:wifi:yellow",
+		.name			= "nilrt:wifi:secondary",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 4,
 	},
