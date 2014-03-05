@@ -311,6 +311,7 @@ header-y += nfs_fs.h
 header-y += nfs.h
 header-y += nfs_idmap.h
 header-y += nfs_mount.h
+header-y += niwatchdog.h
 header-y += nl80211.h
 header-y += n_r3964.h
 header-y += nubus.h
