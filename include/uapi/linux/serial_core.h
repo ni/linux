@@ -281,4 +281,7 @@
 /* MediaTek BTIF */
 #define PORT_MTK_BTIF	117
 
+/* National Instruments 16550 UART */
+#define PORT_NI16550	118
+
 #endif /* _UAPILINUX_SERIAL_CORE_H */
