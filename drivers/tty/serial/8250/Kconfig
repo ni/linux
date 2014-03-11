@@ -342,3 +342,9 @@ config SERIAL_8250_MT6577
 	help
 	  If you have a Mediatek based board and want to use the
 	  serial port, say Y to this option. If unsure, say N.
+
+config SERIAL_8250_NI16550
+	bool "NI 16550 UART support"
+	depends on SERIAL_8250
+	help
+	  This driver supports the National Instruments (NI) 16550 UART port.
