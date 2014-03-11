@@ -546,3 +546,9 @@ config SERIAL_OF_PLATFORM
 	  are probed through devicetree, including Open Firmware based
 	  PowerPC systems and embedded systems on architectures using the
 	  flattened device tree format.
+
+config SERIAL_8250_NI16550
+	bool "NI 16550 UART support"
+	depends on SERIAL_8250
+	help
+	  This driver supports the National Instruments (NI) 16550 UART port.
