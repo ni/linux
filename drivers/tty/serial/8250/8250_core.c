@@ -357,6 +357,13 @@ configured less than Maximum supported fifo bytes */
 		.rxtrig_bytes	= {1, 4, 8, 14},
 		.flags		= UART_CAP_FIFO,
 	},
+	[PORT_NI16550] = {
+		.name		= "NI 16550",
+		.fifo_size	= 128,
+		.tx_loadsz	= 128,
+		.fcr		= UART_FCR_ENABLE_FIFO | UART_FCR_R_TRIG_10,
+		.flags		= UART_CAP_FIFO | UART_CAP_AFE | UART_CAP_EFR,
+	},
 };
 
 /* Uart divisor latch read */
