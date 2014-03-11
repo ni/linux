@@ -238,4 +238,7 @@
 /* Tilera TILE-Gx UART */
 #define PORT_TILEGX	106
 
+/* National Instruments 16550 UART */
+#define PORT_NI16550	104
+
 #endif /* _UAPILINUX_SERIAL_CORE_H */
