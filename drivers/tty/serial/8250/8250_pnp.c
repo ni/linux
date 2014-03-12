@@ -21,8 +21,20 @@
 
 #include "8250.h"
 
+#include <linux/ni16550.h>
+
 #define UNKNOWN_DEV 0x3000
 #define CIR_PORT	0x0800
+
+#define NI_PORT_ID "NIC7750"
+#define NI_PORT_CLK 33333333
+static bool is_niport(struct pnp_dev *dev)
+{
+	if (strncmp(dev->id->id, NI_PORT_ID, sizeof(NI_PORT_ID)) == 0)
+		return true;
+	else
+		return false;
+}
 
 static const struct pnp_device_id pnp_dev_table[] = {
 	/* Archtek America Corp. */
@@ -191,6 +203,8 @@ static const struct pnp_device_id pnp_dev_table[] = {
 	/* Com 1 */
 	/*  Deskline K56 Phone System PnP */
 	{	"MVX00A1",		0	},
+	/* National Instruments (NI) 16550 PNP */
+	{	NI_PORT_ID,		0	},
 	/* PC Rider K56 Phone System PnP */
 	{	"MVX00F2",		0	},
 	/* NEC 98NOTE SPEAKER PHONE FAX MODEM(33600bps) */
@@ -475,6 +489,14 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 	device_property_read_u32(&dev->dev, "clock-frequency", &uart.port.uartclk);
 	uart.port.dev = &dev->dev;
 
+#ifdef CONFIG_SERIAL_8250_NI16550
+	if (is_niport(dev)) {
+		uart.port.uartclk = NI_PORT_CLK;
+		uart.port.flags |= UPF_FIXED_PORT | UPF_FIXED_TYPE;
+		uart.port.type = PORT_NI16550;
+		ni16550_port_setup(&uart.port);
+	}
+#endif
 	line = serial8250_register_8250_port(&uart);
 	if (line < 0 || (flags & CIR_PORT))
 		return -ENODEV;
