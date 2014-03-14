@@ -774,19 +774,6 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		return -ENODEV;
 	}
 
-	err = sysfs_create_files(&nirtfeatures->acpi_device->dev.kobj,
-				 nirtfeatures_attrs);
-	if (0 != err) {
-		nirtfeatures_acpi_remove(device);
-		return err;
-	}
-
-	err = nirtfeatures_create_leds(nirtfeatures);
-	if (0 != err) {
-		nirtfeatures_acpi_remove(device);
-		return err;
-	}
-
 	spin_lock_init(&nirtfeatures->lock);
 
 	nirtfeatures->revision[0] = inb(nirtfeatures->io_base + NIRTF_YEAR);
@@ -800,6 +787,19 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	if (!(procmode & NIRTF_PROCESSOR_MODE_HARD_BOOT_N)) {
 		procmode |= NIRTF_PROCESSOR_MODE_HARD_BOOT_N;
 		outb(procmode, nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	}
+
+	err = sysfs_create_files(&nirtfeatures->acpi_device->dev.kobj,
+				 nirtfeatures_attrs);
+	if (0 != err) {
+		nirtfeatures_acpi_remove(device);
+		return err;
+	}
+
+	err = nirtfeatures_create_leds(nirtfeatures);
+	if (0 != err) {
+		nirtfeatures_acpi_remove(device);
+		return err;
 	}
 
 	dev_info(&nirtfeatures->acpi_device->dev,
