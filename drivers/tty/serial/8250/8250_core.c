@@ -511,7 +511,7 @@ static void __init serial8250_isa_init_ports(void)
 	if (nr_uarts > UART_NR)
 		nr_uarts = UART_NR;
 
-	for (i = 0; i < nr_uarts; i++) {
+	for (i = 0; i < UART_NR; i++) {
 		struct uart_8250_port *up = &serial8250_ports[i];
 		struct uart_port *port = &up->port;
 
@@ -612,7 +612,7 @@ static int univ8250_console_setup(struct console *co, char *options)
 	 * if so, search for the first available port that does have
 	 * console support.
 	 */
-	if (co->index >= nr_uarts)
+	if (co->index >= UART_NR)
 		co->index = 0;
 	port = &serial8250_ports[co->index].port;
 	/* link port to console */
@@ -665,7 +665,7 @@ static int univ8250_console_match(struct console *co, char *name, int idx,
 		return -ENODEV;
 
 	/* try to match the port specified on the command line */
-	for (i = 0; i < nr_uarts; i++) {
+	for (i = 0; i < UART_NR; i++) {
 		struct uart_port *port = &serial8250_ports[i].port;
 
 		if (port->iotype != iotype)
@@ -700,9 +700,6 @@ static struct console univ8250_console = {
 
 static int __init univ8250_console_init(void)
 {
-	if (nr_uarts == 0)
-		return -ENODEV;
-
 	serial8250_isa_init_ports();
 	register_console(&univ8250_console);
 	return 0;
@@ -733,7 +730,7 @@ int __init early_serial_setup(struct uart_port *port)
 {
 	struct uart_port *p;
 
-	if (port->line >= ARRAY_SIZE(serial8250_ports) || nr_uarts == 0)
+	if (port->line >= ARRAY_SIZE(serial8250_ports))
 		return -ENODEV;
 
 	serial8250_isa_init_ports();
@@ -873,7 +870,7 @@ static int serial8250_remove(struct platform_device *dev)
 {
 	int i;
 
-	for (i = 0; i < nr_uarts; i++) {
+	for (i = 0; i < UART_NR; i++) {
 		struct uart_8250_port *up = &serial8250_ports[i];
 
 		if (up->port.dev == &dev->dev)
@@ -940,7 +937,7 @@ static struct uart_8250_port *serial8250_find_match_or_unused(const struct uart_
 	/*
 	 * First, find a port entry which matches.
 	 */
-	for (i = 0; i < nr_uarts; i++)
+	for (i = 0; i < UART_NR; i++)
 		if (uart_match_port(&serial8250_ports[i].port, port))
 			return &serial8250_ports[i];
 
@@ -954,7 +951,7 @@ static struct uart_8250_port *serial8250_find_match_or_unused(const struct uart_
 	 * free entry.  We look for one which hasn't been previously
 	 * used (indicated by zero iobase).
 	 */
-	for (i = 0; i < nr_uarts; i++)
+	for (i = 0; i < UART_NR; i++)
 		if (serial8250_ports[i].port.type == PORT_UNKNOWN &&
 		    serial8250_ports[i].port.iobase == 0)
 			return &serial8250_ports[i];
@@ -963,7 +960,7 @@ static struct uart_8250_port *serial8250_find_match_or_unused(const struct uart_
 	 * That also failed.  Last resort is to find any entry which
 	 * doesn't have a real port associated with it.
 	 */
-	for (i = 0; i < nr_uarts; i++)
+	for (i = 0; i < UART_NR; i++)
 		if (serial8250_ports[i].port.type == PORT_UNKNOWN)
 			return &serial8250_ports[i];
 
@@ -1191,9 +1188,6 @@ EXPORT_SYMBOL(serial8250_unregister_port);
 static int __init serial8250_init(void)
 {
 	int ret;
-
-	if (nr_uarts == 0)
-		return -ENODEV;
 
 	serial8250_isa_init_ports();
 
