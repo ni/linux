@@ -211,6 +211,10 @@ static ssize_t nirtfeatures_reset_set(struct device *dev,
 
 static DEVICE_ATTR(reset, S_IWUSR, NULL, nirtfeatures_reset_set);
 
+static const char * const nirtfeatures_reset_source_strings[] = {
+	"button", "processor", "fpga", "watchdog", "software", "softoff",
+};
+
 static ssize_t nirtfeatures_reset_source_get(struct device *dev,
 					     struct device_attribute *attr,
 					     char *buf)
@@ -218,48 +222,16 @@ static ssize_t nirtfeatures_reset_source_get(struct device *dev,
 	struct acpi_device *acpi_device = to_acpi_device(dev);
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
-	const char *reset_source;
+	int i;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_RESET_SOURCE);
 
-	data &= NIRTF_PROCESSOR_MODE_HARD_BOOT_N;
+	for (i = 0; i < ARRAY_SIZE(nirtfeatures_reset_source_strings); i++)
+		if ((1 << i) & data)
+			return sprintf(buf, "%s\n",
+				       nirtfeatures_reset_source_strings[i]);
 
-	/* Power-on reset status is in a different register from the other reset
-	   sources, we must check it first. */
-	if (!data) {
-		reset_source = "power-on reset";
-	} else {
-		data = inb(nirtfeatures->io_base + NIRTF_RESET_SOURCE);
-
-		switch (data) {
-		case NIRTF_RESET_SOURCE_SOFT_OFF:
-			reset_source = "soft off button";
-			break;
-		case NIRTF_RESET_SOURCE_SOFTWARE:
-			reset_source = "software";
-			break;
-		case NIRTF_RESET_SOURCE_WATCHDOG:
-			reset_source = "watchdog";
-			break;
-		case NIRTF_RESET_SOURCE_FPGA:
-			reset_source = "FPGA";
-			break;
-		case NIRTF_RESET_SOURCE_PROCESSOR:
-			reset_source = "processor";
-			break;
-		case NIRTF_RESET_SOURCE_BUTTON:
-			reset_source = "reset button";
-			break;
-		default:
-			dev_err(&nirtfeatures->acpi_device->dev,
-				"Unrecognized reset source 0x%02X\n",
-				data);
-			reset_source = "unknown";
-			break;
-		}
-	}
-
-	return sprintf(buf, "%s\n", reset_source);
+	return sprintf(buf, "poweron\n");
 }
 
 static DEVICE_ATTR(reset_source, S_IRUGO, nirtfeatures_reset_source_get, NULL);
