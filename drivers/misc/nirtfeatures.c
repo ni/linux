@@ -771,6 +771,14 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		return -ENODEV;
 	}
 
+	spin_lock_init(&nirtfeatures->lock);
+
+	nirtfeatures->revision[0] = inb(nirtfeatures->io_base + NIRTF_YEAR);
+	nirtfeatures->revision[1] = inb(nirtfeatures->io_base + NIRTF_MONTH);
+	nirtfeatures->revision[2] = inb(nirtfeatures->io_base + NIRTF_DAY);
+	nirtfeatures->revision[3] = inb(nirtfeatures->io_base + NIRTF_HOUR);
+	nirtfeatures->revision[4] = inb(nirtfeatures->io_base + NIRTF_MINUTE);
+
 	err = sysfs_create_files(&nirtfeatures->acpi_device->dev.kobj,
 				 nirtfeatures_attrs);
 	if (0 != err) {
@@ -783,14 +791,6 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		nirtfeatures_acpi_remove(device);
 		return err;
 	}
-
-	spin_lock_init(&nirtfeatures->lock);
-
-	nirtfeatures->revision[0] = inb(nirtfeatures->io_base + NIRTF_YEAR);
-	nirtfeatures->revision[1] = inb(nirtfeatures->io_base + NIRTF_MONTH);
-	nirtfeatures->revision[2] = inb(nirtfeatures->io_base + NIRTF_DAY);
-	nirtfeatures->revision[3] = inb(nirtfeatures->io_base + NIRTF_HOUR);
-	nirtfeatures->revision[4] = inb(nirtfeatures->io_base + NIRTF_MINUTE);
 
 	dev_info(&nirtfeatures->acpi_device->dev,
 		 "IO range 0x%04X-0x%04X\n",
