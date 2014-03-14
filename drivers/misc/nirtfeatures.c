@@ -264,9 +264,9 @@ static ssize_t nirtfeatures_reset_source_get(struct device *dev,
 
 static DEVICE_ATTR(reset_source, S_IRUGO, nirtfeatures_reset_source_get, NULL);
 
-static ssize_t nirtfeatures_hard_boot_get(struct device *dev,
-					  struct device_attribute *attr,
-					  char *buf)
+static ssize_t nirtfeatures_soft_reset_get(struct device *dev,
+					   struct device_attribute *attr,
+					   char *buf)
 {
 	struct acpi_device *acpi_device = to_acpi_device(dev);
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
@@ -276,35 +276,10 @@ static ssize_t nirtfeatures_hard_boot_get(struct device *dev,
 
 	data &= NIRTF_PROCESSOR_MODE_HARD_BOOT_N;
 
-	return sprintf(buf, "%s\n", data ? "soft reset" : "power-on reset");
+	return sprintf(buf, "%u\n", !!data);
 }
 
-static ssize_t nirtfeatures_hard_boot_set(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
-	u8 data;
-
-	if (strcmp(buf, "1"))
-		return -EINVAL;
-
-	spin_lock(&nirtfeatures->lock);
-
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-
-	data |= NIRTF_PROCESSOR_MODE_HARD_BOOT_N;
-
-	outb(data, nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-
-	spin_unlock(&nirtfeatures->lock);
-
-	return count;
-}
-
-static DEVICE_ATTR(hard_boot, S_IRUGO|S_IWUSR, nirtfeatures_hard_boot_get,
-	nirtfeatures_hard_boot_set);
+static DEVICE_ATTR(soft_reset, S_IRUGO, nirtfeatures_soft_reset_get, NULL);
 
 static ssize_t nirtfeatures_no_fpga_get(struct device *dev,
 					struct device_attribute *attr,
@@ -514,7 +489,7 @@ static const struct attribute *nirtfeatures_attrs[] = {
 	&dev_attr_railstatus2.attr,
 	&dev_attr_reset.attr,
 	&dev_attr_reset_source.attr,
-	&dev_attr_hard_boot.attr,
+	&dev_attr_soft_reset.attr,
 	&dev_attr_no_fpga.attr,
 	&dev_attr_recovery_mode.attr,
 	&dev_attr_console_out.attr,
