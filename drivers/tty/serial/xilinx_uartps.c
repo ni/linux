@@ -940,6 +940,25 @@ static void xuartps_enable_ms(struct uart_port *port)
 	/* N/A */
 }
 
+#ifdef CONFIG_CONSOLE_POLL
+static int xuartps_get_poll_char(struct uart_port *port)
+{
+	if((xuartps_readl(XUARTPS_SR_OFFSET) & XUARTPS_SR_RXEMPTY) == XUARTPS_SR_RXEMPTY)
+		return NO_POLL_CHAR;
+
+	return xuartps_readl(XUARTPS_FIFO_OFFSET);
+}
+
+static void xuartps_put_poll_char(struct uart_port *port, unsigned char c)
+{
+	while ((xuartps_readl(XUARTPS_SR_OFFSET) & XUARTPS_SR_TXEMPTY)
+			!= XUARTPS_SR_TXEMPTY)
+		barrier();
+
+	xuartps_writel(c, XUARTPS_FIFO_OFFSET);
+}
+#endif
+
 /** The UART operations structure
  */
 static struct uart_ops xuartps_ops = {
@@ -972,6 +991,10 @@ static struct uart_ops xuartps_ops = {
 	.config_port	= xuartps_config_port,	/* Configure when driver
 						 * adds a xuartps port
 						 */
+#ifdef CONFIG_CONSOLE_POLL
+	.poll_get_char = xuartps_get_poll_char,
+	.poll_put_char = xuartps_put_poll_char,
+#endif
 };
 
 static struct uart_port xuartps_port[2];
