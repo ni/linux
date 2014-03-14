@@ -122,6 +122,8 @@ static int ni16550_config_rs485(struct uart_port *port,
 static void
 ni16550_set_rs485_defaults(struct serial_rs485 *rs485)
 {
+	/* The hardware comes up by default in 2-wire auto mode and we
+	 * set the flags to represent that */
 	rs485->flags = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND;
 }
 
