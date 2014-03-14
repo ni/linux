@@ -69,7 +69,7 @@ static void __init __serial8250_isa_init_ports(void)
 	 * default to CONFIG_SERIAL_8250_RUNTIME_UARTS. Note that we do not
 	 * need to increase nr_uarts when setting up the initial ISA ports.
 	 */
-	for (i = 0; i < nr_uarts; i++)
+	for (i = 0; i < UART_NR; i++)
 		serial8250_setup_port(i);
 
 	/* chain base port ops to support Remote Supervisor Adapter */
@@ -241,7 +241,7 @@ static void serial8250_remove(struct platform_device *dev)
 {
 	int i;
 
-	for (i = 0; i < nr_uarts; i++) {
+	for (i = 0; i < UART_NR; i++) {
 		struct uart_8250_port *up = serial8250_get_port(i);
 
 		if (up->port.dev == &dev->dev)
@@ -303,9 +303,6 @@ struct platform_device *serial8250_isa_devs;
 static int __init serial8250_init(void)
 {
 	int ret;
-
-	if (nr_uarts == 0)
-		return -ENODEV;
 
 	serial8250_isa_init_ports();
 
