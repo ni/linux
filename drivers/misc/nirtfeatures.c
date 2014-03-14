@@ -35,6 +35,7 @@
 #define NIRTF_BPINFO		0x07
 #define NIRTF_RAIL_STATUS1	0x08
 #define NIRTF_RAIL_STATUS2	0x09
+#define NIRTF_LOCK		0x0F
 #define NIRTF_RESET		0x10
 #define NIRTF_RESET_SOURCE	0x11
 #define NIRTF_PROCESSOR_MODE	0x12
@@ -42,6 +43,8 @@
 #define NIRTF_STATUS_LED_SHIFT1	0x21
 #define NIRTF_STATUS_LED_SHIFT0	0x22
 #define NIRTF_RT_LEDS		0x23
+#define NIRTF_DEBUG_SWITCH	0x30
+#define NIRTF_GP_BUTTON		0x31
 
 #define NIRTF_IO_SIZE	0x40
 
@@ -403,8 +406,9 @@ static ssize_t nirtfeatures_register_dump_get(struct device *dev,
 	struct acpi_device *acpi_device = to_acpi_device(dev);
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 signature, year, month, day, hour, minute, scratch, bpinfo;
-	u8 railstatus1, railstatus2, reset, reset_source, processor_mode;
+	u8 railstatus1, railstatus2, lock, reset, reset_source, processor_mode;
 	u8 system_leds, status_led_shift1, status_led_shift0, rt_leds;
+	u8 debug_switch, gp_button;
 
 	signature = inb(nirtfeatures->io_base + NIRTF_SIGNATURE);
 	year = inb(nirtfeatures->io_base + NIRTF_YEAR);
@@ -416,6 +420,7 @@ static ssize_t nirtfeatures_register_dump_get(struct device *dev,
 	bpinfo = inb(nirtfeatures->io_base + NIRTF_BPINFO);
 	railstatus1 = inb(nirtfeatures->io_base + NIRTF_RAIL_STATUS1);
 	railstatus2 = inb(nirtfeatures->io_base + NIRTF_RAIL_STATUS2);
+	lock = inb(nirtfeatures->io_base + NIRTF_LOCK);
 	reset = inb(nirtfeatures->io_base + NIRTF_RESET);
 	reset_source = inb(nirtfeatures->io_base + NIRTF_RESET_SOURCE);
 	processor_mode = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
@@ -425,6 +430,8 @@ static ssize_t nirtfeatures_register_dump_get(struct device *dev,
 	status_led_shift0 =
 		inb(nirtfeatures->io_base + NIRTF_STATUS_LED_SHIFT0);
 	rt_leds = inb(nirtfeatures->io_base + NIRTF_RT_LEDS);
+	debug_switch = inb(nirtfeatures->io_base + NIRTF_DEBUG_SWITCH);
+	gp_button = inb(nirtfeatures->io_base + NIRTF_GP_BUTTON);
 
 	return sprintf(buf,
 		       "Signature:          0x%02X\n"
@@ -437,17 +444,21 @@ static ssize_t nirtfeatures_register_dump_get(struct device *dev,
 		       "BPInfo:             0x%02X\n"
 		       "Rail status 1:      0x%02X\n"
 		       "Rail status 2:      0x%02X\n"
+		       "Lock:               0x%02X\n"
 		       "Reset:              0x%02X\n"
 		       "Reset source:       0x%02X\n"
 		       "Processor mode:     0x%02X\n"
 		       "System LEDs:        0x%02X\n"
 		       "Status LED shift 1: 0x%02X\n"
 		       "Status LED shift 0: 0x%02X\n"
-		       "RT LEDs:            0x%02X\n",
+		       "RT LEDs:            0x%02X\n"
+		       "Debug switch:       0x%02X\n"
+		       "GP button:          0x%02X\n",
 		       signature, year, month, day, hour, minute, scratch,
-		       bpinfo, railstatus1, railstatus2, reset, reset_source,
-		       processor_mode, system_leds, status_led_shift1,
-		       status_led_shift0, rt_leds);
+		       bpinfo, railstatus1, railstatus2, lock, reset,
+		       reset_source, processor_mode, system_leds,
+		       status_led_shift1, status_led_shift0, rt_leds,
+		       debug_switch, gp_button);
 }
 
 static DEVICE_ATTR(register_dump, S_IRUGO, nirtfeatures_register_dump_get,
