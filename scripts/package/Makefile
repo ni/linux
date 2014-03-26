@@ -108,6 +108,11 @@ tar%pkg: FORCE
 
 clean-dirs += $(objtree)/tar-install/
 
+ni-pkg: FORCE
+	$(MAKE) all
+	$(CONFIG_SHELL) $(srctree)/scripts/package/buildnipkg
+
+clean-dirs += $(objtree)/ni-install/
 
 # perf-pkg - generate a source tarball with perf source
 # ---------------------------------------------------------------------------
@@ -143,6 +148,7 @@ help: FORCE
 	@echo '  binrpm-pkg          - Build only the binary kernel RPM package'
 	@echo '  deb-pkg             - Build both source and binary deb kernel packages'
 	@echo '  bindeb-pkg          - Build only the binary kernel deb package'
+	@echo '  ni-pkg              - Build the kernel and needed files for National Instruments targets'
 	@echo '  tar-pkg             - Build the kernel as an uncompressed tarball'
 	@echo '  targz-pkg           - Build the kernel as a gzip compressed tarball'
 	@echo '  tarbz2-pkg          - Build the kernel as a bzip2 compressed tarball'

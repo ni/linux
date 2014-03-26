@@ -1,0 +1,175 @@
+#!/bin/sh
+
+#
+# builditb 0.0.1
+#
+# (C) 2014, 2016 National Instruments Corp.
+#
+# Author: Brad Mouring <brad.mouring@ni.com>
+#
+# This script is used to build the image tree blob and accompanying kernel
+# header squashfs. Based upon the builddeb script from Wichert Akkerman
+# <wichert@wiggy.net>.
+#
+
+set -e
+
+tmpdir="${objtree}/ni-install/${ARCH}"
+hdrdir="${tmpdir}/headers/kernel"
+bootdir="${tmpdir}/boot"
+hdrsquash="module-versioning-image.squashfs"
+
+CROSS_PREFIX=$(basename "${CROSS_COMPILE}")
+
+rm -rf -- "${tmpdir}"
+mkdir -p -- "${bootdir}"
+mkdir -p -- "${hdrdir}"
+
+if grep -q '^CONFIG_MODULES=y' "${objtree}/.config"; then
+	make ARCH="${ARCH}" O="${objtree}" KBUILD_SRC= INSTALL_MOD_PATH="${tmpdir}" modules_install
+fi
+
+mkdir -p "${hdrdir}"
+
+make ARCH="${ARCH}" O="${objtree}" KBUILD_SRC= INSTALL_HDR_PATH="${hdrdir}" headers_install
+
+${CONFIG_SHELL} ${srctree}/scripts/package/export-kernel-headers.sh "${srctree}" "${objtree}" "${hdrdir}" "${ARCH}"
+
+cp -v -- "${objtree}/System.map" "${hdrdir}"
+cp -v -- "${objtree}/.config" "${hdrdir}"
+cp -v -- "${objtree}/Module.symvers" "${hdrdir}"
+
+if [ -n "${CROSS_PREFIX}" ]; then
+	for bin in `find "${hdrdir}/scripts" -name "${CROSS_PREFIX}*" -type f`
+	do
+		[ -x "${bin}" ] &&  mv -v -- "${bin}" `echo ${bin} | sed "s/${CROSS_PREFIX}//"`
+	done
+fi
+
+mksquashfs "$(dirname "${hdrdir}")" "${tmpdir}/${hdrsquash}"
+mv "${tmpdir}/${hdrsquash}" "$(dirname "${hdrdir}")"
+
+rm -rf "${hdrdir}"
+
+case "${ARCH}" in
+	arm)
+		[ -f "${objtree}/arch/arm/boot/Image" ] || exit 1
+		cp -v -- "${objtree}/arch/arm/boot/Image" "${bootdir}/vmlinux"
+		gzip -f -9 ${bootdir}/vmlinux
+		cat <<EOF > ${bootdir}/linux.its
+/* Runmode image tree source */
+
+/dts-v1/;
+
+/ {
+        description = "custom-kernel-build-`date +%F_%R`";
+        version = "custom-kernel-build-`date +%F_%R`";
+        DeviceCodes = "populate-device-codes";
+        #address-cells = <1>;
+
+        images {
+                kernel@1 {
+                       description = "Linux kernel";
+                        version = "populate-kernel-export-version";
+                        data = /incbin/("./vmlinux.gz");
+                        type = "kernel";
+                        arch = "arm";
+                        os = "linux";
+                        compression = "gzip";
+                        load = <0x00008000>;
+                        entry = <0x00008000>;
+                        hash@1 {
+                                algo = "crc32";
+                        };
+                };
+EOF
+		for TARGET_BOARD in ${objtree}/arch/arm/boot/dts/ni-*.dtb; do
+			DEVCODE=${TARGET_BOARD#${objtree}/arch/arm/boot/dts/ni-}
+			DEVCODE=${DEVCODE%.dtb}
+			cp -v -- "$TARGET_BOARD" "${bootdir}/ni-${DEVCODE}.dtb"
+			cat <<EOF >> ${bootdir}/linux.its
+
+                fdt_$DEVCODE@1 {
+                        description = "$DEVCODE device tree";
+                        data = /incbin/("ni-$DEVCODE.dtb");
+                        type = "flat_dt";
+                        arch = "arm";
+                        compression = "none";
+                        hash@1 {
+                                algo = "crc32";
+                        };
+                };
+EOF
+			TARGET_DEVCODES="${TARGET_DEVCODES} ${DEVCODE}"
+		done
+		cat <<EOF >> ${bootdir}/linux.its
+
+                bootscript@1 {
+                        description = "boot script";
+                        data = /incbin/("./bootscript.txt");
+                        type = "script";
+                        arch = "arm";
+                        compression = "none";
+                        hash@1 {
+                                algo = "crc32";
+                        };
+                };
+            };
+
+            configurations {
+EOF
+		for devcode in $TARGET_DEVCODES; do
+			cat <<EOF >> ${bootdir}/linux.its
+
+                config_0x$devcode@1 {
+                        description = "$devcode runmode configuration";
+                        kernel = "kernel@1";
+                        fdt = "fdt_$devcode@1";
+                };
+EOF
+		done
+		cat <<EOF >> ${bootdir}/linux.its
+        };
+};
+EOF
+
+		sed -i "s/populate-device-codes/`echo ${TARGET_DEVCODES} | sed 's/[ \t]*\([^ \t]*\)/0x\1 /g' | sed 's/[ \t]*$//'`/" ${bootdir}/linux.its
+		cat <<EOF > ${bootdir}/bootscript.txt
+setenv set_args 'setenv bootargs \${consoleparam} \$mtdparts ubi.mtd=boot-config ubi.mtd=root root=ubi1:rootfs rw rootfstype=ubifs kthreadd_pri=25 ksoftirqd_pri=8 irqthread_pri=15 \${usb_gadget_args} \$othbootargs'
+
+# cRIO-9068 doesn't have USB gadget, so skip it on that device
+if test \${DeviceCode} != 0x76D6; then
+  usb_gadget_args="g_ether.idVendor=\${USBVendorID} g_ether.idProduct=\${USBProductID} g_ether.iProduct=\"\${USBProduct} [\${hostname}]\" g_ether.iSerialNumber=\${serial#} g_ether.dev_addr=\${usbgadgetethaddr} g_ether.bcdDevice=\${USBDevice}"
+fi
+
+if test -n \"\$bootscriptenvrun\" ; then run bootscriptenvrun; fi
+
+silent_tmp=\${silent}
+setenv silent
+echo "Booting LabVIEW RT (custom kernel)..."
+setenv silent \${silent_tmp}
+
+run set_args
+bootm \${loadaddr}#config_\${DeviceCode}
+EOF
+
+		PATH=${PATH}:"${objtree}/scripts/dtc" mkimage -f "${bootdir}/linux.its" "${bootdir}/ni_zynq_custom_runmodekernel.itb"
+		;;
+	x86*)
+		cp -v -- ${srctree}/arch/x86/boot/bzImage ${bootdir}
+		;;
+	*)
+		echo "" >&2
+		echo '** ** **  WARNING  ** ** **' >&2
+		echo "" >&2
+		echo "Your architecture did not define any architecture-dependent files" >&2
+		echo "to be placed into the tarball. Please add those to ${0} ..." >&2
+		echo "" >&2
+		exit 1
+		;;
+esac
+
+echo "Image created at ${tmpdir}"
+
+exit 0
+
