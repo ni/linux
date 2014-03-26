@@ -101,6 +101,11 @@ tar%pkg: FORCE
 
 clean-dirs += $(objtree)/tar-install/
 
+itbpkg: FORCE
+	$(MAKE)
+	$(CONFIG_SHELL) $(srctree)/scripts/package/builditb
+
+clean-dirs += $(objtree)/itb-install
 
 # perf-pkg - generate a source tarball with perf source
 # ---------------------------------------------------------------------------
