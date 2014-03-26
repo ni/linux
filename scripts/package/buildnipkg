@@ -1,0 +1,69 @@
+#!/bin/sh
+
+#
+# buildnipkg 0.0.1
+#
+# (C) 2014 by Brad Mouring <brad.mouring@ni.com>
+#
+# This script is used to build the image tree blob and accompanying kernel
+# header squashfs. Based upon the builddeb script from Wichert Akkerman
+# <wichert@wiggy.net>.
+#
+
+set -e
+
+tmpdir="${objtree}/ni-install/${ARCH}"
+hdrdir="${tmpdir}/headers/kernel"
+bootdir="${tmpdir}/boot"
+
+CROSS_PREFIX=$(basename "${CROSS_COMPILE}")
+
+rm -rf -- "${tmpdir}"
+mkdir -p -- "${bootdir}"
+mkdir -p -- "${hdrdir}"
+
+if grep -q '^CONFIG_MODULES=y' "${objtree}/.config"; then
+	make ARCH="${ARCH}" O="${objtree}" KBUILD_SRC= INSTALL_MOD_PATH="${tmpdir}" modules_install
+fi
+
+mkdir -p "${hdrdir}"
+
+make ARCH="${ARCH}" O="${objtree}" KBUILD_SRC= INSTALL_HDR_PATH="${hdrdir}" headers_install
+
+${CONFIG_SHELL} ${srctree}/scripts/package/export-kernel-headers.sh "${srctree}" "${objtree}" "${hdrdir}" "${ARCH}"
+
+cp -v -- "${objtree}/System.map" "${hdrdir}"
+cp -v -- "${objtree}/.config" "${hdrdir}"
+cp -v -- "${objtree}/Module.symvers" "${hdrdir}"
+
+if [ -n "${CROSS_PREFIX}" ]; then
+	for bin in `find "${hdrdir}/scripts" -name "${CROSS_PREFIX}*" -type f`
+	do
+		[ -x "${bin}" ] &&  mv -v -- "${bin}" `echo ${bin} | sed "s/${CROSS_PREFIX}//"`
+	done
+fi
+
+mksquashfs "$(dirname "${hdrdir}")" "${tmpdir}/headers.squashfs"
+mv "${tmpdir}/headers.squashfs" "$(dirname "${hdrdir}")"
+
+rm -rf "${hdrdir}"
+
+case "${ARCH}" in
+	x86*)
+		cp -v -- ${srctree}/arch/x86/boot/bzImage ${bootdir}
+		;;
+	*)
+		echo "" >&2
+		echo '** ** **  WARNING  ** ** **' >&2
+		echo "" >&2
+		echo "Your architecture did not define any architecture-dependent files" >&2
+		echo "Please add those to ${0} ..." >&2
+		echo "" >&2
+		exit 1
+		;;
+esac
+
+echo "Image created at ${tmpdir}"
+
+exit 0
+
