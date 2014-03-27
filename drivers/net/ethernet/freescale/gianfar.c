@@ -135,7 +135,6 @@ static int gfar_poll_sq(struct napi_struct *napi, int budget);
 static void gfar_netpoll(struct net_device *dev);
 #endif
 int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit);
-static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue);
 static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 			       int amount_pull, struct napi_struct *napi);
 void gfar_halt(struct net_device *dev);
@@ -2531,7 +2530,7 @@ static void gfar_align_skb(struct sk_buff *skb)
 }
 
 /* Interrupt Handler for Transmit complete */
-static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
+static int gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 {
 	struct net_device *dev = tx_queue->dev;
 	struct netdev_queue *txq;
@@ -2631,6 +2630,7 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 	tx_queue->dirty_tx = bdp;
 
 	netdev_tx_completed_queue(txq, howmany, bytes_sent);
+	return howmany;
 }
 
 static void gfar_schedule_cleanup(struct gfar_priv_grp *gfargrp)
@@ -2952,10 +2952,14 @@ static int gfar_poll(struct napi_struct *napi, int budget)
 		tx_queue = priv->tx_queue[i];
 		/* run Tx cleanup to completion */
 		if (tx_queue->tx_skbuff[tx_queue->skb_dirtytx]) {
-			gfar_clean_tx_ring(tx_queue);
-			has_tx_work = 1;
+			int ret;
+
+			ret = gfar_clean_tx_ring(tx_queue);
+			if (ret)
+				has_tx_work++;
 		}
 	}
+	work_done += has_tx_work;
 
 	for_each_set_bit(i, &gfargrp->rx_bit_map, priv->num_rx_queues) {
 		/* skip queue if not active */
