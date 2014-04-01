@@ -65,6 +65,7 @@
 #define NIRTF_RESET_SOURCE_PROCESSOR	0x02
 #define NIRTF_RESET_SOURCE_BUTTON	0x01
 
+#define NIRTF_PROCESSOR_MODE_NO_FPGA_SW		0x40
 #define NIRTF_PROCESSOR_MODE_HARD_BOOT_N	0x20
 #define NIRTF_PROCESSOR_MODE_NO_FPGA		0x10
 #define NIRTF_PROCESSOR_MODE_RECOVERY		0x08
@@ -240,6 +241,52 @@ static ssize_t nirtfeatures_reset_source_get(struct device *dev,
 
 static DEVICE_ATTR(reset_source, S_IRUGO, nirtfeatures_reset_source_get, NULL);
 
+static ssize_t nirtfeatures_no_fpga_sw_get(struct device *dev,
+					   struct device_attribute *attr,
+					   char *buf)
+{
+	struct acpi_device *acpi_device = to_acpi_device(dev);
+	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
+	u8 data;
+
+	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+
+	data &= NIRTF_PROCESSOR_MODE_NO_FPGA_SW;
+
+	return sprintf(buf, "%u\n", !!data);
+}
+
+static ssize_t nirtfeatures_no_fpga_sw_set(struct device *dev,
+					   struct device_attribute *attr,
+					   const char *buf, size_t count)
+{
+	struct acpi_device *acpi_device = to_acpi_device(dev);
+	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
+	unsigned long tmp;
+	u8 data;
+
+	if (kstrtoul(buf, 0, &tmp) || (tmp > 1))
+		return -EINVAL;
+
+	spin_lock(&nirtfeatures->lock);
+
+	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+
+	if (tmp)
+		data |= NIRTF_PROCESSOR_MODE_NO_FPGA_SW;
+	else
+		data &= ~NIRTF_PROCESSOR_MODE_NO_FPGA_SW;
+
+	outb(data, nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+
+	spin_unlock(&nirtfeatures->lock);
+
+	return count;
+}
+
+static DEVICE_ATTR(no_fpga_sw, S_IRUGO|S_IWUSR, nirtfeatures_no_fpga_sw_get,
+	nirtfeatures_no_fpga_sw_set);
+
 static ssize_t nirtfeatures_soft_reset_get(struct device *dev,
 					   struct device_attribute *attr,
 					   char *buf)
@@ -272,36 +319,7 @@ static ssize_t nirtfeatures_no_fpga_get(struct device *dev,
 	return sprintf(buf, "%u\n", !!data);
 }
 
-static ssize_t nirtfeatures_no_fpga_set(struct device *dev,
-					struct device_attribute *attr,
-					const char *buf, size_t count)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
-	unsigned long tmp;
-	u8 data;
-
-	if (kstrtoul(buf, 0, &tmp) || (tmp > 1))
-		return -EINVAL;
-
-	spin_lock(&nirtfeatures->lock);
-
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-
-	if (tmp)
-		data |= NIRTF_PROCESSOR_MODE_NO_FPGA;
-	else
-		data &= ~NIRTF_PROCESSOR_MODE_NO_FPGA;
-
-	outb(data, nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-
-	spin_unlock(&nirtfeatures->lock);
-
-	return count;
-}
-
-static DEVICE_ATTR(no_fpga, S_IRUGO|S_IWUSR, nirtfeatures_no_fpga_get,
-	nirtfeatures_no_fpga_set);
+static DEVICE_ATTR(no_fpga, S_IRUGO, nirtfeatures_no_fpga_get, NULL);
 
 static ssize_t nirtfeatures_recovery_mode_get(struct device *dev,
 					      struct device_attribute *attr,
@@ -318,36 +336,8 @@ static ssize_t nirtfeatures_recovery_mode_get(struct device *dev,
 	return sprintf(buf, "%u\n", !!data);
 }
 
-static ssize_t nirtfeatures_recovery_mode_set(struct device *dev,
-					      struct device_attribute *attr,
-					      const char *buf, size_t count)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
-	unsigned long tmp;
-	u8 data;
-
-	if (kstrtoul(buf, 0, &tmp) || (tmp > 1))
-		return -EINVAL;
-
-	spin_lock(&nirtfeatures->lock);
-
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-
-	if (tmp)
-		data |= NIRTF_PROCESSOR_MODE_RECOVERY;
-	else
-		data &= ~NIRTF_PROCESSOR_MODE_RECOVERY;
-
-	outb(data, nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-
-	spin_unlock(&nirtfeatures->lock);
-
-	return count;
-}
-
-static DEVICE_ATTR(recovery_mode, S_IRUGO|S_IWUSR,
-	nirtfeatures_recovery_mode_get, nirtfeatures_recovery_mode_set);
+static DEVICE_ATTR(recovery_mode, S_IRUGO,
+	nirtfeatures_recovery_mode_get, NULL);
 
 static ssize_t nirtfeatures_console_out_get(struct device *dev,
 					    struct device_attribute *attr,
@@ -473,6 +463,7 @@ static const struct attribute *nirtfeatures_attrs[] = {
 	&dev_attr_railstatus2.attr,
 	&dev_attr_reset.attr,
 	&dev_attr_reset_source.attr,
+	&dev_attr_no_fpga_sw.attr,
 	&dev_attr_soft_reset.attr,
 	&dev_attr_no_fpga.attr,
 	&dev_attr_recovery_mode.attr,
