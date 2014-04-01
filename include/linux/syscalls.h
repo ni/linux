@@ -783,6 +783,8 @@ asmlinkage long sys_execve(const char __user *filename,
 		const char __user *const __user *envp);
 asmlinkage long sys_fadvise64_64(int fd, loff_t offset, loff_t len, int advice);
 
+asmlinkage long sys_mcopy(void * __user dest, void * __user src, size_t len);
+
 /* CONFIG_MMU only */
 asmlinkage long sys_swapon(const char __user *specialfile, int swap_flags);
 asmlinkage long sys_swapoff(const char __user *specialfile);
