@@ -54,6 +54,7 @@
 
 #define NIRTF_BPINFO_ID_MANHATTAN	0
 #define NIRTF_BPINFO_ID_HAMMERHEAD	4
+#define NIRTF_BPINFO_ID_WINGHEAD	5
 
 #define NIRTF_RESET_RESET_PROCESSOR	0x80
 
@@ -773,6 +774,12 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		break;
 	case NIRTF_BPINFO_ID_HAMMERHEAD:
 		nirtfeatures->bpstring = "Hammerhead";
+		nirtfeatures->extra_leds = nirtfeatures_leds_cdaq;
+		nirtfeatures->num_extra_leds =
+			ARRAY_SIZE(nirtfeatures_leds_cdaq);
+		break;
+	case NIRTF_BPINFO_ID_WINGHEAD:
+		nirtfeatures->bpstring = "Winghead";
 		nirtfeatures->extra_leds = nirtfeatures_leds_cdaq;
 		nirtfeatures->num_extra_leds =
 			ARRAY_SIZE(nirtfeatures_leds_cdaq);
