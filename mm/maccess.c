@@ -4,6 +4,7 @@
 #include <linux/export.h>
 #include <linux/mm.h>
 #include <linux/uaccess.h>
+#include <linux/syscalls.h>
 
 /**
  * probe_kernel_read(): safely attempt to read from a location
@@ -64,6 +65,39 @@ long __probe_kernel_write(void *dst, const void *src, size_t size)
 
 	return ret ? -EFAULT : 0;
 }
+
+/*
+ * Safely copy 'len' bytes from user space 'src' to user space 'dst'.
+ * 'len' must be less than or equal to 64. In particular, safely here
+ * means that if we are trying to copy memory that has been freed and
+ * unmapped we don't crash.
+ *
+ * Returns
+ *    0      copy completed successfully
+ *
+ *    EFAULT if either the source or destination blocks are not
+ *           valid
+ *
+ *    EINVAL len is greater than 64
+ *
+ */
+SYSCALL_DEFINE3(mcopy, void*, dst, void*, src, size_t, len)
+{
+	char buf[64];
+
+	if (len > 64)
+		return -EINVAL;
+
+	if (copy_from_user(buf, src, len))
+		return -EFAULT;
+
+	if (copy_to_user(dst, buf, len))
+		return -EFAULT;
+
+	return 0;
+}
+
+
 EXPORT_SYMBOL_GPL(probe_kernel_write);
 
 /**
