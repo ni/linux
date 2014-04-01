@@ -468,6 +468,8 @@ asmlinkage long sys_madvise(unsigned long start, size_t len, int behavior);
 asmlinkage long sys_mincore(unsigned long start, size_t len,
 				unsigned char __user * vec);
 
+asmlinkage long sys_mcopy(void * __user dest, void * __user src, size_t len);
+
 asmlinkage long sys_pivot_root(const char __user *new_root,
 				const char __user *put_old);
 asmlinkage long sys_chroot(const char __user *filename);
