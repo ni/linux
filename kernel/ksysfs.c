@@ -17,6 +17,7 @@
 #include <linux/sched.h>
 #include <linux/capability.h>
 #include <linux/compiler.h>
+#include <linux/unistd.h>
 
 #include <linux/rcupdate.h>	/* rcu_expedited and rcu_normal */
 
@@ -154,6 +155,16 @@ static ssize_t fscaps_show(struct kobject *kobj,
 }
 KERNEL_ATTR_RO(fscaps);
 
+#ifdef __NR_mcopy
+static ssize_t ni_syscall_mcopy_show(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				char *buf)
+{
+	return sprintf(buf, "%d\n", __NR_mcopy);
+}
+KERNEL_ATTR_RO(ni_syscall_mcopy);
+#endif
+
 #ifndef CONFIG_TINY_RCU
 int rcu_expedited;
 static ssize_t rcu_expedited_show(struct kobject *kobj,
@@ -239,6 +250,9 @@ static struct attribute * kernel_attrs[] = {
 #endif
 #ifdef CONFIG_PREEMPT_RT
 	&realtime_attr.attr,
+#endif
+#ifdef __NR_mcopy
+	&ni_syscall_mcopy_attr.attr,
 #endif
 	NULL
 };
