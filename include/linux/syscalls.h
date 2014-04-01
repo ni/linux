@@ -901,6 +901,9 @@ asmlinkage long sys_execve(const char __user *filename,
 /* mm/fadvise.c */
 asmlinkage long sys_fadvise64_64(int fd, loff_t offset, loff_t len, int advice);
 
+/* mm/maccess.c */
+asmlinkage long sys_mcopy(void * __user dest, void * __user src, size_t len);
+
 /* mm/, CONFIG_MMU only */
 asmlinkage long sys_swapon(const char __user *specialfile, int swap_flags);
 asmlinkage long sys_swapoff(const char __user *specialfile);
