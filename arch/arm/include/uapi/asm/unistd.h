@@ -420,6 +420,7 @@
 #define __NR_copy_file_range		(__NR_SYSCALL_BASE+391)
 #define __NR_preadv2			(__NR_SYSCALL_BASE+392)
 #define __NR_pwritev2			(__NR_SYSCALL_BASE+393)
+#define __NR_mcopy			(__NR_SYSCALL_BASE+394)
 
 /*
  * The following SWIs are ARM private.

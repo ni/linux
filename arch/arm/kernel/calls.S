@@ -403,6 +403,7 @@
 		CALL(sys_copy_file_range)
 		CALL(sys_preadv2)
 		CALL(sys_pwritev2)
+		CALL(sys_mcopy)
 #ifndef syscalls_counted
 .equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls
 #define syscalls_counted
