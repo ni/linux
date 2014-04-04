@@ -520,6 +520,24 @@ static int dr_controller_setup(struct zynq_udc *udc)
 	portctrl &= ~(PORTSCX_PHY_TYPE_SEL | PORTSCX_PORT_WIDTH);
 	switch (udc->phy_mode) {
 	case ZYNQ_USB2_PHY_ULPI:
+		/*  In device mode, the VBUS Valid interrupt should be
+		 *  completely ignored by the MAC. However, the Zynq USB MAC
+		 *  doesn't disable this interrupt nor does it completely
+		 *  ignore it. Some VBUS Valid interrupts from the ULPI PHY
+		 *  will confuse the Zynq USB MAC and cause USB communications
+		 *  to cease. To prevent the Zynq USB MAC from getting
+		 *  confused, we will disable the VBUS Valid interrupt on the
+		 *  MAC's behalf. */
+#define XUSBPS_BASE ((u8 *)&dr_regs->otgsc - (u8 *)0x1A4)
+#define ULPI_VIEWPORT 0x170
+/* Enable all interrupts except for VBUS Valid. */
+#define ULPI_VIEWPORT_DISABLE_VBUS_IER 0x6010001D
+#define ULPI_VIEWPORT_DISABLE_VBUS_IEF 0x600D001D
+		zynq_writel(ULPI_VIEWPORT_DISABLE_VBUS_IER,
+			      (unsigned __iomem *) XUSBPS_BASE + ULPI_VIEWPORT);
+		zynq_writel(ULPI_VIEWPORT_DISABLE_VBUS_IEF,
+			      (unsigned __iomem *) XUSBPS_BASE + ULPI_VIEWPORT);
+
 		portctrl |= PORTSCX_PTS_ULPI;
 		break;
 	case ZYNQ_USB2_PHY_UTMI_WIDE:
