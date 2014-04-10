@@ -779,8 +779,8 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		dev_err(&nirtfeatures->acpi_device->dev,
 			"Unrecognized backplane type %u\n",
 			bpinfo);
-		nirtfeatures_acpi_remove(device);
-		return -ENODEV;
+		nirtfeatures->bpstring = "Unknown";
+		break;
 	}
 
 	spin_lock_init(&nirtfeatures->lock);
