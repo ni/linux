@@ -722,7 +722,6 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	struct nirtfeatures *nirtfeatures;
 	acpi_status acpi_ret;
 	u8 bpinfo;
-	u8 procmode;
 	int err;
 
 	nirtfeatures = kzalloc(sizeof(*nirtfeatures), GFP_KERNEL);
@@ -790,13 +789,6 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	nirtfeatures->revision[2] = inb(nirtfeatures->io_base + NIRTF_DAY);
 	nirtfeatures->revision[3] = inb(nirtfeatures->io_base + NIRTF_HOUR);
 	nirtfeatures->revision[4] = inb(nirtfeatures->io_base + NIRTF_MINUTE);
-
-	procmode = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-
-	if (!(procmode & NIRTF_PROCESSOR_MODE_HARD_BOOT_N)) {
-		procmode |= NIRTF_PROCESSOR_MODE_HARD_BOOT_N;
-		outb(procmode, nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-	}
 
 	err = sysfs_create_files(&nirtfeatures->acpi_device->dev.kobj,
 				 nirtfeatures_attrs);
