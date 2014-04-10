@@ -100,40 +100,8 @@ static ssize_t niwatchdog_wdmode_set(struct device *dev,
 static DEVICE_ATTR(watchdog_mode, S_IRUSR|S_IWUSR, niwatchdog_wdmode_get,
 	niwatchdog_wdmode_set);
 
-static ssize_t niwatchdog_register_dump_get(struct device *dev,
-					    struct device_attribute *attr,
-					    char *buf)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct niwatchdog *niwatchdog = acpi_device->driver_data;
-	u8 control, counter2, counter1, counter0;
-	u8 seed2, seed1, seed0;
-
-	control = inb(niwatchdog->io_base + NIWD_CONTROL);
-	counter2 = inb(niwatchdog->io_base + NIWD_COUNTER2);
-	counter1 = inb(niwatchdog->io_base + NIWD_COUNTER1);
-	counter0 = inb(niwatchdog->io_base + NIWD_COUNTER0);
-	seed2 = inb(niwatchdog->io_base + NIWD_SEED2);
-	seed1 = inb(niwatchdog->io_base + NIWD_SEED1);
-	seed0 = inb(niwatchdog->io_base + NIWD_SEED0);
-
-	return sprintf(buf,
-		       "Control:   0x%02X\n"
-		       "Counter 2: 0x%02X\n"
-		       "Counter 1: 0x%02X\n"
-		       "Counter 0: 0x%02X\n"
-		       "Seed 2:    0x%02X\n"
-		       "Seed 1:    0x%02X\n"
-		       "Seed 0:    0x%02X\n",
-		       control, counter2, counter1, counter0,
-		       seed2, seed1, seed0);
-}
-
-static DEVICE_ATTR(register_dump, S_IRUGO, niwatchdog_register_dump_get, NULL);
-
 static const struct attribute *niwatchdog_attrs[] = {
 	&dev_attr_watchdog_mode.attr,
-	&dev_attr_register_dump.attr,
 	NULL
 };
 
