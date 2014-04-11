@@ -17,10 +17,6 @@
 #include <linux/leds.h>
 #include <linux/delay.h>
 
-#ifdef CONFIG_NI_HW_REBOOT
-#include <asm/emergency-restart.h>
-#endif
-
 #define MODULE_NAME "nirtfeatures"
 
 /* Register addresses */
@@ -644,26 +640,6 @@ static void nirtfeatures_remove_leds(struct nirtfeatures *nirtfeatures)
 		led_classdev_unregister(&nirtfeatures->extra_leds[i].cdev);
 }
 
-/* Board specific reboot fixup */
-
-#ifdef CONFIG_NI_HW_REBOOT
-
-static u16 mach_reboot_fixup_io_base;
-
-void mach_reboot_fixups(void)
-{
-	int i;
-
-	if (mach_reboot_fixup_io_base)
-		for (i = 0; i < 10; ++i) {
-			outb(NIRTF_RESET_RESET_PROCESSOR,
-			     mach_reboot_fixup_io_base + NIRTF_RESET);
-			udelay(100);
-		}
-}
-
-#endif
-
 /* ACPI driver */
 
 static acpi_status nirtfeatures_resources(struct acpi_resource *res, void *data)
@@ -748,11 +724,6 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		nirtfeatures_acpi_remove(device);
 		return -EBUSY;
 	}
-
-#ifdef CONFIG_NI_HW_REBOOT
-	mach_reboot_fixup_io_base = nirtfeatures->io_base;
-	reboot_type = BOOT_KBD;
-#endif
 
 	bpinfo = inb(nirtfeatures->io_base + NIRTF_BPINFO);
 
