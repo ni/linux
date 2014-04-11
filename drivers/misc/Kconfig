@@ -503,17 +503,6 @@ config NI_LED_PREFIX
 
 	  If unsure, use the default.
 
-config NI_HW_REBOOT
-	bool "Hardware reboot for NI 903x/913x"
-	depends on NI_RT_FEATURES && X86_64
-	default n
-	help
-	  If enabled, when rebooting an NI 903x/913x, on-board hardware will
-	  be used to reset the system. If not enabled, the controller will do
-	  a normal ACPI reset.
-
-	  If unsure, say N.
-
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
