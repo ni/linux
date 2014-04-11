@@ -21,53 +21,36 @@
 
 /* Register addresses */
 
-#define NIRTF_SIGNATURE		0x00
 #define NIRTF_YEAR		0x01
 #define NIRTF_MONTH		0x02
 #define NIRTF_DAY		0x03
 #define NIRTF_HOUR		0x04
 #define NIRTF_MINUTE		0x05
 #define NIRTF_SCRATCH		0x06
-#define NIRTF_BPINFO		0x07
-#define NIRTF_RAIL_STATUS1	0x08
-#define NIRTF_RAIL_STATUS2	0x09
-#define NIRTF_LOCK		0x0F
-#define NIRTF_RESET		0x10
-#define NIRTF_RESET_SOURCE	0x11
-#define NIRTF_PROCESSOR_MODE	0x12
+#define NIRTF_PLATFORM_MISC	0x07
+#define NIRTF_PROC_RESET_SOURCE	0x11
+#define NIRTF_CONTROLLER_MODE	0x12
 #define NIRTF_SYSTEM_LEDS	0x20
 #define NIRTF_STATUS_LED_SHIFT1	0x21
 #define NIRTF_STATUS_LED_SHIFT0	0x22
 #define NIRTF_RT_LEDS		0x23
-#define NIRTF_DEBUG_SWITCH	0x30
-#define NIRTF_GP_BUTTON		0x31
 
 #define NIRTF_IO_SIZE	0x40
 
 /* Register values */
 
-#define NIRTF_BPINFO_ID_MASK	0x07
+#define NIRTF_PLATFORM_MISC_ID_MASK		0x07
+#define NIRTF_PLATFORM_MISC_ID_MANHATTAN	0
+#define NIRTF_PLATFORM_MISC_ID_HAMMERHEAD	4
+#define NIRTF_PLATFORM_MISC_ID_WINGHEAD		5
 
-#define NIRTF_BPINFO_ID_MANHATTAN	0
-#define NIRTF_BPINFO_ID_HAMMERHEAD	4
-#define NIRTF_BPINFO_ID_WINGHEAD	5
-
-#define NIRTF_RESET_RESET_PROCESSOR	0x80
-
-#define NIRTF_RESET_SOURCE_SOFT_OFF	0x20
-#define NIRTF_RESET_SOURCE_SOFTWARE	0x10
-#define NIRTF_RESET_SOURCE_WATCHDOG	0x08
-#define NIRTF_RESET_SOURCE_FPGA		0x04
-#define NIRTF_RESET_SOURCE_PROCESSOR	0x02
-#define NIRTF_RESET_SOURCE_BUTTON	0x01
-
-#define NIRTF_PROCESSOR_MODE_NO_FPGA_SW		0x40
-#define NIRTF_PROCESSOR_MODE_HARD_BOOT_N	0x20
-#define NIRTF_PROCESSOR_MODE_NO_FPGA		0x10
-#define NIRTF_PROCESSOR_MODE_RECOVERY		0x08
-#define NIRTF_PROCESSOR_MODE_CONSOLE_OUT	0x04
-#define NIRTF_PROCESSOR_MODE_IP_RESET		0x02
-#define NIRTF_PROCESSOR_MODE_SAFE		0x01
+#define NIRTF_CONTROLLER_MODE_NO_FPGA_SW	0x40
+#define NIRTF_CONTROLLER_MODE_HARD_BOOT_N	0x20
+#define NIRTF_CONTROLLER_MODE_NO_FPGA		0x10
+#define NIRTF_CONTROLLER_MODE_RECOVERY		0x08
+#define NIRTF_CONTROLLER_MODE_CONSOLE_OUT	0x04
+#define NIRTF_CONTROLLER_MODE_IP_RESET		0x02
+#define NIRTF_CONTROLLER_MODE_SAFE		0x01
 
 #define NIRTF_SYSTEM_LEDS_STATUS_RED	0x08
 #define NIRTF_SYSTEM_LEDS_STATUS_YELLOW	0x04
@@ -165,55 +148,8 @@ static ssize_t nirtfeatures_backplane_id_get(struct device *dev,
 
 static DEVICE_ATTR(backplane_id, S_IRUGO, nirtfeatures_backplane_id_get, NULL);
 
-static ssize_t nirtfeatures_railstatus1_get(struct device *dev,
-					    struct device_attribute *attr,
-					    char *buf)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
-	u8 data;
-
-	data = inb(nirtfeatures->io_base + NIRTF_RAIL_STATUS1);
-
-	return sprintf(buf, "%02x\n", data);
-}
-
-static DEVICE_ATTR(railstatus1, S_IRUGO, nirtfeatures_railstatus1_get, NULL);
-
-static ssize_t nirtfeatures_railstatus2_get(struct device *dev,
-					    struct device_attribute *attr,
-					    char *buf)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
-	u8 data;
-
-	data = inb(nirtfeatures->io_base + NIRTF_RAIL_STATUS2);
-
-	return sprintf(buf, "%02x\n", data);
-}
-
-static DEVICE_ATTR(railstatus2, S_IRUGO, nirtfeatures_railstatus2_get, NULL);
-
-static ssize_t nirtfeatures_reset_set(struct device *dev,
-				      struct device_attribute *attr,
-				      const char *buf, size_t count)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
-
-	if (strcmp(buf, "1"))
-		return -EINVAL;
-
-	outb(NIRTF_RESET_RESET_PROCESSOR, nirtfeatures->io_base + NIRTF_RESET);
-
-	return count;
-}
-
-static DEVICE_ATTR(reset, S_IWUSR, NULL, nirtfeatures_reset_set);
-
 static const char * const nirtfeatures_reset_source_strings[] = {
-	"button", "processor", "fpga", "watchdog", "software", "softoff",
+	"button", "processor", "fpga", "watchdog", "software",
 };
 
 static ssize_t nirtfeatures_reset_source_get(struct device *dev,
@@ -225,7 +161,7 @@ static ssize_t nirtfeatures_reset_source_get(struct device *dev,
 	u8 data;
 	int i;
 
-	data = inb(nirtfeatures->io_base + NIRTF_RESET_SOURCE);
+	data = inb(nirtfeatures->io_base + NIRTF_PROC_RESET_SOURCE);
 
 	for (i = 0; i < ARRAY_SIZE(nirtfeatures_reset_source_strings); i++)
 		if ((1 << i) & data)
@@ -245,9 +181,9 @@ static ssize_t nirtfeatures_no_fpga_sw_get(struct device *dev,
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
-	data &= NIRTF_PROCESSOR_MODE_NO_FPGA_SW;
+	data &= NIRTF_CONTROLLER_MODE_NO_FPGA_SW;
 
 	return sprintf(buf, "%u\n", !!data);
 }
@@ -266,14 +202,14 @@ static ssize_t nirtfeatures_no_fpga_sw_set(struct device *dev,
 
 	spin_lock(&nirtfeatures->lock);
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
 	if (tmp)
-		data |= NIRTF_PROCESSOR_MODE_NO_FPGA_SW;
+		data |= NIRTF_CONTROLLER_MODE_NO_FPGA_SW;
 	else
-		data &= ~NIRTF_PROCESSOR_MODE_NO_FPGA_SW;
+		data &= ~NIRTF_CONTROLLER_MODE_NO_FPGA_SW;
 
-	outb(data, nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	outb(data, nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
 	spin_unlock(&nirtfeatures->lock);
 
@@ -291,9 +227,9 @@ static ssize_t nirtfeatures_soft_reset_get(struct device *dev,
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
-	data &= NIRTF_PROCESSOR_MODE_HARD_BOOT_N;
+	data &= NIRTF_CONTROLLER_MODE_HARD_BOOT_N;
 
 	return sprintf(buf, "%u\n", !!data);
 }
@@ -308,9 +244,9 @@ static ssize_t nirtfeatures_no_fpga_get(struct device *dev,
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
-	data &= NIRTF_PROCESSOR_MODE_NO_FPGA;
+	data &= NIRTF_CONTROLLER_MODE_NO_FPGA;
 
 	return sprintf(buf, "%u\n", !!data);
 }
@@ -325,9 +261,9 @@ static ssize_t nirtfeatures_recovery_mode_get(struct device *dev,
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
-	data &= NIRTF_PROCESSOR_MODE_RECOVERY;
+	data &= NIRTF_CONTROLLER_MODE_RECOVERY;
 
 	return sprintf(buf, "%u\n", !!data);
 }
@@ -343,9 +279,9 @@ static ssize_t nirtfeatures_console_out_get(struct device *dev,
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
-	data &= NIRTF_PROCESSOR_MODE_CONSOLE_OUT;
+	data &= NIRTF_CONTROLLER_MODE_CONSOLE_OUT;
 
 	return sprintf(buf, "%u\n", !!data);
 }
@@ -360,9 +296,9 @@ static ssize_t nirtfeatures_ip_reset_get(struct device *dev,
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
-	data &= NIRTF_PROCESSOR_MODE_IP_RESET;
+	data &= NIRTF_CONTROLLER_MODE_IP_RESET;
 
 	return sprintf(buf, "%u\n", !!data);
 }
@@ -377,87 +313,19 @@ static ssize_t nirtfeatures_safe_mode_get(struct device *dev,
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 	u8 data;
 
-	data = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
+	data = inb(nirtfeatures->io_base + NIRTF_CONTROLLER_MODE);
 
-	data &= NIRTF_PROCESSOR_MODE_SAFE;
+	data &= NIRTF_CONTROLLER_MODE_SAFE;
 
 	return sprintf(buf, "%u\n", !!data);
 }
 
 static DEVICE_ATTR(safe_mode, S_IRUGO, nirtfeatures_safe_mode_get, NULL);
 
-static ssize_t nirtfeatures_register_dump_get(struct device *dev,
-					      struct device_attribute *attr,
-					      char *buf)
-{
-	struct acpi_device *acpi_device = to_acpi_device(dev);
-	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
-	u8 signature, year, month, day, hour, minute, scratch, bpinfo;
-	u8 railstatus1, railstatus2, lock, reset, reset_source, processor_mode;
-	u8 system_leds, status_led_shift1, status_led_shift0, rt_leds;
-	u8 debug_switch, gp_button;
-
-	signature = inb(nirtfeatures->io_base + NIRTF_SIGNATURE);
-	year = inb(nirtfeatures->io_base + NIRTF_YEAR);
-	month = inb(nirtfeatures->io_base + NIRTF_MONTH);
-	day = inb(nirtfeatures->io_base + NIRTF_DAY);
-	hour = inb(nirtfeatures->io_base + NIRTF_HOUR);
-	minute = inb(nirtfeatures->io_base + NIRTF_MINUTE);
-	scratch = inb(nirtfeatures->io_base + NIRTF_SCRATCH);
-	bpinfo = inb(nirtfeatures->io_base + NIRTF_BPINFO);
-	railstatus1 = inb(nirtfeatures->io_base + NIRTF_RAIL_STATUS1);
-	railstatus2 = inb(nirtfeatures->io_base + NIRTF_RAIL_STATUS2);
-	lock = inb(nirtfeatures->io_base + NIRTF_LOCK);
-	reset = inb(nirtfeatures->io_base + NIRTF_RESET);
-	reset_source = inb(nirtfeatures->io_base + NIRTF_RESET_SOURCE);
-	processor_mode = inb(nirtfeatures->io_base + NIRTF_PROCESSOR_MODE);
-	system_leds = inb(nirtfeatures->io_base + NIRTF_SYSTEM_LEDS);
-	status_led_shift1 =
-		inb(nirtfeatures->io_base + NIRTF_STATUS_LED_SHIFT1);
-	status_led_shift0 =
-		inb(nirtfeatures->io_base + NIRTF_STATUS_LED_SHIFT0);
-	rt_leds = inb(nirtfeatures->io_base + NIRTF_RT_LEDS);
-	debug_switch = inb(nirtfeatures->io_base + NIRTF_DEBUG_SWITCH);
-	gp_button = inb(nirtfeatures->io_base + NIRTF_GP_BUTTON);
-
-	return sprintf(buf,
-		       "Signature:          0x%02X\n"
-		       "Year:               0x%02X\n"
-		       "Month:              0x%02X\n"
-		       "Day:                0x%02X\n"
-		       "Hour:               0x%02X\n"
-		       "Minute:             0x%02X\n"
-		       "Scratch:            0x%02X\n"
-		       "BPInfo:             0x%02X\n"
-		       "Rail status 1:      0x%02X\n"
-		       "Rail status 2:      0x%02X\n"
-		       "Lock:               0x%02X\n"
-		       "Reset:              0x%02X\n"
-		       "Reset source:       0x%02X\n"
-		       "Processor mode:     0x%02X\n"
-		       "System LEDs:        0x%02X\n"
-		       "Status LED shift 1: 0x%02X\n"
-		       "Status LED shift 0: 0x%02X\n"
-		       "RT LEDs:            0x%02X\n"
-		       "Debug switch:       0x%02X\n"
-		       "GP button:          0x%02X\n",
-		       signature, year, month, day, hour, minute, scratch,
-		       bpinfo, railstatus1, railstatus2, lock, reset,
-		       reset_source, processor_mode, system_leds,
-		       status_led_shift1, status_led_shift0, rt_leds,
-		       debug_switch, gp_button);
-}
-
-static DEVICE_ATTR(register_dump, S_IRUGO, nirtfeatures_register_dump_get,
-		   NULL);
-
 static const struct attribute *nirtfeatures_attrs[] = {
 	&dev_attr_revision.attr,
 	&dev_attr_scratch.attr,
 	&dev_attr_backplane_id.attr,
-	&dev_attr_railstatus1.attr,
-	&dev_attr_railstatus2.attr,
-	&dev_attr_reset.attr,
 	&dev_attr_reset_source.attr,
 	&dev_attr_no_fpga_sw.attr,
 	&dev_attr_soft_reset.attr,
@@ -466,7 +334,6 @@ static const struct attribute *nirtfeatures_attrs[] = {
 	&dev_attr_console_out.attr,
 	&dev_attr_ip_reset.attr,
 	&dev_attr_safe_mode.attr,
-	&dev_attr_register_dump.attr,
 	NULL
 };
 
@@ -725,21 +592,21 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		return -EBUSY;
 	}
 
-	bpinfo = inb(nirtfeatures->io_base + NIRTF_BPINFO);
+	bpinfo = inb(nirtfeatures->io_base + NIRTF_PLATFORM_MISC);
 
-	bpinfo &= NIRTF_BPINFO_ID_MASK;
+	bpinfo &= NIRTF_PLATFORM_MISC_ID_MASK;
 
 	switch (bpinfo) {
-	case NIRTF_BPINFO_ID_MANHATTAN:
+	case NIRTF_PLATFORM_MISC_ID_MANHATTAN:
 		nirtfeatures->bpstring = "Manhattan";
 		break;
-	case NIRTF_BPINFO_ID_HAMMERHEAD:
+	case NIRTF_PLATFORM_MISC_ID_HAMMERHEAD:
 		nirtfeatures->bpstring = "Hammerhead";
 		nirtfeatures->extra_leds = nirtfeatures_leds_cdaq;
 		nirtfeatures->num_extra_leds =
 			ARRAY_SIZE(nirtfeatures_leds_cdaq);
 		break;
-	case NIRTF_BPINFO_ID_WINGHEAD:
+	case NIRTF_PLATFORM_MISC_ID_WINGHEAD:
 		nirtfeatures->bpstring = "Winghead";
 		nirtfeatures->extra_leds = nirtfeatures_leds_cdaq;
 		nirtfeatures->num_extra_leds =
