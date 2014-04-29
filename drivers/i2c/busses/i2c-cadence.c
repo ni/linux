@@ -909,6 +909,15 @@ static int cdns_i2c_probe(struct platform_device *pdev)
 	id->irq = platform_get_irq(pdev, 0);
 
 	id->adap.owner = THIS_MODULE;
+
+	/*
+	 * A bus number of -1 means dynamically assign, default to that if
+	 * bus-id isn't specified in the device tree.
+	 */
+	ret = of_property_read_u32(pdev->dev.of_node, "bus-id", &id->adap.nr);
+	if (ret)
+		id->adap.nr = -1;
+
 	id->adap.dev.of_node = pdev->dev.of_node;
 	id->adap.algo = &cdns_i2c_algo;
 	id->adap.timeout = CDNS_I2C_TIMEOUT;
@@ -969,7 +978,7 @@ static int cdns_i2c_probe(struct platform_device *pdev)
 	 */
 	cdns_i2c_writereg(CDNS_I2C_TIMEOUT_MAX, CDNS_I2C_TIME_OUT_OFFSET);
 
-	ret = i2c_add_adapter(&id->adap);
+	ret = i2c_add_numbered_adapter(&id->adap);
 	if (ret < 0)
 		goto err_clk_dis;
 
