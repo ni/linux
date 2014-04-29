@@ -7290,6 +7290,8 @@ static void igb_restore_vlan(struct igb_adapter *adapter)
 
 	for_each_set_bit(vid, adapter->active_vlans, VLAN_N_VID)
 		igb_vlan_rx_add_vid(adapter->netdev, htons(ETH_P_8021Q), vid);
+
+	igb_vlan_rx_add_vid(adapter->netdev, htons(ETH_P_8021Q), 0);
 }
 
 int igb_set_spd_dplx(struct igb_adapter *adapter, u32 spd, u8 dplx)
