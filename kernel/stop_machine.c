@@ -313,18 +313,21 @@ static DEFINE_MUTEX(stop_cpus_mutex);
 
 static bool queue_stop_cpus_work(const struct cpumask *cpumask,
 				 cpu_stop_fn_t fn, void *arg,
-				 struct cpu_stop_done *done)
+				 struct cpu_stop_done *done, bool inactive)
 {
 	struct cpu_stop_work *work;
 	unsigned int cpu;
 	bool queued = false;
 
 	/*
-	 * Disable preemption while queueing to avoid getting
-	 * preempted by a stopper which might wait for other stoppers
-	 * to enter @fn which can lead to deadlock.
+	 * Make sure that all work is queued on all cpus before
+	 * any of the cpus can execute it.
 	 */
-	lg_global_lock(&stop_cpus_lock);
+	if (!inactive)
+		lg_global_lock(&stop_cpus_lock);
+	else
+		lg_global_trylock_relax(&stop_cpus_lock);
+
 	for_each_cpu(cpu, cpumask) {
 		work = &per_cpu(cpu_stopper.stop_work, cpu);
 		work->fn = fn;
@@ -344,7 +347,7 @@ static int __stop_cpus(const struct cpumask *cpumask,
 	struct cpu_stop_done done;
 
 	cpu_stop_init_done(&done, cpumask_weight(cpumask));
-	if (!queue_stop_cpus_work(cpumask, fn, arg, &done))
+	if (!queue_stop_cpus_work(cpumask, fn, arg, &done, false))
 		return -ENOENT;
 	wait_for_completion(&done.completion);
 	return done.ret;
@@ -532,6 +535,8 @@ static int __init cpu_stop_init(void)
 		INIT_LIST_HEAD(&stopper->works);
 	}
 
+	lg_lock_init(&stop_cpus_lock, "stop_cpus_lock");
+
 	BUG_ON(smpboot_register_percpu_thread(&cpu_stop_threads));
 	stop_machine_unpark(raw_smp_processor_id());
 	stop_machine_initialized = true;
@@ -626,7 +631,7 @@ int stop_machine_from_inactive_cpu(cpu_stop_fn_t fn, void *data,
 	set_state(&msdata, MULTI_STOP_PREPARE);
 	cpu_stop_init_done(&done, num_active_cpus());
 	queue_stop_cpus_work(cpu_active_mask, multi_cpu_stop, &msdata,
-			     &done);
+			     &done, true);
 	ret = multi_cpu_stop(&msdata);
 
 	/* Busy wait for completion. */
