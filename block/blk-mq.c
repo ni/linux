@@ -971,7 +971,7 @@ static void blk_mq_hctx_notify(void *data, unsigned long action,
 	struct blk_mq_ctx *ctx;
 	LIST_HEAD(tmp);
 
-	if (action != CPU_DEAD && action != CPU_DEAD_FROZEN)
+	if (action != CPU_POST_DEAD && action != CPU_POST_DEAD)
 		return;
 
 	/*
