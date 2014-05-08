@@ -270,6 +270,25 @@ static int rt_mutex_adjust_prio_chain(struct task_struct *task,
 
 	/* Deadlock detection */
 	if (lock == orig_lock || rt_mutex_owner(lock) == top_task) {
+		/*
+		 * If the prio chain has changed out from under us, set the task
+		 * to the current owner of the lock in the current waiter and
+		 * continue walking the prio chain
+		 */
+		if (rt_mutex_owner(lock) && rt_mutex_owner(lock) != task) {
+			/* Release the old owner */
+			raw_spin_unlock_irqrestore(&task->pi_lock, flags);
+			put_task_struct(task);
+
+			/* Move to the new owner */
+			task = rt_mutex_owner(lock);
+			get_task_struct(task);
+
+			/* Let's try this again */
+			raw_spin_unlock(&lock->wait_lock);
+			goto retry;
+		}
+
 		debug_rt_mutex_deadlock(deadlock_detect, orig_waiter, lock);
 		raw_spin_unlock(&lock->wait_lock);
 		ret = deadlock_detect ? -EDEADLK : 0;
