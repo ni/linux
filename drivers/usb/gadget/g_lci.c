@@ -68,9 +68,9 @@ static struct usb_device_descriptor lci_device_descriptor = {
 	.bLength =		sizeof lci_device_descriptor,
 	.bDescriptorType =	USB_DT_DEVICE,
 	.bcdUSB =		cpu_to_le16(0x0200),
-	.bDeviceClass =		0xEF,
-	.bDeviceSubClass =	0x02,
-	.bDeviceProtocol =	0x01,
+	.bDeviceClass =		0x00,
+	.bDeviceSubClass =	0x00,
+	.bDeviceProtocol =	0x00,
 
 	/* Vendor and product id can be overridden by module parameters.  */
 	.idVendor =		cpu_to_le16(0x0000),
