@@ -660,7 +660,7 @@ void phy_state_machine(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct phy_device *phydev =
 			container_of(dwork, struct phy_device, state_queue);
-	int needs_aneg = 0, do_suspend = 0;
+	bool needs_aneg = false, do_suspend = false, do_resume = false;
 	int err = 0;
 
 	mutex_lock(&phydev->lock);
@@ -672,7 +672,7 @@ void phy_state_machine(struct work_struct *work)
 	case PHY_PENDING:
 		break;
 	case PHY_UP:
-		needs_aneg = 1;
+		needs_aneg = true;
 
 		phydev->link_timeout = PHY_AN_TIMEOUT;
 
@@ -703,7 +703,7 @@ void phy_state_machine(struct work_struct *work)
 			phydev->adjust_link(phydev->attached_dev);
 			phy_led_trigger_change_speed(phydev);
 		} else if (0 == phydev->link_timeout--) {
-			needs_aneg = 1;
+			needs_aneg = true;
 			/* If we have the magic_aneg bit, we try again */
 			if (phydev->drv->flags & PHY_HAS_MAGICANEG)
 				break;
@@ -731,7 +731,7 @@ void phy_state_machine(struct work_struct *work)
 			netif_carrier_on(phydev->attached_dev);
 		} else {
 			if (0 == phydev->link_timeout--)
-				needs_aneg = 1;
+				needs_aneg = true;
 		}
 
 		phydev->adjust_link(phydev->attached_dev);
@@ -770,7 +770,7 @@ void phy_state_machine(struct work_struct *work)
 			netif_carrier_off(phydev->attached_dev);
 			phydev->adjust_link(phydev->attached_dev);
 			phy_led_trigger_change_speed(phydev);
-			do_suspend = 1;
+			do_suspend = true;
 		}
 		break;
 	case PHY_RESUMING:
@@ -821,6 +821,7 @@ void phy_state_machine(struct work_struct *work)
 			phydev->adjust_link(phydev->attached_dev);
 			phy_led_trigger_change_speed(phydev);
 		}
+		do_resume = true;
 		break;
 	}
 
@@ -828,9 +829,10 @@ void phy_state_machine(struct work_struct *work)
 
 	if (needs_aneg)
 		err = phy_start_aneg(phydev);
-
-	if (do_suspend)
+	else if (do_suspend)
 		phy_suspend(phydev);
+	else if (do_resume)
+		phy_resume(phydev);
 
 	if (err < 0)
 		phy_error(phydev);
