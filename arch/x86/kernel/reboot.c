@@ -39,6 +39,14 @@
 void (*pm_power_off)(void);
 EXPORT_SYMBOL(pm_power_off);
 
+enum requested_reboot_type {
+	REQUEST_DEFAULT_REBOOT,
+	REQUEST_COLD_REBOOT,
+	REQUEST_WARM_REBOOT
+};
+
+enum requested_reboot_type requested_reboot_type = REQUEST_DEFAULT_REBOOT;
+
 /*
  * This is set if we need to go through the 'emergency' path.
  * When machine_emergency_restart() is called, we may be on
@@ -563,6 +571,21 @@ void __attribute__((weak)) mach_reboot_fixups(void)
 {
 }
 
+static void native_machine_restart_cf9(void)
+{
+	if (port_cf9_safe) {
+		u8 reboot_code = reboot_mode == REBOOT_WARM ?  0x06 : 0x0E;
+		u8 cf9 = inb(0xcf9) & ~reboot_code;
+
+		outb(cf9|2, 0xcf9); /* Request hard reset */
+		udelay(50);
+		/* Actually do the reset */
+		outb(cf9|reboot_code, 0xcf9);
+		udelay(50);
+	}
+}
+
+
 /*
  * To the best of our knowledge Windows compatible x86 hardware expects
  * the following on reboot:
@@ -593,6 +616,22 @@ static void native_machine_emergency_restart(void)
 		emergency_vmx_disable_all();
 
 	tboot_shutdown(TB_SHUTDOWN_REBOOT);
+
+
+	switch (requested_reboot_type) {
+	case REQUEST_COLD_REBOOT:
+		port_cf9_safe = true;
+		native_machine_restart_cf9();
+		break;
+
+	case REQUEST_WARM_REBOOT:
+		acpi_reboot();
+		break;
+
+	case REQUEST_DEFAULT_REBOOT:
+	default:
+		break;
+	}
 
 	/* Tell the BIOS if we want cold or warm reboot */
 	mode = reboot_mode == REBOOT_WARM ? 0x1234 : 0;
@@ -649,15 +688,7 @@ static void native_machine_emergency_restart(void)
 			fallthrough;
 
 		case BOOT_CF9_SAFE:
-			if (port_cf9_safe) {
-				u8 reboot_code = reboot_mode == REBOOT_WARM ?  0x06 : 0x0E;
-				u8 cf9 = inb(0xcf9) & ~reboot_code;
-				outb(cf9|2, 0xcf9); /* Request hard reset */
-				udelay(50);
-				/* Actually do the reset */
-				outb(cf9|reboot_code, 0xcf9);
-				udelay(50);
-			}
+			native_machine_restart_cf9();
 			reboot_type = BOOT_TRIPLE;
 			break;
 
