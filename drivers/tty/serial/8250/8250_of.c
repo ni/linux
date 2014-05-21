@@ -15,6 +15,8 @@
 #include <linux/delay.h>
 #include <linux/serial_core.h>
 #include <linux/serial_reg.h>
+#include <linux/serial_8250.h>
+#include <linux/ni16550.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
@@ -216,6 +218,14 @@ static int of_platform_serial_probe(struct platform_device *ofdev)
 		ret = serial8250_register_8250_port(&port8250);
 		break;
 	}
+#ifdef CONFIG_SERIAL_8250_NI16550
+	case PORT_NI16550:
+	{
+		struct uart_8250_port port8250;
+		ret = ni16550_register_port(&port8250);
+		break;
+	}
+#endif
 	default:
 		/* need to add code for these */
 	case PORT_UNKNOWN:
@@ -246,6 +256,11 @@ static int of_platform_serial_remove(struct platform_device *ofdev)
 	case PORT_8250 ... PORT_MAX_8250:
 		serial8250_unregister_port(info->line);
 		break;
+#ifdef CONFIG_SERIAL_8250_NI16550
+	case PORT_NI16550:
+		ni16550_unregister_port(info->line);
+		break;
+#endif
 	default:
 		/* need to add code for these */
 		break;
@@ -334,6 +349,10 @@ static const struct of_device_id of_platform_serial_table[] = {
 		.data = (void *)PORT_XSCALE, },
 	{ .compatible = "mrvl,pxa-uart",
 		.data = (void *)PORT_XSCALE, },
+#ifdef CONFIG_SERIAL_8250_NI16550
+	{ .compatible = "ni16550",  .data = (void *)PORT_NI16550, },
+#endif
+
 	{ /* end of list */ },
 };
 MODULE_DEVICE_TABLE(of, of_platform_serial_table);
