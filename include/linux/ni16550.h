@@ -25,6 +25,7 @@
 #ifndef _NI16550_H
 #define _NI16550_H
 
+bool is_rs232_mode(unsigned long iobase);
 int ni16550_register_port(struct uart_8250_port *uart);
 void ni16550_unregister_port(int line);
 
