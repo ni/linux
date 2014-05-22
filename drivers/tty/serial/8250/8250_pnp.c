@@ -27,6 +27,7 @@
 #define CIR_PORT	0x0800
 
 #define NI_CLK_33333333	0x0002
+#define NI_CAP_PMR	0x0001
 
 static bool is_niport(struct pnp_dev *dev)
 {
@@ -494,10 +495,24 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 	if (is_niport(dev)) {
 		if (flags & NI_CLK_33333333)
 			uart.port.uartclk = 33333333;
-
 		uart.port.flags |= UPF_FIXED_PORT | UPF_FIXED_TYPE;
 		uart.port.type = PORT_NI16550;
-		ni16550_port_setup(&uart.port);
+
+		/*
+		 * NI UARTs are by default connected to RS-485 transceivers,
+		 * unless the PMR register is implemented, and the UART is
+		 * dual-mode capable. Then it could be in RS-232 mode and if it
+		 * is, we will register as a standard 8250 port.
+		 */
+		if ((flags & NI_CAP_PMR) && is_rs232_mode(uart.port.iobase))
+			pr_info("NI 16550 at I/O 0x%x (irq = %d) is dual-mode capable and is in RS-232 mode\n",
+					 (unsigned int)uart.port.iobase,
+					 uart.port.irq);
+		else
+			/* Either the PMR register is not implemented, or it is
+			 * and the UART is in RS-485 mode as set in the PMR
+			 */
+			ni16550_port_setup(&uart.port);
 	}
 #endif
 	line = serial8250_register_8250_port(&uart);
