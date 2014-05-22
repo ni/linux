@@ -32,6 +32,33 @@
 #define NI16550_PCR_TXVR_ENABLE_BIT (1 << 3)
 #define NI16550_PCR_RS485_TERMINATION_BIT (1 << 6)
 
+#define NI16550_PMR_OFFSET 0x0E
+/*
+ * PMR[1:0] - Port Capabilities
+ *
+ * 0 - Register not implemented/supported
+ * 1 - RS-232 capable
+ * 2 - RS-485 capable
+ * 3 - RS-232/RS-485 dual-mode capable
+ *
+ */
+#define NI16550_PMR_CAP_MASK   0x03
+#define NI16550_PMR_NOT_IMPL   0x00
+#define NI16550_PMR_CAP_RS232  0x01
+#define NI16550_PMR_CAP_RS485  0x02
+#define NI16550_PMR_CAP_DUAL   0x03
+/*
+ * PMR[4] - Interface Mode
+ *
+ * 0 - RS-232 mode
+ * 1 - RS-485 mode
+ *
+ */
+#define NI16550_PMR_MODE_MASK  0x10
+#define NI16550_PMR_MODE_RS232 0x00
+#define NI16550_PMR_MODE_RS485 0x10
+
+
 static int ni16550_enable_transceivers(struct uart_port *port)
 {
 	uint8_t pcr;
@@ -116,6 +143,29 @@ static int ni16550_config_rs485(struct uart_port *port,
 
 	dev_dbg(port->dev, "<ni16550_config_rs485\n");
 	return 0;
+}
+
+bool is_rs232_mode(unsigned long iobase)
+{
+	uint8_t pmr = inb(iobase + NI16550_PMR_OFFSET);
+
+	/* If the PMR is not implemented, then by default NI UARTs are
+	 * connected to RS-485 transceivers
+	 */
+	if ((pmr & NI16550_PMR_CAP_MASK) == NI16550_PMR_NOT_IMPL)
+		return false;
+
+	if ((pmr & NI16550_PMR_CAP_MASK) == NI16550_PMR_CAP_DUAL)
+		/* If the port is dual-mode capable, then read the mode bit
+		 * to know the current mode
+		 */
+		return ((pmr & NI16550_PMR_MODE_MASK)
+					== NI16550_PMR_MODE_RS232);
+	else
+		/* If it is not dual-mode capable, then decide based on the
+		 * capability
+		 */
+		return ((pmr & NI16550_PMR_CAP_MASK) == NI16550_PMR_CAP_RS232);
 }
 
 static struct txvr_ops ni16550_txvr_ops = {
