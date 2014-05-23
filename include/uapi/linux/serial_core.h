@@ -265,6 +265,7 @@
 #define PORT_MVEBU	114
 
 /* National Instruments 16550 UART */
-#define PORT_NI16550	115
+#define PORT_NI16550_F16	115 /* 16-byte FIFOs */
+#define PORT_NI16550_F128	116 /* 128-byte FIFOs */
 
 #endif /* _UAPILINUX_SERIAL_CORE_H */
