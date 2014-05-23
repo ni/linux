@@ -496,7 +496,7 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 		if (flags & NI_CLK_33333333)
 			uart.port.uartclk = 33333333;
 		uart.port.flags |= UPF_FIXED_PORT | UPF_FIXED_TYPE;
-		uart.port.type = PORT_NI16550;
+		uart.port.type = PORT_NI16550_F128;
 
 		/*
 		 * NI UARTs are by default connected to RS-485 transceivers,
