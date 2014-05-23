@@ -271,6 +271,7 @@
 #define PORT_MPS2UART	116
 
 /* National Instruments 16550 UART */
-#define PORT_NI16550	117
+#define PORT_NI16550_F16	117 /* 16-byte FIFOs */
+#define PORT_NI16550_F128	118 /* 128-byte FIFOs */
 
 #endif /* _UAPILINUX_SERIAL_CORE_H */
