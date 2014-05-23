@@ -209,7 +209,8 @@ static const struct pnp_device_id pnp_dev_table[] = {
 	/* PC Rider K56 Phone System PnP */
 	{	"MVX00F2",		0	},
 	/* National Instruments (NI) 16550 PNP */
-	{	"NIC7750",	NI_CLK_33333333	},
+	{	"NIC7750",	NI_CLK_33333333			},
+	{	"NIC7772",	NI_CAP_PMR | NI_16BYTE_FIFO	},
 	/* NEC 98NOTE SPEAKER PHONE FAX MODEM(33600bps) */
 	{	"nEC8241",		0	},
 	/* Pace 56 Voice Internal Plug & Play Modem */
