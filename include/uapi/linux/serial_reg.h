@@ -64,7 +64,8 @@
  * TI16C752:	 8  16  56  60		 8  16  32  56
  * OX16C950:	16  32 112 120		16  32  64 112	PORT_16C950
  * Tegra:	 1   4   8  14		16   8   4   1	PORT_TEGRA
- * NI 16550:	 1  32  64  112		xx  xx  xx  xx	PORT_NI16550
+ * NI 16550:	 1   4   8  14		xx  xx  xx  xx	PORT_NI16550_F16
+ * NI 16550:	 1  32  64  112		xx  xx  xx  xx	PORT_NI16550_F128
  */
 #define UART_FCR_R_TRIG_00	0x00
 #define UART_FCR_R_TRIG_01	0x40
