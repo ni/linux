@@ -357,8 +357,15 @@ configured less than Maximum supported fifo bytes */
 		.rxtrig_bytes	= {1, 4, 8, 14},
 		.flags		= UART_CAP_FIFO,
 	},
-	[PORT_NI16550] = {
-		.name		= "NI 16550",
+	[PORT_NI16550_F16] = {
+		.name		= "NI 16550 (with 16-byte FIFOs)",
+		.fifo_size	= 16,
+		.tx_loadsz	= 16,
+		.fcr		= UART_FCR_ENABLE_FIFO | UART_FCR_R_TRIG_10,
+		.flags		= UART_CAP_FIFO | UART_CAP_AFE | UART_CAP_EFR,
+	},
+	[PORT_NI16550_F128] = {
+		.name		= "NI 16550 (with 128-byte FIFOs)",
 		.fifo_size	= 128,
 		.tx_loadsz	= 128,
 		.fcr		= UART_FCR_ENABLE_FIFO | UART_FCR_R_TRIG_10,
