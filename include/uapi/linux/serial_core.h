@@ -282,6 +282,7 @@
 #define PORT_MTK_BTIF	117
 
 /* National Instruments 16550 UART */
-#define PORT_NI16550	118
+#define PORT_NI16550_F16	118 /* 16-byte FIFOs */
+#define PORT_NI16550_F128	119 /* 128-byte FIFOs */
 
 #endif /* _UAPILINUX_SERIAL_CORE_H */
