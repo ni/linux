@@ -1467,7 +1467,7 @@ static void run_timer_softirq(struct softirq_action *h)
 	hrtimer_run_pending();
 
 #if defined(CONFIG_IRQ_WORK) && defined(CONFIG_PREEMPT_RT_FULL)
-	irq_work_run();
+	irq_work_tick();
 #endif
 
 	if (time_after_eq(jiffies, base->timer_jiffies))

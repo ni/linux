@@ -20,11 +20,8 @@
 #include <asm/processor.h>
 
 
-static DEFINE_PER_CPU(struct llist_head, irq_work_list);
-#ifdef CONFIG_PREEMPT_RT_FULL
-static DEFINE_PER_CPU(struct llist_head, hirq_work_list);
-#endif
-static DEFINE_PER_CPU(int, irq_work_raised);
+static DEFINE_PER_CPU(struct llist_head, raised_list);
+static DEFINE_PER_CPU(struct llist_head, lazy_list);
 
 /*
  * Claim the entry so that no one else will poke at it.
@@ -67,6 +64,9 @@ void __weak arch_irq_work_raise(void)
  */
 void irq_work_queue(struct irq_work *work)
 {
+	bool lazy_work, realtime = IS_ENABLED(CONFIG_PREEMPT_RT_FULL);
+	struct llist_head *list;
+
 	/* Only queue if not already pending */
 	if (!irq_work_claim(work))
 		return;
@@ -74,19 +74,16 @@ void irq_work_queue(struct irq_work *work)
 	/* Queue the entry and raise the IPI if needed. */
 	preempt_disable();
 
-#ifdef CONFIG_PREEMPT_RT_FULL
-	if (work->flags & IRQ_WORK_HARD_IRQ)
-		llist_add(&work->llnode, &__get_cpu_var(hirq_work_list));
+	/* If the work is "lazy", handle it from next tick if any */
+	lazy_work = work->flags & IRQ_WORK_LAZY;
+
+	if (lazy_work || (realtime && !(work->flags & IRQ_WORK_HARD_IRQ)))
+		list = this_cpu_ptr(&lazy_list);
 	else
-#endif
-		llist_add(&work->llnode, &__get_cpu_var(irq_work_list));
-	/*
-	 * If the work is not "lazy" or the tick is stopped, raise the irq
-	 * work interrupt (if supported by the arch), otherwise, just wait
-	 * for the next tick.
-	 */
-	if (!(work->flags & IRQ_WORK_LAZY) || tick_nohz_tick_stopped()) {
-		if (!this_cpu_cmpxchg(irq_work_raised, 0, 1))
+		list = this_cpu_ptr(&raised_list);
+
+	if (llist_add(&work->llnode, list)) {
+		if (!lazy_work || tick_nohz_tick_stopped())
 			arch_irq_work_raise();
 	}
 
@@ -96,10 +93,11 @@ EXPORT_SYMBOL_GPL(irq_work_queue);
 
 bool irq_work_needs_cpu(void)
 {
-	struct llist_head *this_list;
+	struct llist_head *raised, *lazy;
 
-	this_list = &__get_cpu_var(irq_work_list);
-	if (llist_empty(this_list))
+	raised = &__get_cpu_var(raised_list);
+	lazy = &__get_cpu_var(lazy_list);
+	if (llist_empty(raised) && llist_empty(lazy))
 		return false;
 
 	/* All work should have been flushed before going offline */
@@ -108,34 +106,18 @@ bool irq_work_needs_cpu(void)
 	return true;
 }
 
-static void __irq_work_run(void)
+static void irq_work_run_list(struct llist_head *list)
 {
 	unsigned long flags;
 	struct irq_work *work;
-	struct llist_head *this_list;
 	struct llist_node *llnode;
 
+	BUG_ON_NONRT(!irqs_disabled());
 
-	/*
-	 * Reset the "raised" state right before we check the list because
-	 * an NMI may enqueue after we find the list empty from the runner.
-	 */
-	__this_cpu_write(irq_work_raised, 0);
-	barrier();
-
-#ifdef CONFIG_PREEMPT_RT_FULL
-	if (in_irq())
-		this_list = &__get_cpu_var(hirq_work_list);
-	else
-#endif
-		this_list = &__get_cpu_var(irq_work_list);
-	if (llist_empty(this_list))
+	if (llist_empty(list))
 		return;
 
-#ifndef CONFIG_PREEMPT_RT_FULL
-	BUG_ON(!irqs_disabled());
-#endif
-	llnode = llist_del_all(this_list);
+	llnode = llist_del_all(list);
 	while (llnode != NULL) {
 		work = llist_entry(llnode, struct irq_work, llnode);
 
@@ -166,12 +148,23 @@ static void __irq_work_run(void)
  */
 void irq_work_run(void)
 {
-#ifndef CONFIG_PREEMPT_RT_FULL
-	BUG_ON(!in_irq());
-#endif
-	__irq_work_run();
+	irq_work_run_list(this_cpu_ptr(&raised_list));
+	if (IS_ENABLED(CONFIG_PREEMPT_RT_FULL)) {
+		if (!llist_empty(this_cpu_ptr(&lazy_list)))
+			raise_softirq(TIMER_SOFTIRQ);
+	} else
+		irq_work_run_list(this_cpu_ptr(&lazy_list));
 }
 EXPORT_SYMBOL_GPL(irq_work_run);
+
+void irq_work_tick(void)
+{
+	struct llist_head *raised = this_cpu_ptr(&raised_list);
+
+	if (!llist_empty(raised) && !arch_irq_work_has_interrupt())
+		irq_work_run_list(raised);
+	irq_work_run_list(this_cpu_ptr(&lazy_list));
+}
 
 /*
  * Synchronize against the irq_work @entry, ensures the entry is not
@@ -197,7 +190,7 @@ static int irq_work_cpu_notify(struct notifier_block *self,
 		/* Called from stop_machine */
 		if (WARN_ON_ONCE(cpu != smp_processor_id()))
 			break;
-		__irq_work_run();
+		irq_work_tick();
 		break;
 	default:
 		break;
