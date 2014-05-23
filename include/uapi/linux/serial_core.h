@@ -239,6 +239,7 @@
 #define PORT_TILEGX	106
 
 /* National Instruments 16550 UART */
-#define PORT_NI16550	104
+#define PORT_NI16550_F16	104 /* 16-byte FIFOs */
+#define PORT_NI16550_F128	105 /* 128-byte FIFOs */
 
 #endif /* _UAPILINUX_SERIAL_CORE_H */
