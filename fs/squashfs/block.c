@@ -31,6 +31,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/buffer_head.h>
+#include <linux/sched.h>
 
 #include "squashfs_fs.h"
 #include "squashfs_fs_sb.h"
@@ -158,6 +159,8 @@ int squashfs_read_data(struct super_block *sb, void **buffer, u64 index,
 	}
 
 	if (compressed) {
+		if (current->plug)
+			io_schedule();
 		length = squashfs_decompress(msblk, buffer, bh, b, offset,
 			 length, srclength, pages);
 		if (length < 0)
