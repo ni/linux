@@ -199,15 +199,10 @@ static void __init zynq_clk_register_fclk(enum zynq_clk fclk,
 			CLK_DIVIDER_ONE_BASED | CLK_DIVIDER_ALLOW_ZERO,
 			fclk_lock);
 
-	clks[fclk] = clk_register_gate(NULL, clk_name,
-			div1_name, CLK_SET_RATE_PARENT, fclk_gate_reg,
-			0, CLK_GATE_SET_TO_DISABLE, fclk_gate_lock);
-	enable_reg = readl(fclk_gate_reg) & 1;
-	if (enable && !enable_reg) {
-		if (clk_prepare_enable(clks[fclk]))
-			pr_warn("%s: FCLK%u enable failed\n", __func__,
-					fclk - fclk0);
-	}
+	clks[fclk] = clk_register_gate(NULL, clk_name, div1_name,
+			CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
+			fclk_gate_reg, 0, CLK_GATE_SET_TO_DISABLE,
+			fclk_gate_lock);
 	kfree(mux_name);
 	kfree(div0_name);
 	kfree(div1_name);
