@@ -144,6 +144,7 @@ config X86
 	select ACPI_LEGACY_TABLES_LOOKUP if ACPI
 	select X86_FEATURE_NAMES if PROC_FS
 	select SRCU
+	select NI_COLD_BOOT_SUPPORT
 
 config INSTRUCTION_DECODER
 	def_bool y
