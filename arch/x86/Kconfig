@@ -333,6 +333,10 @@ config X86
 	select SCHED_SMT			if SMP
 	select ARCH_SUPPORTS_SCHED_CLUSTER	if SMP
 	select ARCH_SUPPORTS_SCHED_MC		if SMP
+	select NI_COLD_BOOT_SUPPORT
+
+config NI_COLD_BOOT_SUPPORT
+	def_bool n
 
 config INSTRUCTION_DECODER
 	def_bool y
