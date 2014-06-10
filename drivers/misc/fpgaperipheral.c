@@ -161,6 +161,8 @@ static int fpgaperipheral_probe(struct platform_device *pdev)
 		goto failed_after_ioremap;
 	}
 
+	dev_info(&pdev->dev, "probe succeeded\n");
+
 	return 0;
 
 failed_after_ioremap:
