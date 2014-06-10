@@ -204,7 +204,8 @@ static int of_platform_serial_probe(struct platform_device *ofdev)
 	}
 #endif
 #ifdef CONFIG_SERIAL_8250_NI16550
-	case PORT_NI16550:
+	case PORT_NI16550_F16:
+	case PORT_NI16550_F128:
 	{
 		struct device_node *np = ofdev->dev.of_node;
 		const char *transceiver;
@@ -267,7 +268,8 @@ static int of_platform_serial_remove(struct platform_device *ofdev)
 		break;
 #endif
 #ifdef CONFIG_SERIAL_8250_NI16550
-	case PORT_NI16550:
+	case PORT_NI16550_F16:
+	case PORT_NI16550_F128:
 	{
 		struct device_node *np = ofdev->dev.of_node;
 		const char *transceiver;
@@ -318,7 +320,10 @@ static struct of_device_id of_platform_serial_table[] = {
 	{ .compatible = "altr,16550-FIFO128",
 		.data = (void *)PORT_ALTR_16550_F128, },
 #ifdef CONFIG_SERIAL_8250_NI16550
-	{ .compatible = "ni16550",  .data = (void *)PORT_NI16550, },
+	{ .compatible = "ni16550-fifo16",
+		.data = (void *)PORT_NI16550_F16, },
+	{ .compatible = "ni16550-fifo128",
+		.data = (void *)PORT_NI16550_F128, },
 #endif
 #ifdef CONFIG_SERIAL_OF_PLATFORM_NWPSERIAL
 	{ .compatible = "ibm,qpace-nwp-serial",
