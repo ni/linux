@@ -200,6 +200,7 @@ static ssize_t rcu_normal_store(struct kobject *kobj,
 KERNEL_ATTR_RW(rcu_normal);
 #endif /* #ifndef CONFIG_TINY_RCU */
 
+#ifdef CONFIG_NI_COLD_BOOT_SUPPORT
 extern int requested_reboot_type;
 static ssize_t ni_requested_reboot_type_show(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
@@ -216,6 +217,7 @@ static ssize_t ni_requested_reboot_type_store(struct kobject *kobj,
 	return count;
 }
 KERNEL_ATTR_RW(ni_requested_reboot_type);
+#endif
 
 /*
  * Make /sys/kernel/notes give the raw contents of our kernel .notes section.
@@ -268,7 +270,9 @@ static struct attribute * kernel_attrs[] = {
 #ifdef __NR_mcopy
 	&ni_syscall_mcopy_attr.attr,
 #endif
+#ifdef CONFIG_NI_COLD_BOOT_SUPPORT
 	&ni_requested_reboot_type_attr.attr,
+#endif
 	NULL
 };
 
