@@ -1,0 +1,136 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/* NIDEVCODE 76D6 */
+
+/ {
+	model = "NI Dos Equis";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba@0 {
+		i2c0: i2c@e0004000 {
+			nicpld@40 {
+				watchdogs {
+					boot-watchdog {
+						interrupt-parent = <&gpio>;
+						interrupts = <46 2 /* IRQ_TYPE_EDGE_FALLING */>;
+					};
+				};
+
+				leds {
+					user1-0 {
+						label = "nilrt:user1:green";
+					};
+					user1-1 {
+						label = "nilrt:user1:yellow";
+					};
+					status-0 {
+						label = "nilrt:status:red";
+					};
+					status-1 {
+						label = "nilrt:status:yellow";
+						max-brightness = <0xFFFF>;
+					};
+					wifi-0 {
+						label = "nilrt:wifi:primary";
+					};
+					wifi-1 {
+						label = "nilrt:wifi:secondary";
+					};
+					eth0-0 {
+						label = "nilrt:eth0:green";
+						linux,default-trigger =
+						  "e000b000.etherne:00:100Mb";
+					};
+					eth0-1 {
+						label = "nilrt:eth0:yellow";
+						linux,default-trigger =
+						  "e000b000.etherne:00:Gb";
+					};
+					eth1-0 {
+						label = "nilrt:eth1:green";
+						linux,default-trigger =
+						  "e000b000.etherne:01:100Mb";
+					};
+					eth1-1 {
+						label = "nilrt:eth1:yellow";
+						linux,default-trigger =
+						  "e000b000.etherne:01:Gb";
+					};
+				};
+			};
+
+			ds3231_rtc@68 {
+				status = "okay";
+			};
+		};
+	};
+};
+
+&gem0 {
+	status = "okay";
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	phy0: phy@0 {
+		compatible = "marvell,88e1512";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt on GPIO1, shared with phy1. */
+		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
+		interrupt-parent = <&gpio>;
+		/* Page 3, Register 16, LED[2:0] Function
+		   Control Register */
+		leds = <0x1881>;
+	};
+
+	phy1: phy@1 {
+		compatible = "marvell,88e1512";
+		device_type = "ethernet-phy";
+		reg = <0x1>;
+		/* Interrupt on GPIO1, shared with phy0. */
+		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
+		interrupt-parent = <&gpio>;
+		/* Page 3, Register 16, LED[2:0] Function
+		   Control Register */
+		leds = <0x1881>;
+	};
+};
+
+&gem1 {
+	status = "okay";
+	clocks = <&clkc 31>, <&clkc 14>, <&clkc 15>;
+	clock-names = "pclk", "hclk", "tx_clk";
+	phy-handle = <&phy1>;
+	phy-mode = "rgmii-id";
+	cdns,no_mdio_bus;
+	emio-speed-gpios = <0>,
+			   <&gpio 54 0>;
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart2 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&clkc {
+	/* Enable fclk1 for serial. */
+	fclk-enable = <0x2>;
+};
