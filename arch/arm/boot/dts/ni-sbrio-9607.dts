@@ -1,0 +1,233 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/* NIDEVCODE 77D6 */
+
+/ {
+	model = "NI sbRIO-9607";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba@0 {
+		i2c0: i2c@e0004000 {
+			nicpld@40 {
+				watchdogs {
+					boot-watchdog {
+						interrupt-parent = <&gpio>;
+						interrupts = <1 2 /* IRQ_TYPE_EDGE_FALLING */>;
+					};
+				};
+
+				leds {
+					user1-0 {
+						label = "nilrt:user1:green";
+					};
+					status-0 {
+						label = "nilrt:status:yellow";
+						max-brightness = <0xFFFF>;
+					};
+					eth0-0 {
+						label = "nilrt:eth0:green";
+						linux,default-trigger =
+						  "e000b000.etherne:00:100Mb";
+					};
+					eth0-1 {
+						label = "nilrt:eth0:yellow";
+						linux,default-trigger =
+						  "e000b000.etherne:00:Gb";
+					};
+					eth1-0 {
+						label = "nilrt:eth1:green";
+						linux,default-trigger =
+						  "e000b000.etherne:01:100Mb";
+					};
+					eth1-1 {
+						label = "nilrt:eth1:yellow";
+						linux,default-trigger =
+						  "e000b000.etherne:01:Gb";
+					};
+				};
+			};
+
+			ds3231_rtc@68 {
+				status = "okay";
+			};
+		};
+	};
+};
+
+&gem0 {
+	status = "okay";
+	clocks = <&clkc 30>, <&clkc 13>, <&clkc 15>;
+	clock-names = "pclk", "hclk", "tx_clk";
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	emio-speed-gpios = <0>,
+			   <&gpio 54 0>;
+
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	phy0: phy@0 {
+		compatible = "micrel,KSZ9031";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt on GPIO25, shared with phy1. */
+		interrupts = <25 8 /* IRQ_TYPE_LEVEL_LOW */>;
+		interrupt-parent = <&gpio>;
+
+		/* RX_DV Pad Skew [7:4] = +0.30ns (0xC0) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 + 300 is 720 ps. */
+		rxdv-skew-ps = <720>;
+
+		/* TX_EN Pad Skew [3:0] = -0.30ns (0x02) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 - 300 is 120 ps. */
+		txen-skew-ps = <120>;
+
+		/* RXD 0-3 Pad Skew = +0.30ns (0xC) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 + 300 is 720 ps. */
+		rxd0-skew-ps = <720>;
+		rxd1-skew-ps = <720>;
+		rxd2-skew-ps = <720>;
+		rxd3-skew-ps = <720>;
+
+		/* TXD 0-3 Pad Skew = -0.30ns (0x2) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 - 300 is 120 ps. */
+		txd0-skew-ps = <120>;
+		txd1-skew-ps = <120>;
+		txd2-skew-ps = <120>;
+		txd3-skew-ps = <120>;
+
+		/* Write value to MMD Address 2h, Register 8h */
+		/* RX_CLK Pad Skew [4:0] = -0.9ns (0x0) */
+		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.90 ns is
+		 * 900 ps. 900 - 900 is 0 ps. */
+		rxc-skew-ps = <0>;
+		/* GTX_CLK Pad Skew [9:5] = +0.96ns (0x3E) */
+		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.96 ns is
+		 * 960 ps. 900 + 960 is 1860 ps. */
+		txc-skew-ps = <1860>;
+	};
+
+	phy1: phy@1 {
+		compatible = "micrel,KSZ9031";
+		device_type = "ethernet-phy";
+		reg = <0x1>;
+		/* Interrupt on GPIO25, shared with phy0. */
+		interrupts = <25 8 /* IRQ_TYPE_LEVEL_LOW */>;
+		interrupt-parent = <&gpio>;
+
+		/* RX_DV Pad Skew [7:4] = +0.30ns (0xC0) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 + 300 is 720 ps. */
+		rxdv-skew-ps = <720>;
+
+		/* TX_EN Pad Skew [3:0] = -0.30ns (0x02) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 - 300 is 120 ps. */
+		txen-skew-ps = <120>;
+
+		/* RXD 0-3 Pad Skew = +0.30ns (0xC) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 + 300 is 720 ps. */
+		rxd0-skew-ps = <720>;
+		rxd1-skew-ps = <720>;
+		rxd2-skew-ps = <720>;
+		rxd3-skew-ps = <720>;
+
+		/* TXD 0-3 Pad Skew = -0.30ns (0x2) */
+		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
+		 * ps. 420 - 300 is 120 ps. */
+		txd0-skew-ps = <120>;
+		txd1-skew-ps = <120>;
+		txd2-skew-ps = <120>;
+		txd3-skew-ps = <120>;
+
+		/* Write value to MMD Address 2h, Register 8h */
+		/* RX_CLK Pad Skew [4:0] = -0.9ns (0x0) */
+		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.90 ns is
+		 * 900 ps. 900 - 900 is 0 ps. */
+		rxc-skew-ps = <0>;
+		/* GTX_CLK Pad Skew [9:5] = +0.96ns (0x3E) */
+		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.96 ns is
+		 * 960 ps. 900 + 960 is 1860 ps. */
+		txc-skew-ps = <1860>;
+	};
+};
+
+&gem1 {
+	status = "okay";
+	clocks = <&clkc 31>, <&clkc 14>, <&clkc 17>;
+	clock-names = "pclk", "hclk", "tx_clk";
+	phy-handle = <&phy1>;
+	phy-mode = "rgmii-id";
+	cdns,no_mdio_bus;
+	emio-speed-gpios = <0>,
+			   <&gpio 55 0>;
+};
+
+&sdhci1 {
+	status = "okay";
+	force-sd-standard;
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart2 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart3 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart4 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart5 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
+&ni_uart6 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
+&can0 {
+	status = "okay";
+};
+
+&can1 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&usb1 {
+	status = "okay";
+	dr_mode = "peripheral";
+};
+
+&clkc {
+	/* Enable fclk1 for serial. */
+	fclk-enable = <0x2>;
+};
