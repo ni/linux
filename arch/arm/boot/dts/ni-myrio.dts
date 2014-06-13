@@ -1,0 +1,75 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/ {
+	model = "NI myRIO";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba {
+		gpio: gpio@e000a000 {
+			/* You can specify GPIO settings here:
+			 *
+			 *  gpioN-label      String label.
+			 *  gpioN-direction  "input" or "output".
+			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
+			 */
+
+			/* GPIO1 (MIO1) */
+			gpio1-label     = "phy_interupt";
+			gpio1-direction = "input";
+			gpio1-settings  = "level-low";
+
+			/* GPIO15 (MIO15) */
+			gpio15-label     = "wake_interrupt";
+			gpio15-direction = "input";
+			gpio15-settings  = "level-low";
+		};
+
+		i2c0: i2c@e0004000 {
+			nizynqcpld@40 {
+				interrupts = <24 0 25 0>;
+			};
+		};
+	};
+};
+
+&sdhci0 {
+	status = "okay";
+
+	/* We must force the SDHCI into test mode, so that it
+	 * always pretends to have a card present. This is to
+	 * work-around a hardware bug where TiWi WiFi does not
+	 * have its CD line connected correctly. */
+	force-sd-cd-test-mode = <1>;
+
+	wl12xx: wl12xx@0 {
+		compatible = "ti,wl12xx_sdio";
+		interrupt-parent = <&gpio>;
+		interrupts = <15 0>;
+	};
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&usb1 {
+	status = "okay";
+	dr_mode = "peripheral";
+};

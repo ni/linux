@@ -1,0 +1,99 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/ {
+	model = "NI Sol";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba {
+		eth0: eth@e000b000 {
+			status = "okay";
+			phy-handle = <&phy0>;
+			phy-mode = "rgmii-id";
+
+			phy0: phy@0 {
+				compatible = "micrel,KSZ9031";
+				device_type = "ethernet-phy";
+				reg = <0x0>;
+				/* Interrupt on GPIO1. */
+				interrupts = <1 0>;
+				interrupt-parent = <&gpio>;
+			};
+
+			phy1: phy@1 {
+				compatible = "micrel,KSZ9031";
+				device_type = "ethernet-phy";
+				reg = <0x1>;
+				/* Interrupt on GPIO57. */
+				interrupts = <57 0>;
+				interrupt-parent = <&gpio>;
+			};
+		};
+
+		eth1: eth@e000c000 {
+			status = "okay";
+			phy-handle = <&phy1>;
+			phy-mode = "rgmii-id";
+			xlnx,no_mdio_bus;
+		};
+
+		gpio: gpio@e000a000 {
+			/* You can specify GPIO settings here:
+			 *
+			 *  gpioN-label      String label.
+			 *  gpioN-direction  "input" or "output".
+			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
+			 */
+
+			/* GPIO1 (MIO1) */
+			gpio1-label     = "phy_interrupt";
+			gpio1-direction = "input";
+			gpio1-settings  = "level-low";
+
+			/* GPIO25 (MIO25) */
+			gpio25-label     = "wdt_interrupt";
+			gpio25-direction = "input";
+			gpio25-settings  = "edge-falling";
+
+			/* GPIO54 (EMIO0) */
+			gpio54-label     = "eth0_link_speed_1000";
+			gpio54-direction = "output";
+			gpio54-settings  = "low";
+
+			/* GPIO55 (EMIO1) */
+			gpio55-label     = "eth1_link_speed_1000";
+			gpio55-direction = "output";
+			gpio55-settings  = "low";
+		};
+
+		i2c0: i2c@e0004000 {
+			nizynqcpld@40 {
+				interrupts = <25 0>;
+			};
+
+			ds3231_rtc@68 {
+				status = "okay";
+			};
+		};
+	};
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&usb1 {
+	status = "okay";
+	dr_mode = "peripheral";
+};

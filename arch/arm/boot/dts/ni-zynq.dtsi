@@ -1,0 +1,260 @@
+/include/ "zynq-7000.dtsi"
+
+/ {
+	model = "NI Zynq-based Target";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	/* Populated by the bootloader */
+	memory@0 {
+		device_type = "memory";
+		reg = <0 0>;
+	};
+	chosen { };
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			compatible = "arm,cortex-a9";
+			device_type = "cpu";
+			reg = <0>;
+			clocks = <&clkc 3>;
+		};
+
+		cpu@1 {
+			compatible = "arm,cortex-a9";
+			device_type = "cpu";
+			reg = <1>;
+			clocks = <&clkc 3>;
+		};
+	};
+
+	amba {
+		ni_uart0: serial@80000000 {
+			device_type = "serial";
+			compatible = "ni16550-fifo128";
+			status = "disabled";
+			reg = <0x80000000 0x8>;
+			interrupts = <0 30 4>;
+			clock-frequency = <58824000>;
+			/* Populated by the bootloader */
+			/* current-speed = <0>; */
+		};
+
+		ni_uart1: serial@80000010 {
+			device_type = "serial";
+			compatible = "ni16550-fifo128";
+			status = "disabled";
+			reg = <0x80000010 0x8>;
+			interrupts = <0 31 4>;
+			clock-frequency = <58824000>;
+		};
+
+		ni_uart2: serial@80000020 {
+			device_type = "serial";
+			compatible = "ni16550-fifo128";
+			status = "disabled";
+			reg = <0x80000020 0x8>;
+			interrupts = <0 32 4>;
+			clock-frequency = <58824000>;
+		};
+
+		ni_uart3: serial@80000030 {
+			device_type = "serial";
+			compatible = "ni16550-fifo128";
+			status = "disabled";
+			reg = <0x80000030 0x8>;
+			interrupts = <0 33 0>;
+			clock-frequency = <58824000>;
+		};
+
+		ni_uart4: serial@80000040 {
+			device_type = "serial";
+			compatible = "ni16550-fifo128";
+			status = "disabled";
+			reg = <0x80000040 0x8>;
+			interrupts = <0 34 0>;
+			clock-frequency = <58824000>;
+		};
+
+		ni_uart5: serial@80000050 {
+			device_type = "serial";
+			compatible = "ni16550-fifo128";
+			status = "disabled";
+			reg = <0x80000050 0x8>;
+			interrupts = <0 35 0>;
+			clock-frequency = <58824000>;
+		};
+
+		can0: can@e0008000 {
+			compatible = "xlnx,ps7-can-1.00.a";
+			status = "disabled";
+			reg = <0xe0008000 0x1000>;
+			interrupts = <0 28 4>;
+		};
+
+		can1: can@e0009000 {
+			compatible = "xlnx,ps7-can-1.00.a";
+			status = "disabled";
+			reg = <0xe0009000 0x1000>;
+			interrupts = <0 51 4>;
+		};
+
+		fpgaperipheral@f8007000 {
+			compatible = "fpgaperipheral";
+			reg = <0xf8007000 0x100>;
+		};
+
+		xadcps@f8007100 {
+			compatible = "xlnx,zynq-xadc-1.00.a";
+			reg = <0xf8007100 0x20>;
+			interrupts = <0 7 4>;
+			clocks = <&clkc 12>;
+		};
+
+		sdhci0: sdhci@e0100000 {
+			compatible = "arasan,sdhci-8.9a";
+			status = "disabled";
+			clock-names = "clk_xin", "clk_ahb";
+			clocks = <&clkc 21>, <&clkc 32>;
+			interrupts = <0 24 4>;
+			reg = <0xe0100000 0x1000>;
+			xlnx,has-cd = <0x1>;
+			xlnx,has-cpc = <0x1>;
+		};
+
+		smcc@e000e000 {
+                        #address-cells = <1>;
+                        #size-cells = <1>;
+                        compatible = "xlnx,ps7-smcc-1.00.a", "xlnx,ps7-smc";
+                        interrupts = <0 18 4>;
+                        ranges ;
+                        reg = <0xE000E000 0x1000>;
+                        clock-names = "ref_clk", "aper_clk";
+                        clocks = <&clkc 11>, <&clkc 44>;
+                        xlnx,addr25 = <0x0>;
+                        xlnx,nor-chip-sel0 = <0x0>;
+                        xlnx,nor-chip-sel1 = <0x0>;
+                        xlnx,sram-chip-sel0 = <0x0>;
+                        xlnx,sram-chip-sel1 = <0x0>;
+			nand@e1000000 {
+				compatible = "xlnx,ps7-nand-1.00.a";
+				reg = <0xE1000000 0x1000000>;
+				bank-width = <1>; /* 8-bit width */
+				xlnx,nand-width = <0x8>;
+
+				/* SLCR SMC_CLK_CTRL value, 83MHz clock, 12ns cycle time */
+				/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
+				xlnx,onfi-mode0 = <0x0001021 4 3 2 7 4 10 10>;
+
+				/* SLCR SMC_CLK_CTRL value, 166MHz clock, 6ns cycle time */
+				/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
+				xlnx,onfi-mode1 = <0x0000821 4 2 2 7 4 10 10>;
+				xlnx,onfi-mode2 = <0x0000821 4 2 2 5 3 8 7>;
+				xlnx,onfi-mode3 = <0x0000821 4 2 2 5 2 7 6>;
+				xlnx,onfi-mode4 = <0x0000821 4 2 2 4 2 6 5>;
+				xlnx,onfi-mode5 = <0x0000821 4 2 2 3 2 5 4>;
+
+				#address-cells = <1>;
+				#size-cells = <1>;
+			};
+		};
+
+		eth0: eth@e000b000 {
+			compatible = "xlnx,ps7-ethernet-1.00.a";
+			status = "disabled";
+			reg = <0xe000b000 0x1000>;
+			interrupts = <0 22 4>;
+			clock-names = "ref_clk", "aper_clk";
+			clocks = <&clkc 13>, <&clkc 30>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+		};
+
+		eth1: eth@e000c000 {
+			compatible = "xlnx,ps7-ethernet-1.00.a";
+			status = "disabled";
+			reg = <0xe000c000 0x1000>;
+			interrupts = <0 45 4>;
+			clock-names = "ref_clk", "aper_clk";
+			clocks = <&clkc 14>, <&clkc 31>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+		};
+
+		usb0: usb@e0002000 {
+			compatible = "xlnx,ps7-usb-1.00.a";
+			status = "disabled";
+			reg = <0xe0002000 0x1000>;
+			interrupts = <0 21 4>;
+			clocks = <&clkc 28>;
+			phy_type = "ulpi";
+		};
+
+                usb1: usb@e0003000 {
+                        compatible = "xlnx,ps7-usb-1.00.a";
+			status = "disabled";
+                        reg = <0xe0003000 0x1000>;
+                        interrupts = <0 44 4>;
+			clocks = <&clkc 29>;
+                        phy_type = "ulpi";
+                };
+
+		gpio: gpio@e000a000 {
+			compatible = "xlnx,ps7-gpio-1.00.a";
+			reg = <0xe000a000 0x1000>;
+			#interrupt-cells = <0x2>;
+			interrupt-controller;
+			interrupts = <0 20 4>;
+			clocks = <&clkc 42>;
+			#gpio-cells = <2>;
+			gpio-controller;
+		};
+
+		i2c0: i2c@e0004000 {
+			compatible = "cdns,i2c-r1p10";
+			reg = <0xE0004000 0x1000>;
+			interrupts = <0 25 4>;
+			bus-id = <0>;
+			clocks = <&clkc 38>;
+			clock-frequency = <400000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			nizynqcpld@40 {
+				compatible = "nizynqcpld";
+				reg = <0x40>;
+				interrupt-parent = <&gpio>;
+			};
+
+			ds3231_rtc@68 {
+				compatible = "ds3232";
+				status = "disabled";
+				reg = <0x68>;
+			};
+		};
+
+		i2c1: i2c@e0005000 {
+			compatible = "cdns,i2c-r1p10";
+			status = "disabled";
+			reg = <0xe0005000 0x1000>;
+			interrupts = <0 48 4>;
+			bus-id = <1>;
+			clocks = <&clkc 39>;
+			clock-frequency = <400000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		} ;
+
+		i2c2: i2c@81000000 {
+			compatible = "xlnx,xps-iic-2.00.a";
+			status = "disabled";
+			reg = <0x81000000 0x1000>;
+			interrupts = <0 33 4>;
+			bus-id = <2>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+	};
+};

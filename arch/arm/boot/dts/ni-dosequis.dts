@@ -1,0 +1,105 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/ {
+	model = "NI Dos Equis";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba {
+		eth0: eth@e000b000 {
+			status = "okay";
+			phy-handle = <&phy0>;
+			phy-mode = "rgmii-id";
+
+			phy0: phy@0 {
+				compatible = "marvell,88e1512";
+				device_type = "ethernet-phy";
+				reg = <0x0>;
+				/* Interrupt on GPIO1, shared with phy1. */
+				interrupts = <1 0>;
+				interrupt-parent = <&gpio>;
+				/* Page 3, Register 16, LED[2:0] Function
+				   Control Register */
+				leds = <0x1881>;
+			};
+
+			phy1: phy@1 {
+				compatible = "marvell,88e1512";
+				device_type = "ethernet-phy";
+				reg = <0x1>;
+				/* Interrupt on GPIO1, shared with phy0. */
+				interrupts = <1 0>;
+				interrupt-parent = <&gpio>;
+				/* Page 3, Register 16, LED[2:0] Function
+				   Control Register */
+				leds = <0x1881>;
+			};
+		};
+
+		eth1: eth@e000c000 {
+			status = "okay";
+			phy-handle = <&phy1>;
+			phy-mode = "rgmii-id";
+			xlnx,no_mdio_bus;
+		};
+
+		gpio: gpio@e000a000 {
+			/* You can specify GPIO settings here:
+			 *
+			 *  gpioN-label      String label.
+			 *  gpioN-direction  "input" or "output".
+			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
+			 */
+
+			/* GPIO1 (MIO1) */
+			gpio1-label     = "phy_interrupt";
+			gpio1-direction = "input";
+			gpio1-settings  = "level-low";
+
+			/* GPIO46 (MIO46) */
+			gpio46-label     = "wdt_interrupt";
+			gpio46-direction = "input";
+			gpio46-settings  = "edge-falling";
+
+			/* GPIO54 (EMIO0) */
+			gpio54-label     = "eth1_link_speed";
+			gpio54-direction = "output";
+			gpio54-settings  = "low";
+		};
+
+		i2c0: i2c@e0004000 {
+			nizynqcpld@40 {
+				interrupts = <46 0>;
+			};
+
+			ds3231_rtc@68 {
+				status = "okay";
+			};
+		};
+	};
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart2 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};

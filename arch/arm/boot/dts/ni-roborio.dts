@@ -1,0 +1,90 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/ {
+	model = "NI Athena";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba {
+		eth0: eth@e000b000 {
+			status = "okay";
+			phy-handle = <&phy0>;
+			phy-mode = "rgmii-id";
+
+                        phy0: phy@0 {
+                                compatible = "smsc,lan8720";
+                                device_type = "ethernet-phy";
+                                reg = <0x0>;
+                                /* Interrupt pin is connected from PL pin to FPGA IRQ 3 */
+                                interrupts = <0 32 4>;
+                        };
+		};
+
+		gpio: gpio@e000a000 {
+			/* You can specify GPIO settings here:
+			 *
+			 *  gpioN-label      String label.
+			 *  gpioN-direction  "input" or "output".
+			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
+			 */
+
+			/* GPIO54 (EMIO0) */
+			gpio54-label		= "eth0_link_speed";
+			gpio54-direction	= "output";
+			gpio54-settings		= "high";
+
+			/* GPIO55 (EMIO1) */
+			gpio55-label		= "phy_interrupt";
+			gpio55-direction	= "input";
+			gpio55-settings		= "level-low";
+
+		};
+
+		i2c0: i2c@e0004000 {
+			nizynqcpld@40 {
+				interrupts = <24 0>;
+			};
+		};
+
+		i2c1: i2c@e0005000 {
+			status = "okay";
+		};
+
+		i2c2: i2c@81000000 {
+			status = "okay";
+		};
+	};
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&can0 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&usb1 {
+	status = "okay";
+	dr_mode = "peripheral";
+};
