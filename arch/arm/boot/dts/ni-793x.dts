@@ -1,0 +1,106 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/* NIDEVCODE 77AC */
+/* NIDEVCODE 77B2 */
+/* NIDEVCODE 77B1 */
+
+/ {
+	model = "NI-793x";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba@0 {
+
+		leds-ni793x@4020F000 {
+			compatible = "ni,led-793x";
+			reg = <0x4020F000 4>;
+			user1 {
+				label = "nilrt:user1:green";
+			};
+		};
+
+		i2c0: i2c@e0004000 {
+			nicpld@40 {
+				watchdogs {
+					boot-watchdog {
+						interrupt-parent = <&gpio>;
+						interrupts = <15 2 /* IRQ_TYPE_EDGE_FALLING */>;
+					};
+				};
+
+				leds {
+					status-0 {
+						label = "nilrt:status:yellow";
+						max-brightness = <0xFFFF>;
+					};
+					eth0-0 {
+						label = "nilrt:eth0:green";
+						linux,default-trigger =
+						  "e000b000.etherne:00:100Mb";
+					};
+					eth0-1 {
+						label = "nilrt:eth0:yellow";
+						linux,default-trigger =
+						  "e000b000.etherne:00:Gb";
+					};
+				};
+			};
+
+			ds3231_rtc@68 {
+				status = "okay";
+			};
+		};
+	};
+};
+
+&gem0 {
+	status = "okay";
+
+	/* No fpga_clk specified because we want our FPGA clock
+	 * (fclk0) to always be 125 MHz. The bootloader sets
+	 * fclk0 to 125 MHz and we just leave it like that. */
+
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	emio-speed-gpios = <0>,
+			   <&gpio 54 0>;
+
+	phy0: phy@0 {
+		compatible = "micrel,KSZ9031";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt on GPIO1. */
+		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
+		interrupt-parent = <&gpio>;
+
+		/* Set RX_CLK Pad Skew [4:0] to 0b00000. */
+		rxc-skew-ps = <0>;
+	};
+};
+
+&sdhci0 {
+	status = "okay";
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "peripheral";
+};
+
+&usb1 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&clkc {
+	/* Enable fclk0 for eth0 and eth1, fclk1 for serial. */
+	fclk-enable = <0x3>;
+};

@@ -1,0 +1,54 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/* NIDEVCODE 7885 */
+
+/ {
+	model = "NI ELVIS RIO CM";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba@0 {
+		i2c0: i2c@e0004000 {
+			nicpld@40 {
+				watchdogs {
+					boot-watchdog {
+						interrupt-parent = <&gpio>;
+						interrupts = <24 2 /* IRQ_TYPE_EDGE_FALLING */>;
+					};
+				};
+
+				leds {
+					status-1 {
+						label = "nilrt:status:yellow";
+						max-brightness = <0xFFFF>;
+					};
+				};
+			};
+		};
+	};
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&usb1 {
+	status = "okay";
+	dr_mode = "peripheral";
+};
+
+&clkc {
+	/* Enable fclk1 for serial. */
+	fclk-enable = <0x2>;
+};
