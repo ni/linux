@@ -1,6 +1,8 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
+/* NIDEVCODE 775E */
+
 / {
 	model = "NI Tecate";
 	compatible = "ni,zynq", "xlnx,zynq-7000";

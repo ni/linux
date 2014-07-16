@@ -1,6 +1,8 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
+/* NIDEVCODE 76F2 */
+
 / {
 	model = "NI Athena";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
