@@ -646,7 +646,7 @@ static const struct vm_operations_struct uio_vm_ops = {
 	.fault = uio_vma_fault,
 };
 
-static int uio_mmap_physical(struct vm_area_struct *vma)
+static int uio_mmap_physical(struct vm_area_struct *vma, bool cached)
 {
 	struct uio_device *idev = vma->vm_private_data;
 	int mi = uio_find_mem_index(vma);
@@ -655,7 +655,8 @@ static int uio_mmap_physical(struct vm_area_struct *vma)
 
 	vma->vm_flags |= VM_IO | VM_RESERVED;
 
-	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+	if(!cached)
+		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 	return remap_pfn_range(vma,
 			       vma->vm_start,
@@ -702,13 +703,28 @@ static int uio_mmap(struct file *filep, struct vm_area_struct *vma)
 
 	switch (idev->info->mem[mi].memtype) {
 		case UIO_MEM_PHYS:
-			return uio_mmap_physical(vma);
+			return uio_mmap_physical(vma, false);
+		case UIO_MEM_PHYS_CACHED:
+			return uio_mmap_physical(vma, true);
 		case UIO_MEM_LOGICAL:
 		case UIO_MEM_VIRTUAL:
 			return uio_mmap_logical(vma);
 		default:
 			return -EINVAL;
 	}
+}
+
+static long uio_ioctl(struct file *filep, unsigned int cmd, unsigned long arg) {
+	struct uio_listener *listener = filep->private_data;
+	struct uio_device *idev = listener->dev;
+	int ret;
+
+	if (idev->info->ioctl) {
+		ret = idev->info->ioctl(idev->info, cmd, arg);
+		return ret;
+	}
+
+	return -EINVAL;
 }
 
 static const struct file_operations uio_fops = {
@@ -721,6 +737,7 @@ static const struct file_operations uio_fops = {
 	.poll		= uio_poll,
 	.fasync		= uio_fasync,
 	.llseek		= noop_llseek,
+	.unlocked_ioctl = uio_ioctl,
 };
 
 static int uio_major_init(void)

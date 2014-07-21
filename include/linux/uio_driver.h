@@ -95,6 +95,7 @@ struct uio_info {
 	int (*open)(struct uio_info *info, struct inode *inode);
 	int (*release)(struct uio_info *info, struct inode *inode);
 	int (*irqcontrol)(struct uio_info *info, s32 irq_on);
+	int (*ioctl)(struct uio_info *info, unsigned int cmd, unsigned long arg);
 };
 
 extern int __must_check
@@ -114,10 +115,11 @@ extern void uio_event_notify(struct uio_info *info);
 #define UIO_IRQ_NONE	0
 
 /* defines for uio_mem->memtype */
-#define UIO_MEM_NONE	0
-#define UIO_MEM_PHYS	1
-#define UIO_MEM_LOGICAL	2
-#define UIO_MEM_VIRTUAL 3
+#define UIO_MEM_NONE	    0
+#define UIO_MEM_PHYS	    1
+#define UIO_MEM_LOGICAL	    2
+#define UIO_MEM_VIRTUAL     3
+#define UIO_MEM_PHYS_CACHED 4
 
 /* defines for uio_port->porttype */
 #define UIO_PORT_NONE	0
