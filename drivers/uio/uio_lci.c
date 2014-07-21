@@ -6,13 +6,17 @@
 #include <linux/moduleparam.h>
 #include <linux/platform_device.h>
 #include <linux/uio_driver.h>
+#include <linux/uio_lci_ioctl.h>
 #include <linux/slab.h>
 
 #include <asm/cacheflush.h>
+#include <asm/uaccess.h>
+#include <linux/dma-mapping.h>
 
 struct lci_dev {
 	struct uio_info info;
 	unsigned long flags;
+	void __iomem* dmabuf;
 	spinlock_t lock;
 };
 
@@ -46,6 +50,38 @@ static int uio_lci_irqcontrol(struct uio_info *dev_info, s32 irq_on)
 	return 0;
 }
 
+static int uio_lci_ioctl(struct uio_info *dev_info, unsigned int cmd, unsigned long arg)
+{
+	lci_arg_t* region = (lci_arg_t*)arg;
+
+	phys_addr_t outer_start = dev_info->mem[1].addr + region->offset;
+	phys_addr_t outer_end = outer_start + region->size;
+
+	struct lci_dev* pdev = dev_info->priv;
+
+	void __iomem* inner_start = pdev->dmabuf + region->offset;
+
+	switch(cmd) 
+	{
+		case UIO_LCI_DEV_TO_CPU:
+			//Invalidate the DMA area in the outer (L2) cache
+			outer_inv_range(outer_start, outer_end);
+			//Now invalidate L1 data cache
+			dmac_unmap_area(inner_start, region->size, DMA_FROM_DEVICE);
+			break;
+		case UIO_LCI_CPU_TO_DEV:
+			//Flush L1 data cache
+			dmac_map_area(inner_start, region->size , DMA_TO_DEVICE);
+			//Now, clean the DMA area in the outer (L2) cache
+			outer_clean_range(outer_start, outer_end);
+			break;
+		default:
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int __devinit lci_probe(struct platform_device *dev)
 {
 	struct lci_dev* pdev;
@@ -63,6 +99,7 @@ static int __devinit lci_probe(struct platform_device *dev)
 	pdev->info.version = "1.00a";
 	pdev->info.handler = uio_lci_handler;
 	pdev->info.irqcontrol = uio_lci_irqcontrol;
+	pdev->info.ioctl = uio_lci_ioctl;
 	pdev->info.priv = pdev;
 	//Mem region 0 is for the FPGA registers
 	pdev->info.mem[0].name = "registers";
@@ -74,9 +111,14 @@ static int __devinit lci_probe(struct platform_device *dev)
 	pdev->info.mem[1].name = "DMA_mem";
 	pdev->info.mem[1].addr = dev->resource[1].start;
 	pdev->info.mem[1].size = dev->resource[1].end - dev->resource[1].start + 1;
-	pdev->info.mem[1].memtype = UIO_MEM_PHYS;
+	pdev->info.mem[1].memtype = UIO_MEM_PHYS_CACHED;
 	//Set flags to 0, since our IRQ is enabled initially
 	pdev->flags = 0;
+
+	//Map in the dma memory for flushing purposes.  Per the ARM arch reference
+	//manual, the L1 dcache behaves as a physical-index pysical-tag cache.
+	//Flushing this virtual address will flush any user mode mappings as well.
+	pdev->dmabuf = ioremap_cached(pdev->info.mem[1].addr, pdev->info.mem[1].size);
 
 	irq = platform_get_irq(dev, 0);
 	if (irq == -ENXIO)
@@ -93,6 +135,7 @@ static int __devinit lci_probe(struct platform_device *dev)
 	return 0;
 
 err_register:
+	iounmap(pdev->dmabuf);
 	kfree(pdev);
 err_alloc:
 	return err;
@@ -102,22 +145,23 @@ static int __devexit lci_remove(struct platform_device *dev)
 {
 	struct lci_dev* pdev = platform_get_drvdata(dev);
 	uio_unregister_device(&pdev->info);
+	iounmap(pdev->dmabuf);
 	kfree(pdev);
 	platform_set_drvdata(dev, NULL);
 	printk(KERN_INFO "cleaned up the lci device!\n");
-        return 0;
+   	return 0;
 }
 
 static struct of_device_id lci_of_match[] __devinitdata = {
-	        { .compatible = "ni,lci-1.00.a", },
-		        { /* end of table */}
+		{ .compatible = "ni,lci-1.00.a", },
+		{ /* end of table */}
 };
 MODULE_DEVICE_TABLE(of, lci_of_match);
 
 static struct platform_driver lci_driver = {
-        .probe = lci_probe,
-        .remove = __devexit_p(lci_remove),
-        .driver = {
+		.probe = lci_probe,
+		.remove = __devexit_p(lci_remove),
+		.driver = {
 		.name = "lci_uio",
 		.owner = THIS_MODULE,
 		.of_match_table = lci_of_match,
@@ -126,14 +170,14 @@ static struct platform_driver lci_driver = {
 
 static int __init lci_init_module(void)
 {
-        return platform_driver_register(&lci_driver);
+	return platform_driver_register(&lci_driver);
 }
 
 module_init(lci_init_module);
 
 static void __exit lci_exit_module(void)
 {
-        platform_driver_unregister(&lci_driver);
+	platform_driver_unregister(&lci_driver);
 }
 
 module_exit(lci_exit_module);

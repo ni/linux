@@ -227,6 +227,7 @@ Code  Seq#(hex)	Include File		Comments
 					<http://web.archive.org/web/*/http://mikonos.dia.unisa.it/tcfs>
 'l'	40-7F	linux/udf_fs_i.h	in development:
 					<http://sourceforge.net/projects/linux-udf/>
+'l'	80-8F	linux/uio_lci_ioctl.h	LCI UIO driver
 'm'	00-09	linux/mmtimer.h		conflict!
 'm'	all	linux/mtio.h		conflict!
 'm'	all	linux/soundcard.h	conflict!

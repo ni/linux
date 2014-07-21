@@ -372,6 +372,7 @@ header-y += udf_fs_i.h
 header-y += udp.h
 header-y += uinput.h
 header-y += uio.h
+header-y += uio_lci_ioctl.h
 header-y += ultrasound.h
 header-y += un.h
 header-y += unistd.h
