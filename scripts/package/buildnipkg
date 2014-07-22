@@ -36,10 +36,12 @@ cp -v -- "${objtree}/System.map" "${hdrdir}"
 cp -v -- "${objtree}/.config" "${hdrdir}"
 cp -v -- "${objtree}/Module.symvers" "${hdrdir}"
 
-for bin in `find "${hdrdir}/scripts" -name "${CROSS_PREFIX}*" -type f`
-do
-	[ -x "${bin}" ] &&  mv -v -- "${bin}" `echo ${bin} | sed "s/${CROSS_PREFIX}//"`
-done
+if [ -n "${CROSS_PREFIX}" ]; then
+	for bin in `find "${hdrdir}/scripts" -name "${CROSS_PREFIX}*" -type f`
+	do
+		[ -x "${bin}" ] &&  mv -v -- "${bin}" `echo ${bin} | sed "s/${CROSS_PREFIX}//"`
+	done
+fi
 
 mksquashfs "$(dirname "${hdrdir}")" "${tmpdir}/headers.squashfs"
 mv "${tmpdir}/headers.squashfs" "$(dirname "${hdrdir}")"
@@ -149,6 +151,9 @@ bootm \${loadaddr}#config_\${DeviceCode}
 EOF
 
 		PATH=${PATH}:"${objtree}/scripts/dtc" mkimage -f "${bootdir}/linux.its" "${bootdir}/ni_zynq_custom_runmodekernel.itb"
+		;;
+	x86*)
+		cp -v -- ${srctree}/arch/x86/boot/bzImage ${bootdir}
 		;;
 	*)
 		echo "" >&2
