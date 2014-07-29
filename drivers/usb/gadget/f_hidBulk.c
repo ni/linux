@@ -29,13 +29,11 @@
 #define USE_INTR_OUT
 
 //How many requests to keep outstanding
-#define REQ_COUNT 10
+#define REQ_COUNT 5
 
 //The minor number of the first hid interface - the one that switches
 //to bulk.
 #define FIRST_HID_MINOR 0
-
-#define MAX_REQ_SIZE 1024
 
 static int major, minors, bulk_major, bulk_minors;
 static struct class *hidg_class;
