@@ -658,6 +658,14 @@ static void hidg_bulk_complete(struct usb_ep *ep, struct usb_request *req)
 	struct f_hidg *hidg = ep->driver_data;
 	int index = (int)req->context;
 
+	/* free completed in reqs, we are done with sent data */
+	if (hidg->bulk_eps[index]->desc->bEndpointAddress
+		 & USB_ENDPOINT_DIR_MASK)
+	{
+		kfree(req->buf);
+		req->buf = NULL;
+	}
+
 	spin_lock(&hidg->bulk_spinlock);
 
 	list_add_tail(&req->list, &(hidg->bulk_reqs[index]));
