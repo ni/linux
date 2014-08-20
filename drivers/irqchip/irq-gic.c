@@ -266,6 +266,17 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 
 	return IRQ_SET_MASK_OK;
 }
+
+void gic_set_cpu(unsigned int cpu, unsigned int irq)
+{
+	struct irq_data *d = irq_get_irq_data(irq);
+	struct cpumask mask;
+
+	cpumask_clear(&mask);
+	cpumask_set_cpu(cpu, &mask);
+	gic_set_affinity(d, &mask, true);
+}
+EXPORT_SYMBOL(gic_set_cpu);
 #endif
 
 #ifdef CONFIG_PM
@@ -674,6 +685,7 @@ void gic_raise_softirq(const struct cpumask *mask, unsigned int irq)
 
 	raw_spin_unlock_irqrestore(&irq_controller_lock, flags);
 }
+EXPORT_SYMBOL(gic_raise_softirq);
 #endif
 
 #ifdef CONFIG_BL_SWITCHER

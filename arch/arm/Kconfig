@@ -4,7 +4,7 @@ config ARM
 	select ARCH_BINFMT_ELF_RANDOMIZE_PIE
 	select ARCH_HAS_ATOMIC64_DEC_IF_POSITIVE
 	select ARCH_HAS_TICK_BROADCAST if GENERIC_CLOCKEVENTS_BROADCAST
-	select ARCH_HAVE_CUSTOM_GPIO_H
+	select ARCH_HAVE_CUSTOM_GPIO_H if (!ARCH_ZYNQ)
 	select ARCH_MIGHT_HAVE_PC_PARPORT
 	select ARCH_USE_BUILTIN_BSWAP
 	select ARCH_USE_CMPXCHG_LOCKREF
@@ -1630,7 +1630,7 @@ config ARM_PSCI
 # selected platforms.
 config ARCH_NR_GPIO
 	int
-	default 1024 if ARCH_SHMOBILE || ARCH_TEGRA
+	default 1024 if ARCH_SHMOBILE || ARCH_TEGRA || ARCH_ZYNQ
 	default 512 if ARCH_EXYNOS || ARCH_KEYSTONE || SOC_OMAP5 || SOC_DRA7XX || ARCH_S3C24XX || ARCH_S3C64XX
 	default 392 if ARCH_U8500
 	default 352 if ARCH_VT8500
@@ -2125,7 +2125,7 @@ config XIP_PHYS_ADDR
 
 config KEXEC
 	bool "Kexec system call (EXPERIMENTAL)"
-	depends on (!SMP || PM_SLEEP_SMP)
+	depends on PM_SLEEP_SMP
 	help
 	  kexec is a system call that implements the ability to shutdown your
 	  current kernel, and to start another kernel.  It is like a reboot

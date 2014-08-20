@@ -16,9 +16,9 @@
 
 #include <linux/init.h>
 #include <linux/kernel.h>
-#include <linux/cpumask.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/clk/zynq.h>
 #include <linux/clocksource.h>
 #include <linux/of_address.h>
@@ -46,10 +46,17 @@ void __iomem *zynq_scu_base;
  * zynq_memory_init - Initialize special memory
  *
  * We need to stop things allocating the low memory as DMA can't work in
- * the 1st 512K of memory.
+ * the 1st 512K of memory.  Using reserve vs remove is not totally clear yet.
  */
 static void __init zynq_memory_init(void)
 {
+	/*
+	 * Reserve the 0-0x4000 addresses (before swapper page tables
+	 * and kernel) which can't be used for DMA.
+	 * 0x0 - 0x4000 - reserving below not to be used by DMA
+	 * 0x4000 - 0x8000 swapper page table
+	 * 0x8000 - 0x80000 kernel .text
+	 */
 	if (!__pa(PAGE_OFFSET))
 		memblock_reserve(__pa(PAGE_OFFSET), __pa(swapper_pg_dir));
 }
@@ -58,25 +65,74 @@ static struct platform_device zynq_cpuidle_device = {
 	.name = "cpuidle-zynq",
 };
 
+#ifdef CONFIG_CACHE_L2X0
+static int __init zynq_l2c_init(void)
+{
+	u32 auxctrl;
+
+	/*
+	 * 64KB way size, 8-way associativity, parity disabled,
+	 * prefetching option, shared attribute override enable
+	 */
+	auxctrl = L2X0_AUX_CTRL_SHARE_OVERRIDE_EN_MASK |
+			L2X0_AUX_CTRL_WAY_SIZE64K_MASK |
+			L2X0_AUX_CTRL_REPLACE_POLICY_RR_MASK;
+#ifdef CONFIG_XILINX_L2_PREFETCH
+	auxctrl |= L2X0_AUX_CTRL_EARLY_BRESP_EN_MASK |
+			L2X0_AUX_CTRL_INSTR_PREFETCH_EN_MASK |
+			L2X0_AUX_CTRL_DATA_PREFETCH_EN_MASK;
+#endif
+	return l2x0_of_init(auxctrl, 0xF0F0FFFF);
+}
+early_initcall(zynq_l2c_init);
+#endif
+
+
+#ifdef CONFIG_XILINX_L1_PREFETCH
+static void __init zynq_data_prefetch_enable(void *info)
+{
+	/*
+	 * Enable prefetching in aux control register. L2 prefetch must
+	 * only be enabled if the slave supports it (PL310 does)
+	 */
+	asm volatile ("mrc   p15, 0, r1, c1, c0, 1\n"
+		      "orr   r1, r1, #6\n"
+		      "mcr   p15, 0, r1, c1, c0, 1\n"
+		      : : : "r1");
+}
+#endif
+
+static void __init zynq_init_late(void)
+{
+	zynq_pm_late_init();
+
+#ifdef CONFIG_XILINX_L1_PREFETCH
+	on_each_cpu(zynq_data_prefetch_enable, NULL, 0);
+#endif
+}
+
 /**
  * zynq_init_machine - System specific initialization, intended to be
  *		       called from board specific initialization.
  */
 static void __init zynq_init_machine(void)
 {
-	/*
-	 * 64KB way size, 8-way associativity, parity disabled
-	 */
-	l2x0_of_init(0x02060000, 0xF0F0FFFF);
+	struct platform_device_info devinfo = { .name = "cpufreq-cpu0", };
 
 	of_platform_populate(NULL, of_default_bus_match_table, NULL, NULL);
 
 	platform_device_register(&zynq_cpuidle_device);
+	platform_device_register_full(&devinfo);
+
+	zynq_slcr_init();
 }
 
 static void __init zynq_timer_init(void)
 {
-	zynq_slcr_init();
+	zynq_early_slcr_init();
+
+	zynq_clock_init();
+	of_clk_init(NULL);
 	clocksource_of_init();
 }
 
@@ -128,6 +184,7 @@ DT_MACHINE_START(XILINX_EP107, "Xilinx Zynq Platform")
 	.map_io		= zynq_map_io,
 	.init_irq	= zynq_irq_init,
 	.init_machine	= zynq_init_machine,
+	.init_late	= zynq_init_late,
 	.init_time	= zynq_timer_init,
 	.dt_compat	= zynq_dt_match,
 	.reserve	= zynq_memory_init,

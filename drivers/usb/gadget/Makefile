@@ -28,6 +28,7 @@ obj-$(CONFIG_USB_R8A66597)	+= r8a66597-udc.o
 obj-$(CONFIG_USB_FSL_QE)	+= fsl_qe_udc.o
 obj-$(CONFIG_USB_S3C_HSOTG)	+= s3c-hsotg.o
 obj-$(CONFIG_USB_S3C_HSUDC)	+= s3c-hsudc.o
+obj-$(CONFIG_USB_GADGET_XILINX)	+= xilinx_udc.o
 obj-$(CONFIG_USB_LPC32XX)	+= lpc32xx_udc.o
 obj-$(CONFIG_USB_EG20T)		+= pch_udc.o
 obj-$(CONFIG_USB_MV_UDC)	+= mv_udc.o
@@ -36,6 +37,7 @@ obj-$(CONFIG_USB_FUSB300)	+= fusb300_udc.o
 obj-$(CONFIG_USB_FOTG210_UDC)	+= fotg210-udc.o
 obj-$(CONFIG_USB_MV_U3D)	+= mv_u3d_core.o
 obj-$(CONFIG_USB_GR_UDC)	+= gr_udc.o
+obj-$(CONFIG_USB_ZYNQ)		+= zynq_udc.o
 
 # USB Functions
 usb_f_acm-y			:= f_acm.o

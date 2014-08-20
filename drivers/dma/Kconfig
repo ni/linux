@@ -33,6 +33,8 @@ if DMADEVICES
 
 comment "DMA Devices"
 
+source "drivers/dma/xilinx/Kconfig"
+
 config INTEL_MID_DMAC
 	tristate "Intel MID DMA support for Peripheral DMA controllers"
 	depends on PCI && X86

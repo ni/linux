@@ -32,7 +32,9 @@ config MICROBLAZE
 	select MODULES_USE_ELF_RELA
 	select CLONE_BACKWARDS3
 	select CLKSRC_OF
+	select COMMON_CLK
 	select BUILDTIME_EXTABLE_SORT
+	select GENERIC_SCHED_CLOCK
 
 config SWAP
 	def_bool n
@@ -273,6 +275,11 @@ config PCI_SYSCALL
 config PCI_XILINX
 	bool "Xilinx PCI host bridge support"
 	depends on PCI
+
+config XILINX_AXIPCIE
+	bool "Xilinx AXI PCIe host bridge support"
+	depends on PCI
+	select ARCH_SUPPORTS_MSI
 
 source "drivers/pci/Kconfig"
 

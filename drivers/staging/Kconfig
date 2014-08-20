@@ -146,4 +146,10 @@ source "drivers/staging/dgnc/Kconfig"
 
 source "drivers/staging/dgap/Kconfig"
 
+source "drivers/staging/video/axivdma/Kconfig"
+
+source "drivers/staging/apf/Kconfig"
+
+source "drivers/staging/pmods/Kconfig"
+
 endif # STAGING

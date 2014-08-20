@@ -199,3 +199,7 @@ source "drivers/gpu/drm/msm/Kconfig"
 source "drivers/gpu/drm/tegra/Kconfig"
 
 source "drivers/gpu/drm/panel/Kconfig"
+
+source "drivers/gpu/drm/xilinx/Kconfig"
+
+source "drivers/gpu/drm/xylon/Kconfig"

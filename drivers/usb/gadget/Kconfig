@@ -199,6 +199,33 @@ config USB_FSL_USB2
 	   dynamically linked module called "fsl_usb2_udc" and force
 	   all gadget drivers to also be dynamically linked.
 
+config USB_ZYNQ
+	tristate "Xilinx Zynq Highspeed USB DR Peripheral Controller"
+	depends on ARCH_ZYNQ
+	default USB_GADGET
+	select USB_GADGET_DUALSPEED
+	select USB_ZYNQ_DR_OF if OF
+	select USB_GADGET_SELECTED
+	help
+	   Xilinx Zynq USB controller core supports device mode.
+
+	   Say "y" to link the driver statically, or "m" to build a
+	   dynamically linked module called "xilinx_usbps_udc" and
+	   force all gadget drivers to also be dynamically linked.
+
+config USB_ZYNQ_ERRATA_DT654401
+	bool "USB Errata: Adding a dTD to a Primed Endpoint May Not Get Recognized"
+	depends on USB_ZYNQ
+	---help---
+	  There is an issue with the add dTD tripwire semaphore (ATDTW bit
+	  in USBCMD register) that can cause the controller to ignore a dTD
+	  that is added to a primed endpoint. When this happens, the software
+	  can read the tripwire bit and the status bit at '1' even though
+	  the endpoint is unprimed.
+
+	  This issue is only applicable for the Zynq silicon revisions < 3.0.
+	  For silicon versions 3.0 and higher, disable this option.
+
 config USB_FUSB300
 	tristate "Faraday FUSB300 USB Peripheral Controller"
 	depends on !PHYS_ADDR_T_64BIT && HAS_DMA
@@ -274,6 +301,13 @@ config USB_R8A66597
 	   Say "y" to link the driver statically, or "m" to build a
 	   dynamically linked module called "r8a66597_udc" and force all
 	   gadget drivers to also be dynamically linked.
+
+config USB_GADGET_XILINX
+	boolean "Xilinx USB Driver"
+	depends on (XILINX_VIRTEX || MICROBLAZE || ARCH_ZYNQ)
+	select USB_GADGET_DUALSPEED
+	help
+	   Sample USB gadget driver
 
 config USB_RENESAS_USBHS_UDC
 	tristate 'Renesas USBHS controller'
@@ -797,7 +831,7 @@ config USB_ETH
 	help
 	  This driver implements Ethernet style communication, in one of
 	  several ways:
-	  
+
 	   - The "Communication Device Class" (CDC) Ethernet Control Model.
 	     That protocol is often avoided with pure Ethernet adapters, in
 	     favor of simpler vendor-specific hardware, but is widely
@@ -839,7 +873,7 @@ config USB_ETH_RNDIS
 	   If you say "y" here, the Ethernet gadget driver will try to provide
 	   a second device configuration, supporting RNDIS to talk to such
 	   Microsoft USB hosts.
-	   
+
 	   To make MS-Windows work with this, use Documentation/usb/linux.inf
 	   as the "driver info file".  For versions of MS-Windows older than
 	   XP, you'll need to download drivers from Microsoft's website; a URL

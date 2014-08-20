@@ -301,8 +301,16 @@ config GPIO_TZ1090_PDC
 config GPIO_XILINX
 	bool "Xilinx GPIO support"
 	depends on PPC_OF || MICROBLAZE || ARCH_ZYNQ
+	select GENERIC_IRQ_CHIP
 	help
-	  Say yes here to support the Xilinx FPGA GPIO device
+	  Say yes here to support the Xilinx AXI/XPS GPIO device
+
+config GPIO_ZYNQ
+	tristate "Xilinx ZYNQ GPIO support"
+	depends on ARCH_ZYNQ
+	select GENERIC_IRQ_CHIP
+	help
+	  Say yes here to support Xilinx ZYNQ GPIO controller.
 
 config GPIO_XTENSA
 	bool "Xtensa GPIO32 support"

@@ -111,6 +111,15 @@ config WM8350_WATCHDOG
 	  Support for the watchdog in the WM8350 AudioPlus PMIC.  When
 	  the watchdog triggers the system will be reset.
 
+config XILINX_WATCHDOG
+	tristate "Xilinx Watchdog timer"
+	select WATCHDOG_CORE
+	help
+	  Watchdog driver for the xps_timebase_wdt ip core.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called of_xilinx_wdt.
+
 # ALPHA Architecture
 
 # ARM Architecture
@@ -347,6 +356,14 @@ config NUC900_WATCHDOG
 	  for the Nuvoton NUC900 series SoCs.
 	  To compile this driver as a module, choose M here: the
 	  module will be called nuc900_wdt.
+
+config CADENCE_WATCHDOG
+	tristate "Cadence Watchdog Timer"
+	depends on ARM && HAS_IOMEM
+	select WATCHDOG_CORE
+	help
+	  Say Y here if you want to include support for the watchdog
+	  timer in the Xilinx Zynq.
 
 config TS72XX_WATCHDOG
 	tristate "TS-72XX SBC Watchdog"
@@ -1022,18 +1039,6 @@ config M54xx_WATCHDOG
 	  module will be called m54xx_wdt.
 
 # MicroBlaze Architecture
-
-config XILINX_WATCHDOG
-	tristate "Xilinx Watchdog timer"
-	depends on MICROBLAZE
-	---help---
-	  Watchdog driver for the xps_timebase_wdt ip core.
-
-	  IMPORTANT: The xps_timebase_wdt parent must have the property
-	  "clock-frequency" at device tree.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called of_xilinx_wdt.
 
 # MIPS Architecture
 

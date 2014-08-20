@@ -20,11 +20,16 @@
 void zynq_secondary_startup(void);
 
 extern int zynq_slcr_init(void);
+extern int zynq_early_slcr_init(void);
 extern void zynq_slcr_system_reset(void);
 extern void zynq_slcr_cpu_stop(int cpu);
 extern void zynq_slcr_cpu_start(int cpu);
+extern bool zynq_slcr_cpu_state_read(int cpu);
+extern void zynq_slcr_cpu_state_write(int cpu, bool die);
+extern u32 zynq_slcr_get_ocm_config(void);
 
 #ifdef CONFIG_SMP
+extern void zynq_secondary_startup(void);
 extern void secondary_startup(void);
 extern char zynq_secondary_trampoline;
 extern char zynq_secondary_trampoline_jump;
@@ -33,10 +38,22 @@ extern int zynq_cpun_start(u32 address, int cpu);
 extern struct smp_operations zynq_smp_ops __initdata;
 #endif
 
+extern void zynq_slcr_init_preload_fpga(void);
+extern void zynq_slcr_init_postload_fpga(void);
+
 extern void __iomem *zynq_slcr_base;
 extern void __iomem *zynq_scu_base;
 
-/* Hotplug */
-extern void zynq_platform_cpu_die(unsigned int cpu);
+#ifdef CONFIG_SUSPEND
+int zynq_pm_late_init(void);
+#else
+static inline int zynq_pm_late_init(void)
+{
+	return 0;
+}
+#endif
+
+extern unsigned int zynq_sys_suspend_sz;
+int zynq_sys_suspend(void __iomem *ddrc_base, void __iomem *slcr_base);
 
 #endif
