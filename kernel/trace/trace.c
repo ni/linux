@@ -5238,7 +5238,7 @@ tracing_rawmark_write(struct file *filp, const char __user *ubuf,
 			goto error_and_trace;
 		}
 	}
-	if (filter_check_discard(call, entry, buffer, event))
+	if (call_filter_check_discard(call, entry, buffer, event))
 		goto out_unlock;
  error_and_trace:
 	__buffer_unlock_commit(buffer, event);
