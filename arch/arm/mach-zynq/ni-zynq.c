@@ -25,7 +25,7 @@
 struct ni_zynq_board_reset *ni_zynq_board_reset;
 EXPORT_SYMBOL_GPL(ni_zynq_board_reset);
 
-static void ni_cpld_system_reset(char mode, const char *cmd)
+static void ni_cpld_system_reset(enum reboot_mode mode, const char *cmd)
 {
 	if (ni_zynq_board_reset)
 		ni_zynq_board_reset->reset(ni_zynq_board_reset);
