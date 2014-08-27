@@ -1089,8 +1089,8 @@ long v4l2_compat_ioctl32(struct file *file, unsigned int cmd, unsigned long arg)
 	case VIDIOC_QUERY_DV_TIMINGS:
 	case VIDIOC_DV_TIMINGS_CAP:
 	case VIDIOC_ENUM_FREQ_BANDS:
-	case VIDIOC_SUBDEV_G_EDID32:
-	case VIDIOC_SUBDEV_S_EDID32:
+	case VIDIOC_G_EDID32:
+	case VIDIOC_S_EDID32:
 		ret = do_video_ioctl(file, cmd, arg);
 		break;
 
