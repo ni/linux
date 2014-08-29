@@ -88,14 +88,14 @@
 		};
 
 		can0: can@e0008000 {
-			compatible = "xlnx,ps7-can-1.00.a";
+			compatible = "xlnx,zynq-can-1.00.a";
 			status = "disabled";
 			reg = <0xe0008000 0x1000>;
 			interrupts = <0 28 4>;
 		};
 
 		can1: can@e0009000 {
-			compatible = "xlnx,ps7-can-1.00.a";
+			compatible = "xlnx,zynq-can-1.00.a";
 			status = "disabled";
 			reg = <0xe0009000 0x1000>;
 			interrupts = <0 51 4>;
@@ -113,34 +113,23 @@
 			clocks = <&clkc 12>;
 		};
 
-		sdhci0: sdhci@e0100000 {
-			compatible = "arasan,sdhci-8.9a";
-			status = "disabled";
-			clock-names = "clk_xin", "clk_ahb";
-			clocks = <&clkc 21>, <&clkc 32>;
-			interrupts = <0 24 4>;
-			reg = <0xe0100000 0x1000>;
-			xlnx,has-cd = <0x1>;
-			xlnx,has-cpc = <0x1>;
-		};
-
 		smcc@e000e000 {
-                        #address-cells = <1>;
-                        #size-cells = <1>;
-                        compatible = "xlnx,ps7-smcc-1.00.a", "xlnx,ps7-smc";
-                        interrupts = <0 18 4>;
-                        ranges ;
-                        reg = <0xE000E000 0x1000>;
-                        clock-names = "ref_clk", "aper_clk";
-                        clocks = <&clkc 11>, <&clkc 44>;
-                        xlnx,addr25 = <0x0>;
-                        xlnx,nor-chip-sel0 = <0x0>;
-                        xlnx,nor-chip-sel1 = <0x0>;
-                        xlnx,sram-chip-sel0 = <0x0>;
-                        xlnx,sram-chip-sel1 = <0x0>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			arm,addr25 = <0x0>;
+			arm,nor-chip-sel0 = <0x0>;
+			arm,nor-chip-sel1 = <0x0>;
+			arm,sram-chip-sel0 = <0x0>;
+			arm,sram-chip-sel1 = <0x0>;
+			clock-names = "memclk", "aclk";
+			clocks = <&clkc 11>, <&clkc 44>;
+			compatible = "arm,pl353-smc-r2p1";
+			interrupts = <0 18 4>;
+			ranges ;
+			reg = <0xe000e000 0x1000>;
 			nand@e1000000 {
-				compatible = "xlnx,ps7-nand-1.00.a";
-				reg = <0xE1000000 0x1000000>;
+				compatible = "arm,pl353-nand-r2p1";
+				reg = <0xe1000000 0x1000000>;
 				bank-width = <1>; /* 8-bit width */
 				xlnx,nand-width = <0x8>;
 
@@ -184,7 +173,7 @@
 		};
 
 		usb0: usb@e0002000 {
-			compatible = "xlnx,ps7-usb-1.00.a";
+			compatible = "xlnx,zynq-usb-1.00.a";
 			status = "disabled";
 			reg = <0xe0002000 0x1000>;
 			interrupts = <0 21 4>;
@@ -192,17 +181,17 @@
 			phy_type = "ulpi";
 		};
 
-                usb1: usb@e0003000 {
-                        compatible = "xlnx,ps7-usb-1.00.a";
+		usb1: usb@e0003000 {
+			compatible = "xlnx,zynq-usb-1.00.a";
 			status = "disabled";
-                        reg = <0xe0003000 0x1000>;
-                        interrupts = <0 44 4>;
+			reg = <0xe0003000 0x1000>;
+			interrupts = <0 44 4>;
 			clocks = <&clkc 29>;
-                        phy_type = "ulpi";
-                };
+			phy_type = "ulpi";
+		};
 
 		gpio: gpio@e000a000 {
-			compatible = "xlnx,ps7-gpio-1.00.a";
+			compatible = "xlnx,zynq-gpio-1.0";
 			reg = <0xe000a000 0x1000>;
 			#interrupt-cells = <0x2>;
 			interrupt-controller;
