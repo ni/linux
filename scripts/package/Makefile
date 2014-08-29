@@ -105,7 +105,7 @@ ni-pkg: FORCE
 	$(MAKE)
 	$(CONFIG_SHELL) $(srctree)/scripts/package/buildnipkg
 
-clean-dirs += $(objtree)/ni-install
+clean-dirs += $(objtree)/ni-install/
 
 # perf-pkg - generate a source tarball with perf source
 # ---------------------------------------------------------------------------
