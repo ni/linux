@@ -81,9 +81,10 @@ case "${ARCH}" in
                 };
 EOF
 		for TARGET_BOARD in `ls arch/arm/boot/dts/ni-*.dts | sed 's#.*/\([^/]*\)\.dts$#\1#'`; do
-			cp -v -- "${srctree}/arch/arm/boot/dts/${TARGET_BOARD}.dts" "${bootdir}"
-			${srctree}/scripts/dtc/dtc -O dtb -o "${bootdir}/${TARGET_BOARD}.dtb" -b 0 -p 1024 "${bootdir}/${TARGET_BOARD}.dts"
-			DEVCODE=`grep NIDEVCODE ${bootdir}/${TARGET_BOARD}.dts | sed "s/.* \([A-Fa-f0-9]\{4\}\) .*/\1/"`
+			echo "Creating dtb for ${TARGET_BOARD}"
+			SRC_DTS=${srctree}/arch/arm/boot/dts/${TARGET_BOARD}.dts
+			${srctree}/scripts/dtc/dtc -O dtb -o "${bootdir}/${TARGET_BOARD}.dtb" -b 0 -p 1024 "${SRC_DTS}"
+			DEVCODE=`grep NIDEVCODE ${SRC_DTS} | sed "s/.* \([A-Fa-f0-9]\{4\}\) .*/\1/"`
 			cat <<EOF >> ${bootdir}/linux.its
 
                 fdt_$DEVCODE@1 {
