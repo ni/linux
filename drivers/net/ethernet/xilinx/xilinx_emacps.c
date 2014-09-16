@@ -502,6 +502,7 @@ struct net_local {
 	void __iomem *baseaddr;
 	struct clk *devclk;
 	struct clk *aperclk;
+	struct clk *fpgaclk;
 
 	struct device_node *phy_node;
 	struct device_node *gmii2rgmii_phy_node;
@@ -705,14 +706,27 @@ static void xemacps_adjust_link(struct net_device *ndev)
 				gmii2rgmii_reg |= XEMACPS_GMII2RGMII_SPEED1000;
 				xemacps_set_freq(lp->devclk, 125000000,
 						&lp->pdev->dev);
+
+				if (lp->fpgaclk)
+					xemacps_set_freq(lp->fpgaclk,
+							 125000000,
+							 &lp->pdev->dev);
 			} else if (phydev->speed == SPEED_100) {
 				regval |= XEMACPS_NWCFG_100_MASK;
 				gmii2rgmii_reg |= XEMACPS_GMII2RGMII_SPEED100;
 				xemacps_set_freq(lp->devclk, 25000000,
 						&lp->pdev->dev);
+
+				if (lp->fpgaclk)
+					xemacps_set_freq(lp->fpgaclk, 25000000,
+							&lp->pdev->dev);
 			} else if (phydev->speed == SPEED_10) {
 				xemacps_set_freq(lp->devclk, 2500000,
 						&lp->pdev->dev);
+
+				if (lp->fpgaclk)
+					xemacps_set_freq(lp->fpgaclk, 2500000,
+							&lp->pdev->dev);
 			} else {
 				dev_err(&lp->pdev->dev,
 					"%s: unknown PHY speed %d\n",
@@ -2914,6 +2928,11 @@ static int xemacps_probe(struct platform_device *pdev)
 		rc = PTR_ERR(lp->devclk);
 		goto err_out_unregister_netdev;
 	}
+	lp->fpgaclk = devm_clk_get(&pdev->dev, "fpga_clk");
+	if (IS_ERR(lp->fpgaclk)) {
+		dev_info(&pdev->dev, "fpga_clk clock not found.\n");
+		lp->fpgaclk = NULL;
+	}
 
 	rc = clk_prepare_enable(lp->aperclk);
 	if (rc) {
@@ -2924,6 +2943,13 @@ static int xemacps_probe(struct platform_device *pdev)
 	if (rc) {
 		dev_err(&pdev->dev, "Unable to enable device clock.\n");
 		goto err_out_clk_dis_aper;
+	}
+	if (lp->fpgaclk) {
+		rc = clk_prepare_enable(lp->devclk);
+		if (rc) {
+			dev_err(&pdev->dev, "Unable to enable FPGA clock.\n");
+			goto err_out_clk_dis_dev;
+		}
 	}
 
 	if (of_get_property(lp->pdev->dev.of_node, "xlnx,no_mdio_bus", NULL))
@@ -2996,6 +3022,9 @@ static int xemacps_probe(struct platform_device *pdev)
 	return 0;
 
 err_out_clk_dis_all:
+	if (lp->fpgaclk)
+		clk_disable_unprepare(lp->fpgaclk);
+err_out_clk_dis_dev:
 	clk_disable_unprepare(lp->devclk);
 err_out_clk_dis_aper:
 	clk_disable_unprepare(lp->aperclk);
@@ -3027,9 +3056,13 @@ static int xemacps_remove(struct platform_device *pdev)
 		unregister_netdev(ndev);
 
 		if (!pm_runtime_suspended(&pdev->dev)) {
+			if (lp->fpgaclk)
+				clk_disable_unprepare(lp->fpgaclk);
 			clk_disable_unprepare(lp->devclk);
 			clk_disable_unprepare(lp->aperclk);
 		} else {
+			if (lp->fpgaclk)
+				clk_unprepare(lp->fpgaclk);
 			clk_unprepare(lp->devclk);
 			clk_unprepare(lp->aperclk);
 		}
@@ -3057,6 +3090,8 @@ static int xemacps_suspend(struct device *device)
 
 	netif_device_detach(ndev);
 	if (!pm_runtime_suspended(device)) {
+		if (lp->fpgaclk)
+			clk_disable(lp->fpgaclk);
 		clk_disable(lp->devclk);
 		clk_disable(lp->aperclk);
 	}
@@ -3088,6 +3123,15 @@ static int xemacps_resume(struct device *device)
 			clk_disable(lp->aperclk);
 			return ret;
 		}
+
+		if (lp->fpgaclk) {
+			ret = clk_enable(lp->fpgaclk);
+			if (ret) {
+				clk_disable(lp->devclk);
+				clk_disable(lp->aperclk);
+				return ret;
+			}
+		}
 	}
 	netif_device_attach(ndev);
 	return 0;
@@ -3118,6 +3162,13 @@ static int xemacps_runtime_resume(struct device *device)
 		return ret;
 	}
 
+	ret = clk_enable(lp->fpgaclk);
+	if (ret) {
+		clk_disable(lp->devclk);
+		clk_disable(lp->aperclk);
+		return ret;
+	}
+
 	return 0;
 }
 
@@ -3128,6 +3179,8 @@ static int xemacps_runtime_suspend(struct device *device)
 	struct net_device *ndev = platform_get_drvdata(pdev);
 	struct net_local *lp = netdev_priv(ndev);
 
+	if (lp->fpgaclk)
+		clk_disable(lp->fpgaclk);
 	clk_disable(lp->devclk);
 	clk_disable(lp->aperclk);
 	return 0;
