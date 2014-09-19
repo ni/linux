@@ -17,6 +17,7 @@
 
 			phy-handle = <&phy0>;
 			phy-mode = "rgmii-id";
+			xlnx,emio-gpio-speed-1000 = <54>;
 
 			phy0: phy@0 {
 				compatible = "micrel,KSZ9031";
@@ -37,6 +38,8 @@
 
 			phy-handle = <&phy1>;
 			phy-mode = "rgmii-id";
+			xlnx,emio-gpio-speed-1000 = <55>;
+			xlnx,emio-gpio-speed-100 = <56>;
 
 			phy1: phy@1 {
 				compatible = "micrel,KSZ9031";
