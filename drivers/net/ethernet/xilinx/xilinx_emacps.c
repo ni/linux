@@ -871,7 +871,6 @@ static int xemacps_mii_init(struct net_local *lp)
 	int rc = -ENXIO, i;
 	struct resource res;
 	struct device_node *np = of_get_parent(lp->phy_node);
-	struct device_node *npp;
 
 	lp->mii_bus = mdiobus_alloc();
 	if (lp->mii_bus == NULL) {
@@ -894,8 +893,9 @@ static int xemacps_mii_init(struct net_local *lp)
 
 	for (i = 0; i < PHY_MAX_ADDR; i++)
 		lp->mii_bus->irq[i] = PHY_POLL;
-	npp = of_get_parent(np);
-	of_address_to_resource(npp, 0, &res);
+	/* We use the parent of the PHY (np) and its grandparent so that we can
+	 * have two Ethernet ports operating on two distinct MII buses. */
+	of_address_to_resource(np, 0, &res);
 	snprintf(lp->mii_bus->id, MII_BUS_ID_SIZE, "%.8llx",
 		 (unsigned long long)res.start);
 
