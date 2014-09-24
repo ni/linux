@@ -29,8 +29,8 @@
 				compatible = "micrel,KSZ9031";
 				device_type = "ethernet-phy";
 				reg = <0x1>;
-				/* Interrupt on GPIO57. */
-				interrupts = <57 0>;
+				/* Interrupt on GPIO1, shared with phy0. */
+				interrupts = <1 0>;
 				interrupt-parent = <&gpio>;
 			};
 		};
