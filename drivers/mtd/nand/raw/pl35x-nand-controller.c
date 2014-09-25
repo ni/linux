@@ -28,7 +28,7 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 
-#define PL35X_NANDC_DRIVER_NAME "pl35x-nand-controller"
+#define PL35X_NANDC_DRIVER_NAME "xilinx_nand"
 
 /* SMC controller status register (RO) */
 #define PL35X_SMC_MEMC_STATUS 0x0
