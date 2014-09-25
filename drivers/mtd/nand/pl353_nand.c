@@ -30,7 +30,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
-#define PL353_NAND_DRIVER_NAME "pl353-nand"
+#define PL353_NAND_DRIVER_NAME "xilinx_nand"
 
 /* NAND flash driver defines */
 #define PL353_NAND_CMD_PHASE	1	/* End command valid in command phase */
