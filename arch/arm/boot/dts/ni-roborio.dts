@@ -60,6 +60,49 @@
 		i2c2: i2c@81000000 {
 			status = "okay";
 		};
+
+		spi0: spi@e0006000 {
+			status = "okay";
+			num-cs = <7>;
+			is-decoded-cs = <0>;
+			speed-hz = <200000000>;
+			bus-num = <0>;
+
+			spidev@0 {
+                                compatible = "spidev";
+                                spi-max-frequency = <2000000>;
+                                reg = <0>;
+			};
+			spidev@1 {
+                                compatible = "spidev";
+                                spi-max-frequency = <2000000>;
+                                reg = <1>;
+			};
+			spidev@2 {
+                                compatible = "spidev";
+                                spi-max-frequency = <2000000>;
+                                reg = <2>;
+			};
+			spidev@3 {
+                                compatible = "spidev";
+                                spi-max-frequency = <2000000>;
+                                reg = <3>;
+			};
+		};
+
+		spi1: spi@e0007000 {
+			status = "okay";
+			num-cs = <3>;
+			is-decoded-cs = <0>;
+			speed-hz = <200000000>;
+			bus-num = <1>;
+
+			spidev@0 {
+                                compatible = "spidev";
+                                spi-max-frequency = <2000000>;
+                                reg = <0>;
+			};
+		};
 	};
 };
 
