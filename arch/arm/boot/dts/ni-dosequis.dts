@@ -108,3 +108,8 @@
 	status = "okay";
 	dr_mode = "host";
 };
+
+&clkc {
+	/* Enable fclk1 for serial. */
+	fclk-enable = <0x2>;
+};
