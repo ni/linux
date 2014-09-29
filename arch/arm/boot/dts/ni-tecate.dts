@@ -166,3 +166,8 @@
 	status = "okay";
 	dr_mode = "host";
 };
+
+&clkc {
+	/* Enable fclk0 for eth0 and eth1, fclk1 for serial. */
+	fclk-enable = <0x3>;
+};
