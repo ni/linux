@@ -831,7 +831,6 @@ irqreturn_t phy_change_threadfn(int irq, void *dev_id)
 
 	/* reschedule state queue work to run as soon as possible */
 	phy_trigger_machine(phydev, true);
-	return;
 
 	return IRQ_HANDLED;
 
