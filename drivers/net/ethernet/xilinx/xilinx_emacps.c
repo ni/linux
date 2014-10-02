@@ -78,8 +78,15 @@ MDC_DIV_64, MDC_DIV_96, MDC_DIV_128, MDC_DIV_224 };
 #undef  DEBUG
 #define DEBUG
 
-#define XEMACPS_SEND_BD_CNT		256
-#define XEMACPS_RECV_BD_CNT		256
+/* Transmit and receive descriptor counts. The values are chosen to use full
+ * pages of memory. When allocating coherent DMA memory, it gives you full
+ * pages regardless of how much you ask for. We share two pages between the
+ * transmit and receive descriptors. Descriptors are 8 bytes and a page is 4096
+ * bytes which gives us 1024 descriptors. We split it evenly, 512 transmit
+ * descriptors and 512 receive descriptors.
+ */
+#define XEMACPS_SEND_BD_CNT		512
+#define XEMACPS_RECV_BD_CNT		512
 
 #define XEMACPS_NAPI_WEIGHT		64
 
@@ -1674,17 +1681,12 @@ static void xemacps_descriptor_free(struct net_local *lp)
 	kfree(lp->rx_skb);
 	lp->rx_skb = NULL;
 
-	size = XEMACPS_RECV_BD_CNT * sizeof(struct xemacps_bd);
 	if (lp->rx_bd) {
+		size = (XEMACPS_RECV_BD_CNT + XEMACPS_SEND_BD_CNT) *
+			sizeof(struct xemacps_bd);
 		dma_free_coherent(&lp->pdev->dev, size,
 			lp->rx_bd, lp->rx_bd_dma);
 		lp->rx_bd = NULL;
-	}
-
-	size = XEMACPS_SEND_BD_CNT * sizeof(struct xemacps_bd);
-	if (lp->tx_bd) {
-		dma_free_coherent(&lp->pdev->dev, size,
-			lp->tx_bd, lp->tx_bd_dma);
 		lp->tx_bd = NULL;
 	}
 }
@@ -1726,12 +1728,13 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	 * Set up RX buffer descriptors.
 	 */
 
-	size = XEMACPS_RECV_BD_CNT * sizeof(struct xemacps_bd);
+	size = (XEMACPS_RECV_BD_CNT + XEMACPS_SEND_BD_CNT) *
+		sizeof(struct xemacps_bd);
 	lp->rx_bd = dma_alloc_coherent(&lp->pdev->dev, size,
 			&lp->rx_bd_dma, GFP_KERNEL);
 	if (!lp->rx_bd)
 		goto err_out;
-	dev_dbg(&lp->pdev->dev, "RX ring %d bytes at 0x%x mapped %p\n",
+	dev_dbg(&lp->pdev->dev, "RX/TX ring %d bytes at 0x%x mapped %p\n",
 			size, lp->rx_bd_dma, lp->rx_bd);
 
 	for (i = 0; i < XEMACPS_RECV_BD_CNT; i++) {
@@ -1768,13 +1771,9 @@ static int xemacps_descriptor_init(struct net_local *lp)
 	 * Set up TX buffer descriptors.
 	 */
 
-	size = XEMACPS_SEND_BD_CNT * sizeof(struct xemacps_bd);
-	lp->tx_bd = dma_alloc_coherent(&lp->pdev->dev, size,
-			&lp->tx_bd_dma, GFP_KERNEL);
-	if (!lp->tx_bd)
-		goto err_out;
-	dev_dbg(&lp->pdev->dev, "TX ring %d bytes at 0x%x mapped %p\n",
-			size, lp->tx_bd_dma, lp->tx_bd);
+	lp->tx_bd = lp->rx_bd + XEMACPS_RECV_BD_CNT;
+	lp->tx_bd_dma = lp->rx_bd_dma + (XEMACPS_RECV_BD_CNT *
+					 sizeof(struct xemacps_bd));
 
 	for (i = 0; i < XEMACPS_SEND_BD_CNT; i++) {
 		cur_p = &lp->tx_bd[i];
