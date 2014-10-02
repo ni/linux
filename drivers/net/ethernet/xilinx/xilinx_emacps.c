@@ -2946,7 +2946,7 @@ static int xemacps_probe(struct platform_device *pdev)
 		goto err_out_clk_dis_aper;
 	}
 	if (lp->fpgaclk) {
-		rc = clk_prepare_enable(lp->devclk);
+		rc = clk_prepare_enable(lp->fpgaclk);
 		if (rc) {
 			dev_err(&pdev->dev, "Unable to enable FPGA clock.\n");
 			goto err_out_clk_dis_dev;
@@ -3163,11 +3163,13 @@ static int xemacps_runtime_resume(struct device *device)
 		return ret;
 	}
 
-	ret = clk_enable(lp->fpgaclk);
-	if (ret) {
-		clk_disable(lp->devclk);
-		clk_disable(lp->aperclk);
-		return ret;
+	if (lp->fpgaclk) {
+		ret = clk_enable(lp->fpgaclk);
+		if (ret) {
+			clk_disable(lp->devclk);
+			clk_disable(lp->aperclk);
+			return ret;
+		}
 	}
 
 	return 0;
