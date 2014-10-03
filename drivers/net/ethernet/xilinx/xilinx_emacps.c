@@ -47,6 +47,10 @@
 #include <linux/ptp_clock_kernel.h>
 #include <linux/gpio.h>
 
+#ifdef CONFIG_XILINX_PS_EMAC_DEVICE_POLL
+#include <linux/netdev_poll.h>
+#endif
+
 /************************** Constant Definitions *****************************/
 
 /* Must be shorter than length of ethtool_drvinfo.driver field to fit */
@@ -566,6 +570,9 @@ struct net_local {
 	struct timecounter tc;
 	struct timer_list time_keep;
 #endif
+#ifdef CONFIG_XILINX_PS_EMAC_DEVICE_POLL
+	struct device_poll device_poll;
+#endif
 };
 #define to_net_local(_nb)	container_of(_nb, struct net_local,\
 		clk_rate_change_nb)
@@ -1010,6 +1017,9 @@ static void xemacps_reset_hw(struct net_local *lp)
 	xemacps_write(lp->baseaddr, XEMACPS_RXSR_OFFSET, ~0UL);
 
 	/* Disable all interrupts */
+#ifdef CONFIG_XILINX_PS_EMAC_DEVICE_POLL
+	device_poll_disable_irq(&lp->device_poll);
+#endif
 	xemacps_write(lp->baseaddr, XEMACPS_IDR_OFFSET, ~0UL);
 	synchronize_irq(lp->ndev->irq);
 	regisr = xemacps_read(lp->baseaddr, XEMACPS_ISR_OFFSET);
@@ -1903,6 +1913,9 @@ static void xemacps_init_hw(struct net_local *lp)
 	/* Enable interrupts */
 	regval  = XEMACPS_IXR_ALL_MASK;
 	xemacps_write(lp->baseaddr, XEMACPS_IER_OFFSET, regval);
+#ifdef CONFIG_XILINX_PS_EMAC_DEVICE_POLL
+	device_poll_enable_irq(&lp->device_poll);
+#endif
 }
 
 /**
@@ -2888,6 +2901,26 @@ static int xemacps_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 
 }
 
+#ifdef CONFIG_XILINX_PS_EMAC_DEVICE_POLL
+static void xemacps_device_poll_interrupt(struct device_poll *device_poll)
+{
+	struct net_device *ndev = to_net_dev(device_poll->device);
+	struct net_local *lp = netdev_priv(ndev);
+
+	/* Because the Zynq driver does not compartmentalize enabling /
+	 * disabling interrupts, we're not going to attempt to hook into NAPI
+	 * and disable polling while bottom-half packet processing takes place.
+	 * Since we're polling continuously, we don't care whether the handler
+	 * returns IRQ_HANDLED or IRQ_NONE.
+	 */
+	xemacps_interrupt(lp->ndev->irq, ndev);
+}
+
+static struct device_poll_ops xemacps_device_poll_ops = {
+	.interrupt = xemacps_device_poll_interrupt,
+};
+#endif
+
 /**
  * xemacps_probe - Platform driver probe
  * @pdev: Pointer to platform device structure
@@ -3054,6 +3087,33 @@ static int xemacps_probe(struct platform_device *pdev)
 	dev_info(&lp->pdev->dev, "pdev->id %d, baseaddr 0x%08lx, irq %d\n",
 		pdev->id, ndev->base_addr, ndev->irq);
 
+#ifdef CONFIG_XILINX_PS_EMAC_DEVICE_POLL
+	lp->device_poll.device = &ndev->dev;
+	lp->device_poll.ops = &xemacps_device_poll_ops;
+
+	/* Default to using interrupts. */
+	lp->device_poll.interval = 0;
+
+	/* Default to SCHED_FIFO priority 10. */
+	lp->device_poll.policy = SCHED_FIFO;
+	lp->device_poll.priority = 10;
+
+	rc = netdev_poll_init(&lp->device_poll);
+	if (rc) {
+		dev_err(&lp->pdev->dev, "failed to init netdev polling\n");
+		goto err_out_clk_dis_all;
+	}
+
+	rc = device_poll_request_irq(&lp->device_poll);
+	if (!rc) {
+		dev_info(&lp->pdev->dev, "polling mode is enabled\n");
+		return 0;
+	}
+
+	dev_info(&lp->pdev->dev,
+		 "polling mode is disabled, using interrupts\n");
+#endif
+
 	rc = devm_request_irq(&pdev->dev, ndev->irq, &xemacps_interrupt, 0,
 		ndev->name, ndev);
 	if (rc) {
@@ -3093,6 +3153,12 @@ static int xemacps_remove(struct platform_device *pdev)
 	if (ndev) {
 		lp = netdev_priv(ndev);
 
+#ifdef CONFIG_XILINX_PS_EMAC_DEVICE_POLL
+		if (device_poll_is_active(&lp->device_poll))
+			device_poll_free_irq(&lp->device_poll);
+
+		device_poll_exit(&lp->device_poll);
+#endif
 		mdiobus_unregister(lp->mii_bus);
 		kfree(lp->mii_bus->irq);
 		mdiobus_free(lp->mii_bus);

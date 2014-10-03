@@ -55,5 +55,15 @@ config XILINX_PS_EMAC_HWTSTAMP
 	---help---
 	  Generate hardare packet timestamps. This is to facilitate IEE 1588.
 
+config XILINX_PS_EMAC_DEVICE_POLL
+	bool "Device polling for Xilinx Zynq Ethernet"
+	default n
+	depends on XILINX_PS_EMAC
+	select NETDEV_POLL
+	---help---
+	  Say Y if you want the ability to use polling instead of interrupts
+	  on the Xilinx Zynq Ethernet interface.
+
+	  If unsure, say N.
 
 endif # NET_VENDOR_XILINX
