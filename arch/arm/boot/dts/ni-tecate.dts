@@ -52,14 +52,6 @@
 		};
 
 		gpio: gpio@e000a000 {
-			compatible = "xlnx,ps7-gpio-1.00.a";
-			reg = <0xe000a000 0x1000>;
-			#interrupt-cells = <0x2>;
-			interrupt-controller;
-			interrupts = <0 20 0>;
-			#gpio-cells = <2>;
-			gpio-controller;
-
 			/* You can specify GPIO settings here:
 			 *
 			 *  gpioN-label      String label.
