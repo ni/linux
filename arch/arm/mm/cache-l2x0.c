@@ -874,6 +874,28 @@ static void __init aurora_of_setup(const struct device_node *np,
 	*aux_mask &= ~mask;
 }
 
+static void __init zynq_of_setup(const struct device_node *np,
+				u32 *aux_val, u32 *aux_mask)
+{
+	void __iomem *l2c_ram;
+	u32 l2c_ram_value;
+
+	l2c_ram = ioremap(0xF8000A1C, 4); /* L2C_RAM is 32-bit */
+	if (!l2c_ram)
+		return;
+
+	/* This assumes the SLCR registers are unlocked and that the L2
+	 * cache hasn't been enabled yet on this boot of the Zynq. If the SLCR
+	 * register are locked, then we don't expect this write to L2C_RAM
+	 * (which is an SLCR register) to succeed. */
+	l2c_ram_value = readl_relaxed(l2c_ram);
+	l2c_ram_value &= ~0x30303; /* These bits must be set to 2, */
+	l2c_ram_value |= 0x20202; /* so we set them to 2. */
+	writel_relaxed(l2c_ram_value, l2c_ram);
+
+	pl310_of_setup(np, aux_val, aux_mask);
+}
+
 static const struct l2x0_of_data pl310_data = {
 	.setup = pl310_of_setup,
 	.save  = pl310_save,
@@ -951,6 +973,21 @@ static const struct l2x0_of_data bcm_l2x0_data = {
 	},
 };
 
+static const struct l2x0_of_data zynq_data = {
+	.setup = zynq_of_setup,
+	.save  = pl310_save,
+	.outer_cache = {
+		.resume      = pl310_resume,
+		.inv_range   = l2x0_inv_range,
+		.clean_range = l2x0_clean_range,
+		.flush_range = l2x0_flush_range,
+		.sync        = l2x0_cache_sync,
+		.flush_all   = l2x0_flush_all,
+		.inv_all     = l2x0_inv_all,
+		.disable     = l2x0_disable,
+	},
+};
+
 static const struct of_device_id l2x0_ids[] __initconst = {
 	{ .compatible = "arm,l210-cache", .data = (void *)&l2x0_data },
 	{ .compatible = "arm,l220-cache", .data = (void *)&l2x0_data },
@@ -965,6 +1002,8 @@ static const struct of_device_id l2x0_ids[] __initconst = {
 	  .data = (void *)&aurora_no_outer_data},
 	{ .compatible = "marvell,tauros3-cache",
 	  .data = (void *)&tauros3_data },
+	{ .compatible = "xlnx,ps7-pl310-1.00.a",
+	  .data = (void *)&zynq_data},
 	{}
 };
 
