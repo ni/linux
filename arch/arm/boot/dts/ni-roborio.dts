@@ -134,3 +134,8 @@
 	status = "okay";
 	dr_mode = "peripheral";
 };
+
+&clkc {
+	/* Enable fclk1 for serial. */
+	fclk-enable = <0x2>;
+};
