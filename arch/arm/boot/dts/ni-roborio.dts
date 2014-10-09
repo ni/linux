@@ -12,6 +12,7 @@
 			status = "okay";
 			phy-handle = <&phy0>;
 			phy-mode = "rgmii-id";
+			xlnx,emio-gpio-speed-100 = <54>;
 
                         phy0: phy@0 {
                                 compatible = "smsc,lan8720";
