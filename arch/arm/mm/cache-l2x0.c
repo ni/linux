@@ -884,12 +884,12 @@ static void __init zynq_of_setup(const struct device_node *np,
 	if (!l2c_ram)
 		return;
 
-	/* This assumes the SLCR registers are unlocked and that the L2
-	 * cache hasn't been enabled yet on this boot of the Zynq. If the SLCR
-	 * register are locked, then we don't expect this write to L2C_RAM
+	/* This assumes the SLCR registers are unlocked and that the L2 cache
+	 * hasn't been enabled yet on this boot of the Zynq. If the SLCR
+	 * registers are locked, then we don't expect this write to L2C_RAM
 	 * (which is an SLCR register) to succeed. */
 	l2c_ram_value = readl_relaxed(l2c_ram);
-	l2c_ram_value &= ~0x30303; /* These bits must be set to 2, */
+	l2c_ram_value &= ~0x70707; /* These bits must be set to 2, */
 	l2c_ram_value |= 0x20202; /* so we set them to 2. */
 	writel_relaxed(l2c_ram_value, l2c_ram);
 
