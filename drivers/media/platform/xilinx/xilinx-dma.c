@@ -535,6 +535,8 @@ xvip_dma_enum_format(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 
 	mutex_lock(&dma->lock);
 	f->pixelformat = dma->format.pixelformat;
+	strlcpy(f->description, dma->fmtinfo->description,
+		sizeof(f->description));
 	mutex_unlock(&dma->lock);
 
 	return 0;
@@ -921,7 +923,7 @@ int xvip_dma_init(struct xvip_composite_device *xdev, struct xvip_dma *dma,
 
 	ret = media_entity_init(&dma->video.entity, 1, &dma->pad, 0);
 	if (ret < 0)
-		return ret;
+		goto error;
 
 	mutex_init(&dma->lock);
 	mutex_init(&dma->pipe.lock);

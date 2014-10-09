@@ -1,5 +1,5 @@
 /*
- * Xylon DRM driver logiCVC header
+ * Xylon DRM driver logiCVC layer header
  *
  * Copyright (C) 2014 Xylon d.o.o.
  * Author: Davor Joja <davor.joja@logicbricks.com>
@@ -14,22 +14,21 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _XYLON_LOGICVC_H_
-#define _XYLON_LOGICVC_H_
+#ifndef _XYLON_LOGICVC_LAYER_H_
+#define _XYLON_LOGICVC_LAYER_H_
 
-enum xylon_cvc_layer_ctrl_cmd {
-	LOGICVC_LAYER_CTRL_NONE,
-	LOGICVC_LAYER_CTRL_COLOR_TRANSP_DISABLE,
-	LOGICVC_LAYER_CTRL_COLOR_TRANSP_ENABLE,
-	LOGICVC_LAYER_CTRL_PIXEL_FORMAT_NORMAL,
-	LOGICVC_LAYER_CTRL_PIXEL_FORMAT_ANDROID
+enum xylon_cvc_layer_control {
+	LOGICVC_LAYER_COLOR_TRANSPARENCY_DISABLE,
+	LOGICVC_LAYER_COLOR_TRANSPARENCY_ENABLE,
+	LOGICVC_LAYER_INTERLACE_DISABLE,
+	LOGICVC_LAYER_INTERLACE_ENABLE,
+	LOGICVC_LAYER_PIXEL_FORMAT_ABGR_DISABLE,
+	LOGICVC_LAYER_PIXEL_FORMAT_ABGR_ENABLE
 };
 
 struct xylon_cvc;
 
-unsigned int xylon_cvc_get_layers_num(struct xylon_cvc *cvc);
-unsigned int xylon_cvc_get_layers_max_width(struct xylon_cvc *cvc);
-
+unsigned int xylon_cvc_layer_get_total_count(struct xylon_cvc *cvc);
 u32 xylon_cvc_layer_get_format(struct xylon_cvc *cvc, int id);
 unsigned int xylon_cvc_layer_get_bits_per_pixel(struct xylon_cvc *cvc, int id);
 void xylon_cvc_layer_set_alpha(struct xylon_cvc *cvc, int id, u8 alpha);
@@ -46,24 +45,9 @@ void xylon_cvc_layer_set_address(struct xylon_cvc *cvc, int id,
 void xylon_cvc_layer_enable(struct xylon_cvc *cvc, int id);
 void xylon_cvc_layer_disable(struct xylon_cvc *cvc, int id);
 void xylon_cvc_layer_update(struct xylon_cvc *cvc, int id);
-void xylon_cvc_layer_ctrl(struct xylon_cvc *cvc, int id, int op);
+void xylon_cvc_layer_ctrl(struct xylon_cvc *cvc, int id,
+			  enum xylon_cvc_layer_control op);
 
-void xylon_cvc_set_hw_color(struct xylon_cvc *cvc, int id, u32 color);
+void xylon_cvc_layer_set_color_reg(struct xylon_cvc *cvc, int id, u32 color);
 
-void xylon_cvc_int_state(struct xylon_cvc *cvc, unsigned int type,
-			 bool enabled);
-u32 xylon_cvc_int_get_active(struct xylon_cvc *cvc);
-void xylon_cvc_int_clear_active(struct xylon_cvc *cvc, u32 active);
-void xylon_cvc_int_hw_enable(struct xylon_cvc *cvc);
-void xylon_cvc_int_hw_disable(struct xylon_cvc *cvc);
-int xylon_cvc_int_request(struct xylon_cvc *cvc, unsigned long flags,
-			  irq_handler_t handler, void *dev);
-void xylon_cvc_int_free(struct xylon_cvc *cvc, void *dev);
-
-void xylon_cvc_reset(struct xylon_cvc *cvc);
-void xylon_cvc_enable(struct xylon_cvc *cvc, struct videomode *vmode);
-void xylon_cvc_disable(struct xylon_cvc *cvc);
-
-struct xylon_cvc *xylon_cvc_probe(struct device *dev, struct device_node *node);
-
-#endif /* _XYLON_LOGICVC_H_ */
+#endif /* _XYLON_LOGICVC_LAYER_H_ */

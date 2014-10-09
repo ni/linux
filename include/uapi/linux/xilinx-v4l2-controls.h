@@ -15,8 +15,8 @@
  * GNU General Public License for more details.
  */
 
-#ifndef __XILINX_CONTROLS_H__
-#define __XILINX_CONTROLS_H__
+#ifndef __UAPI_XILINX_V4L2_CONTROLS_H__
+#define __UAPI_XILINX_V4L2_CONTROLS_H__
 
 #include <linux/v4l2-controls.h>
 
@@ -115,4 +115,13 @@
 /* CD coefficient */
 #define V4L2_CID_XILINX_RGB2YUV_DCOEF		(V4L2_CID_XILINX_RGB2YUV + 13)
 
-#endif /* __XILINX_CONTROLS_H__ */
+/*
+ * Xilinx HLS Video IP
+ */
+
+#define V4L2_CID_XILINX_HLS			(V4L2_CID_USER_BASE + 0xc060)
+
+/* The IP model */
+#define V4L2_CID_XILINX_HLS_MODEL		(V4L2_CID_XILINX_HLS + 1)
+
+#endif /* __UAPI_XILINX_V4L2_CONTROLS_H__ */
