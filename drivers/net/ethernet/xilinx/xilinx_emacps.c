@@ -1385,6 +1385,11 @@ static int xemacps_rx(struct net_local *lp, int budget)
 
 		/* the packet length */
 		len = ctrl & XEMACPS_RXBUF_LEN_MASK;
+
+		/* Break if the length is too small or big (drop) */
+		if (len < ETH_ZLEN || len > XEMACPS_RX_BUF_SIZE)
+			goto rx_skip;
+
 		rmb();
 		skb = lp->rx_skb[lp->rx_bd_ci].skb;
 		dma_unmap_single(lp->ndev->dev.parent,
