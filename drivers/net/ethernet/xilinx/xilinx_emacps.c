@@ -1527,6 +1527,7 @@ static void xemacps_tx_poll(unsigned long data)
 	unsigned long flags;
 	u32 txbdcount = 0;
 	bool isfrag = false;
+	unsigned int bytes_compl = 0, pkts_compl = 0;
 
 	numbdsinhw = XEMACPS_SEND_BD_CNT - lp->tx_bd_freecnt;
 	if (!numbdsinhw)
@@ -1552,6 +1553,7 @@ static void xemacps_tx_poll(unsigned long data)
 		rp = &lp->tx_skb[lp->tx_bd_ci];
 		skb = rp->skb;
 		lp->stats.tx_bytes += cur_p->ctrl & XEMACPS_TXBUF_LEN_MASK;
+		bytes_compl += cur_p->ctrl & XEMACPS_TXBUF_LEN_MASK;
 
 #ifdef CONFIG_XILINX_PS_EMAC_HWTSTAMP
 		if (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) {
@@ -1571,6 +1573,7 @@ static void xemacps_tx_poll(unsigned long data)
 		 */
 		if (cur_p->ctrl & XEMACPS_TXBUF_LAST_MASK) {
 			lp->stats.tx_packets++;
+			pkts_compl++;
 			isfrag = false;
 		} else {
 			isfrag = true;
@@ -1586,6 +1589,8 @@ static void xemacps_tx_poll(unsigned long data)
 		numbdsinhw--;
 		txbdcount++;
 	}
+
+	netdev_completed_queue(ndev, pkts_compl, bytes_compl);
 
 	spin_lock(&lp->tx_lock);
 	lp->tx_bd_freecnt += txbdcount;
@@ -2057,6 +2062,7 @@ static int xemacps_up(struct net_device *ndev)
 
 	netif_carrier_on(ndev);
 	netif_start_queue(ndev);
+	netdev_reset_queue(ndev);
 	tasklet_enable(&lp->tx_bdreclaim_tasklet);
 
 	return 0;
@@ -2078,6 +2084,7 @@ static int xemacps_down(struct net_device *ndev)
 	del_timer_sync(&(lp->gen_purpose_timer));
 
 	/* Disable further calls to xemacps_start_xmit. */
+	netdev_reset_queue(ndev);
 	netif_stop_queue(ndev);
 
 	napi_disable(&lp->napi);
@@ -2285,6 +2292,7 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	struct xemacps_bd *cur_p;
 	unsigned long flags;
 	u32 bd_tail;
+	int skblen = skb->len;
 
 	nr_frags = skb_shinfo(skb)->nr_frags + 1;
 	if (nr_frags > lp->tx_bd_freecnt) {
@@ -2343,6 +2351,8 @@ static int xemacps_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 		lp->tx_bd_tail = lp->tx_bd_tail % XEMACPS_SEND_BD_CNT;
 		cur_p = &(lp->tx_bd[lp->tx_bd_tail]);
 	}
+
+	netdev_sent_queue(ndev, skblen);
 
 	/* commit first buffer to hardware -- do this after
 	 * committing the other buffers to avoid an underrun */
