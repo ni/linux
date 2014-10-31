@@ -31,10 +31,6 @@
 #define PCI_DEVICE_ID_INTEL_BYT		0x0f37
 #define PCI_DEVICE_ID_INTEL_MRFLD	0x119e
 
-#define DWC3_PCI_GEN_REGRW1               0xa0
-#define DWC3_PCI_GEN_REGRW1_REFCLK_EN(n)  (n & 0xfffdffff)
-#define DWC3_PCI_GEN_REGRW1_REFCLK_DIS(n) (n | 0x020000)
-
 struct dwc3_pci {
 	struct device		*dev;
 	struct platform_device	*dwc3;
@@ -95,20 +91,6 @@ err1:
 	platform_device_put(glue->usb2_phy);
 
 	return ret;
-}
-
-static void dwc3_pci_ulpiphy_refclk(struct pci_dev *pci, int enable)
-{
-	u32 val;
-
-	pci_read_config_dword(pci, DWC3_PCI_GEN_REGRW1, &val);
-
-	if (enable)
-		val = DWC3_PCI_GEN_REGRW1_REFCLK_EN(val);
-	else
-		val = DWC3_PCI_GEN_REGRW1_REFCLK_DIS(val);
-
-	pci_write_config_dword(pci, DWC3_PCI_GEN_REGRW1, val);
 }
 
 static int dwc3_pci_probe(struct pci_dev *pci,
@@ -181,9 +163,6 @@ static int dwc3_pci_probe(struct pci_dev *pci,
 		goto err3;
 	}
 
-	/* enable ulpi phy refclk */
-	dwc3_pci_ulpiphy_refclk(pci, 1);
-
 	return 0;
 
 err3:
@@ -197,9 +176,6 @@ err1:
 static void dwc3_pci_remove(struct pci_dev *pci)
 {
 	struct dwc3_pci	*glue = pci_get_drvdata(pci);
-
-	/* disable ulpi phy refclk */
-	dwc3_pci_ulpiphy_refclk(pci, 0);
 
 	platform_device_unregister(glue->dwc3);
 	platform_device_unregister(glue->usb2_phy);
