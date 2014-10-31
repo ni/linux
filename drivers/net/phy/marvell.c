@@ -437,7 +437,8 @@ static int marvell_of_reg_init(struct phy_device *phydev)
 
 static int m88e1121_config_aneg(struct phy_device *phydev)
 {
-	int ret, val, oldpage, mscr;
+	int ret, val, oldpage, mscr, len;
+	const u32 *led_prop;
 
 	oldpage = phy_read(phydev, MII_MARVELL_PHY_PAGE);
 	if (oldpage < 0)
@@ -492,8 +493,14 @@ static int m88e1121_config_aneg(struct phy_device *phydev)
 	if (ret < 0)
 		goto err;
 
-	ret = phy_write(phydev, MII_88E1121_PHY_LED_CTRL,
-			MII_88E1121_PHY_LED_DEF);
+	/* Look for LED configuration. */
+	led_prop = of_get_property(phydev->mdio.dev.of_node, "leds", &len);
+	if (led_prop && (1 == (len / sizeof(u32))))
+		ret = phy_write(phydev, MII_88E1121_PHY_LED_CTRL,
+				be32_to_cpu(*led_prop));
+	else
+		ret = phy_write(phydev, MII_88E1121_PHY_LED_CTRL,
+				MII_88E1121_PHY_LED_DEF);
 
 err:
 	val = phy_write(phydev, MII_MARVELL_PHY_PAGE, oldpage);
