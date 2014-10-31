@@ -437,19 +437,25 @@ static int marvell_of_reg_init(struct phy_device *phydev)
 
 static int m88e1121_config_aneg(struct phy_device *phydev)
 {
-	int err, oldpage, mscr;
+	int ret, val, oldpage, mscr;
 
 	oldpage = phy_read(phydev, MII_MARVELL_PHY_PAGE);
+	if (oldpage < 0)
+		return oldpage;
 
-	err = phy_write(phydev, MII_MARVELL_PHY_PAGE,
+	ret = phy_write(phydev, MII_MARVELL_PHY_PAGE,
 			MII_88E1121_PHY_MSCR_PAGE);
-	if (err < 0)
-		return err;
+	if (ret < 0)
+		goto err;
 
 	if (phy_interface_is_rgmii(phydev)) {
 
-		mscr = phy_read(phydev, MII_88E1121_PHY_MSCR_REG) &
+		ret = phy_read(phydev, MII_88E1121_PHY_MSCR_REG) &
 			MII_88E1121_PHY_MSCR_DELAY_MASK;
+		if (ret < 0)
+			goto err;
+
+		mscr = ret;
 
 		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID)
 			mscr |= (MII_88E1121_PHY_MSCR_RX_DELAY |
@@ -459,48 +465,73 @@ static int m88e1121_config_aneg(struct phy_device *phydev)
 		else if (phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID)
 			mscr |= MII_88E1121_PHY_MSCR_TX_DELAY;
 
-		err = phy_write(phydev, MII_88E1121_PHY_MSCR_REG, mscr);
-		if (err < 0)
-			return err;
+		ret = phy_write(phydev, MII_88E1121_PHY_MSCR_REG, mscr);
+		if (ret < 0)
+			goto err;
 	}
 
-	phy_write(phydev, MII_MARVELL_PHY_PAGE, oldpage);
+	ret = phy_write(phydev, MII_MARVELL_PHY_PAGE, oldpage);
+	if (ret < 0)
+		goto err;
 
-	err = phy_write(phydev, MII_BMCR, BMCR_RESET);
-	if (err < 0)
-		return err;
-
-	err = phy_write(phydev, MII_M1011_PHY_SCR,
+	ret = phy_write(phydev, MII_M1011_PHY_SCR,
 			MII_M1011_PHY_SCR_AUTO_CROSS);
-	if (err < 0)
-		return err;
+	if (ret < 0)
+		return ret;
 
-	return genphy_config_aneg(phydev);
+	/* Soft reset. */
+	ret = phy_write(phydev, MII_BMCR, BMCR_RESET);
+	if (ret < 0)
+		return ret;
+
+	oldpage = phy_read(phydev, MII_MARVELL_PHY_PAGE);
+	if (oldpage < 0)
+		return oldpage;
+
+	ret = phy_write(phydev, MII_MARVELL_PHY_PAGE, MII_88E1121_PHY_LED_PAGE);
+	if (ret < 0)
+		goto err;
+
+	ret = phy_write(phydev, MII_88E1121_PHY_LED_CTRL,
+			MII_88E1121_PHY_LED_DEF);
+
+err:
+	val = phy_write(phydev, MII_MARVELL_PHY_PAGE, oldpage);
+	if (ret == 0)
+		ret = val;
+
+	if (ret < 0)
+		return ret;
+	else
+		return genphy_config_aneg(phydev);
 }
 
 static int m88e1318_config_aneg(struct phy_device *phydev)
 {
-	int err, oldpage, mscr;
+	int ret, val, oldpage, mscr;
 
 	oldpage = phy_read(phydev, MII_MARVELL_PHY_PAGE);
 
-	err = phy_write(phydev, MII_MARVELL_PHY_PAGE,
+	ret = phy_write(phydev, MII_MARVELL_PHY_PAGE,
 			MII_88E1121_PHY_MSCR_PAGE);
-	if (err < 0)
-		return err;
+	if (ret < 0)
+		goto err;
 
 	mscr = phy_read(phydev, MII_88E1318S_PHY_MSCR1_REG);
 	mscr |= MII_88E1318S_PHY_MSCR1_PAD_ODD;
 
-	err = phy_write(phydev, MII_88E1318S_PHY_MSCR1_REG, mscr);
-	if (err < 0)
-		return err;
+	ret = phy_write(phydev, MII_88E1318S_PHY_MSCR1_REG, mscr);
+	if (ret < 0)
+		goto err;
 
-	err = phy_write(phydev, MII_MARVELL_PHY_PAGE, oldpage);
-	if (err < 0)
-		return err;
-
-	return m88e1121_config_aneg(phydev);
+err:
+	val = phy_write(phydev, MII_MARVELL_PHY_PAGE, oldpage);
+	if (ret == 0)
+		ret = val;
+	if (ret < 0)
+		return ret;
+	else
+		return m88e1121_config_aneg(phydev);
 }
 
 /**
