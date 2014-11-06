@@ -4,7 +4,7 @@
 /* NIDEVCODE 76F2 */
 
 / {
-	model = "NI Athena";
+	model = "NI roboRIO";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba {
