@@ -881,6 +881,39 @@ static void max310x_set_termios(struct uart_port *port,
 	uart_update_timeout(port, termios->c_cflag, baud);
 }
 
+static int max310x_rs485_config(struct uart_port *port,
+				struct serial_rs485 *rs485)
+{
+	unsigned int val;
+
+	if (rs485->delay_rts_before_send > 0x0f ||
+		    rs485->delay_rts_after_send > 0x0f)
+		return -ERANGE;
+
+	val = (rs485->delay_rts_before_send << 4) |
+		rs485->delay_rts_after_send;
+	max310x_port_write(port, MAX310X_HDPIXDELAY_REG, val);
+	if (rs485->flags & SER_RS485_ENABLED) {
+		max310x_port_update(port, MAX310X_MODE1_REG,
+				MAX310X_MODE1_TRNSCVCTRL_BIT,
+				MAX310X_MODE1_TRNSCVCTRL_BIT);
+		max310x_port_update(port, MAX310X_MODE2_REG,
+				MAX310X_MODE2_ECHOSUPR_BIT,
+				MAX310X_MODE2_ECHOSUPR_BIT);
+	} else {
+		max310x_port_update(port, MAX310X_MODE1_REG,
+				MAX310X_MODE1_TRNSCVCTRL_BIT, 0);
+		max310x_port_update(port, MAX310X_MODE2_REG,
+				MAX310X_MODE2_ECHOSUPR_BIT, 0);
+	}
+
+	rs485->flags &= SER_RS485_RTS_ON_SEND | SER_RS485_ENABLED;
+	memset(rs485->padding, 0, sizeof(rs485->padding));
+	port->rs485 = *rs485;
+
+	return 0;
+}
+
 static int max310x_startup(struct uart_port *port)
 {
 	unsigned int val, line = port->line;
@@ -1184,6 +1217,7 @@ static int max310x_probe(struct device *dev, int is_spi,
 		s->p[i].port.iobase	= i * 0x20;
 		s->p[i].port.membase	= (void __iomem *)~0;
 		s->p[i].port.uartclk	= uartclk;
+		s->p[i].port.rs485_config = max310x_rs485_config;
 		s->p[i].port.ops	= &max310x_ops;
 		/* Disable all interrupts */
 		max310x_port_write(&s->p[i].port, MAX310X_IRQEN_REG, 0);
