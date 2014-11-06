@@ -1365,12 +1365,10 @@ static int
 serial_omap_config_rs485(struct uart_port *port, struct serial_rs485 *rs485conf)
 {
 	struct uart_omap_port *up = to_uart_omap_port(port);
-	unsigned long flags;
 	unsigned int mode;
 	int val;
 
 	pm_runtime_get_sync(up->dev);
-	spin_lock_irqsave(&up->port.lock, flags);
 
 	/* Disable interrupts from this port */
 	mode = up->ier;
@@ -1406,7 +1404,6 @@ serial_omap_config_rs485(struct uart_port *port, struct serial_rs485 *rs485conf)
 		serial_out(up, UART_OMAP_SCR, up->scr);
 	}
 
-	spin_unlock_irqrestore(&up->port.lock, flags);
 	pm_runtime_mark_last_busy(up->dev);
 	pm_runtime_put_autosuspend(up->dev);
 	return 0;
