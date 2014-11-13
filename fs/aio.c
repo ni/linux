@@ -130,7 +130,7 @@ struct kioctx {
 	} ____cacheline_aligned_in_smp;
 
 	struct {
-		spinlock_t	ctx_lock;
+		raw_spinlock_t	ctx_lock;
 		struct list_head active_reqs;	/* used for cancellation */
 	} ____cacheline_aligned_in_smp;
 
@@ -142,13 +142,16 @@ struct kioctx {
 	struct {
 		unsigned	tail;
 		unsigned	completed_events;
-		spinlock_t	completion_lock;
+		raw_spinlock_t	completion_lock;
 	} ____cacheline_aligned_in_smp;
 
 	struct page		*internal_pages[AIO_RING_PAGES];
 	struct file		*aio_ring_file;
 
 	unsigned		id;
+#ifdef CONFIG_PREEMPT_RT_BASE
+	struct rcu_head		rcu;
+#endif
 };
 
 /*------ sysctl variables----*/
@@ -340,11 +343,11 @@ static int aio_migratepage(struct address_space *mapping, struct page *new,
 	 * while the old page is copied to the new.  This prevents new
 	 * events from being lost.
 	 */
-	spin_lock_irqsave(&ctx->completion_lock, flags);
+	raw_spin_lock_irqsave(&ctx->completion_lock, flags);
 	migrate_page_copy(new, old);
 	BUG_ON(ctx->ring_pages[idx] != old);
 	ctx->ring_pages[idx] = new;
-	spin_unlock_irqrestore(&ctx->completion_lock, flags);
+	raw_spin_unlock_irqrestore(&ctx->completion_lock, flags);
 
 	/* The old page is no longer accessible. */
 	put_page(old);
@@ -467,14 +470,14 @@ void kiocb_set_cancel_fn(struct kiocb *req, kiocb_cancel_fn *cancel)
 	struct kioctx *ctx = req->ki_ctx;
 	unsigned long flags;
 
-	spin_lock_irqsave(&ctx->ctx_lock, flags);
+	raw_spin_lock_irqsave(&ctx->ctx_lock, flags);
 
 	if (!req->ki_list.next)
 		list_add(&req->ki_list, &ctx->active_reqs);
 
 	req->ki_cancel = cancel;
 
-	spin_unlock_irqrestore(&ctx->ctx_lock, flags);
+	raw_spin_unlock_irqrestore(&ctx->ctx_lock, flags);
 }
 EXPORT_SYMBOL(kiocb_set_cancel_fn);
 
@@ -499,6 +502,7 @@ static int kiocb_cancel(struct kioctx *ctx, struct kiocb *kiocb)
 	return cancel(kiocb);
 }
 
+#ifndef CONFIG_PREEMPT_RT_BASE
 static void free_ioctx(struct work_struct *work)
 {
 	struct kioctx *ctx = container_of(work, struct kioctx, free_work);
@@ -509,6 +513,18 @@ static void free_ioctx(struct work_struct *work)
 	free_percpu(ctx->cpu);
 	kmem_cache_free(kioctx_cachep, ctx);
 }
+#else
+static void free_ioctx_rcu(struct rcu_head *rcu)
+{
+	struct kioctx *ctx = container_of(rcu, struct kioctx, rcu);
+
+	pr_debug("freeing %p\n", ctx);
+
+	aio_free_ring(ctx);
+	free_percpu(ctx->cpu);
+	kmem_cache_free(kioctx_cachep, ctx);
+}
+#endif
 
 static void free_ioctx_reqs(struct percpu_ref *ref)
 {
@@ -518,8 +534,19 @@ static void free_ioctx_reqs(struct percpu_ref *ref)
 	if (ctx->requests_done)
 		complete(ctx->requests_done);
 
+#ifndef CONFIG_PREEMPT_RT_BASE
 	INIT_WORK(&ctx->free_work, free_ioctx);
 	schedule_work(&ctx->free_work);
+#else
+	/*
+	 * We're in ->release() under rcu_read_lock_sched(), and can't do
+	 * anything that requires taking a sleeping lock, so ->release()
+	 * becomes a two stage rcu process for -rt.  We've now done the
+	 * rcu work that we can under locks made raw to get us this far.
+	 * Defer the freeing bit until we're again allowed to schedule().
+	 */
+	call_rcu(&ctx->rcu, free_ioctx_rcu);
+#endif
 }
 
 /*
@@ -532,7 +559,7 @@ static void free_ioctx_users(struct percpu_ref *ref)
 	struct kioctx *ctx = container_of(ref, struct kioctx, users);
 	struct kiocb *req;
 
-	spin_lock_irq(&ctx->ctx_lock);
+	raw_spin_lock_irq(&ctx->ctx_lock);
 
 	while (!list_empty(&ctx->active_reqs)) {
 		req = list_first_entry(&ctx->active_reqs,
@@ -542,7 +569,7 @@ static void free_ioctx_users(struct percpu_ref *ref)
 		kiocb_cancel(ctx, req);
 	}
 
-	spin_unlock_irq(&ctx->ctx_lock);
+	raw_spin_unlock_irq(&ctx->ctx_lock);
 
 	percpu_ref_kill(&ctx->reqs);
 	percpu_ref_put(&ctx->reqs);
@@ -655,8 +682,8 @@ static struct kioctx *ioctx_alloc(unsigned nr_events)
 
 	ctx->max_reqs = nr_events;
 
-	spin_lock_init(&ctx->ctx_lock);
-	spin_lock_init(&ctx->completion_lock);
+	raw_spin_lock_init(&ctx->ctx_lock);
+	raw_spin_lock_init(&ctx->completion_lock);
 	mutex_init(&ctx->ring_lock);
 	/* Protect against page migration throughout kiotx setup by keeping
 	 * the ring_lock mutex held until setup is complete. */
@@ -925,7 +952,7 @@ static void refill_reqs_available(struct kioctx *ctx, unsigned head,
  */
 static void user_refill_reqs_available(struct kioctx *ctx)
 {
-	spin_lock_irq(&ctx->completion_lock);
+	raw_spin_lock_irq(&ctx->completion_lock);
 	if (ctx->completed_events) {
 		struct aio_ring *ring;
 		unsigned head;
@@ -946,7 +973,7 @@ static void user_refill_reqs_available(struct kioctx *ctx)
 		refill_reqs_available(ctx, head, ctx->tail);
 	}
 
-	spin_unlock_irq(&ctx->completion_lock);
+	raw_spin_unlock_irq(&ctx->completion_lock);
 }
 
 /* aio_get_req
@@ -1041,9 +1068,9 @@ void aio_complete(struct kiocb *iocb, long res, long res2)
 	if (iocb->ki_list.next) {
 		unsigned long flags;
 
-		spin_lock_irqsave(&ctx->ctx_lock, flags);
+		raw_spin_lock_irqsave(&ctx->ctx_lock, flags);
 		list_del(&iocb->ki_list);
-		spin_unlock_irqrestore(&ctx->ctx_lock, flags);
+		raw_spin_unlock_irqrestore(&ctx->ctx_lock, flags);
 	}
 
 	/*
@@ -1051,7 +1078,7 @@ void aio_complete(struct kiocb *iocb, long res, long res2)
 	 * ctx->completion_lock to prevent other code from messing with the tail
 	 * pointer since we might be called from irq context.
 	 */
-	spin_lock_irqsave(&ctx->completion_lock, flags);
+	raw_spin_lock_irqsave(&ctx->completion_lock, flags);
 
 	tail = ctx->tail;
 	pos = tail + AIO_EVENTS_OFFSET;
@@ -1090,7 +1117,7 @@ void aio_complete(struct kiocb *iocb, long res, long res2)
 	ctx->completed_events++;
 	if (ctx->completed_events > 1)
 		refill_reqs_available(ctx, head, tail);
-	spin_unlock_irqrestore(&ctx->completion_lock, flags);
+	raw_spin_unlock_irqrestore(&ctx->completion_lock, flags);
 
 	pr_debug("added to ring %p at [%u]\n", iocb, tail);
 
@@ -1631,7 +1658,7 @@ static struct kiocb *lookup_kiocb(struct kioctx *ctx, struct iocb __user *iocb,
 {
 	struct list_head *pos;
 
-	assert_spin_locked(&ctx->ctx_lock);
+	assert_raw_spin_locked(&ctx->ctx_lock);
 
 	if (key != KIOCB_KEY)
 		return NULL;
@@ -1671,7 +1698,7 @@ SYSCALL_DEFINE3(io_cancel, aio_context_t, ctx_id, struct iocb __user *, iocb,
 	if (unlikely(!ctx))
 		return -EINVAL;
 
-	spin_lock_irq(&ctx->ctx_lock);
+	raw_spin_lock_irq(&ctx->ctx_lock);
 
 	kiocb = lookup_kiocb(ctx, iocb, key);
 	if (kiocb)
@@ -1679,7 +1706,7 @@ SYSCALL_DEFINE3(io_cancel, aio_context_t, ctx_id, struct iocb __user *, iocb,
 	else
 		ret = -EINVAL;
 
-	spin_unlock_irq(&ctx->ctx_lock);
+	raw_spin_unlock_irq(&ctx->ctx_lock);
 
 	if (!ret) {
 		/*
