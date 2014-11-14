@@ -8,46 +8,6 @@
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba {
-		eth0: eth@e000b000 {
-			status = "okay";
-			phy-handle = <&phy0>;
-			phy-mode = "rgmii-id";
-
-			phy0: phy@0 {
-				compatible = "marvell,88e1512";
-				device_type = "ethernet-phy";
-				reg = <0x0>;
-				/* Interrupt on GPIO1, shared with phy1. */
-				interrupts = <1 0>;
-				interrupt-parent = <&gpio>;
-				/* Page 3, Register 16, LED[2:0] Function
-				   Control Register */
-				leds = <0x1881>;
-			};
-
-			phy1: phy@1 {
-				compatible = "marvell,88e1512";
-				device_type = "ethernet-phy";
-				reg = <0x1>;
-				/* Interrupt on GPIO1, shared with phy0. */
-				interrupts = <1 0>;
-				interrupt-parent = <&gpio>;
-				/* Page 3, Register 16, LED[2:0] Function
-				   Control Register */
-				leds = <0x1881>;
-			};
-		};
-
-		eth1: eth@e000c000 {
-			status = "okay";
-			clocks = <&clkc 14>, <&clkc 31>, <&clkc 15>;
-			clock-names = "ref_clk", "aper_clk", "fpga_clk";
-			phy-handle = <&phy1>;
-			phy-mode = "rgmii-id";
-			xlnx,no_mdio_bus;
-			xlnx,emio-gpio-speed-1000 = <54>;
-		};
-
 		gpio: gpio@e000a000 {
 			/* You can specify GPIO settings here:
 			 *
@@ -87,6 +47,48 @@
 			};
 		};
 	};
+};
+
+&gem0 {
+	status = "okay";
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	phy0: phy@0 {
+		compatible = "marvell,88e1512";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt on GPIO1, shared with phy1. */
+		interrupts = <1 0>;
+		interrupt-parent = <&gpio>;
+		/* Page 3, Register 16, LED[2:0] Function
+		   Control Register */
+		leds = <0x1881>;
+	};
+
+	phy1: phy@1 {
+		compatible = "marvell,88e1512";
+		device_type = "ethernet-phy";
+		reg = <0x1>;
+		/* Interrupt on GPIO1, shared with phy0. */
+		interrupts = <1 0>;
+		interrupt-parent = <&gpio>;
+		/* Page 3, Register 16, LED[2:0] Function
+		   Control Register */
+		leds = <0x1881>;
+	};
+};
+
+&gem1 {
+	status = "okay";
+	clocks = <&clkc 31>, <&clkc 14>, <&clkc 15>;
+	clock-names = "pclk", "hclk", "tx_clk";
+	phy-handle = <&phy1>;
+	phy-mode = "rgmii-id";
+	cdns,no_mdio_bus;
+	cdns,emio-gpio-speed-1000 = <54>;
 };
 
 &ni_uart0 {
