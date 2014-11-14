@@ -150,28 +150,6 @@
 			};
 		};
 
-		eth0: eth@e000b000 {
-			compatible = "xlnx,ps7-ethernet-1.00.a";
-			status = "disabled";
-			reg = <0xe000b000 0x1000>;
-			interrupts = <0 22 4>;
-			clock-names = "ref_clk", "aper_clk";
-			clocks = <&clkc 13>, <&clkc 30>;
-			#address-cells = <0x1>;
-			#size-cells = <0x0>;
-		};
-
-		eth1: eth@e000c000 {
-			compatible = "xlnx,ps7-ethernet-1.00.a";
-			status = "disabled";
-			reg = <0xe000c000 0x1000>;
-			interrupts = <0 45 4>;
-			clock-names = "ref_clk", "aper_clk";
-			clocks = <&clkc 14>, <&clkc 31>;
-			#address-cells = <0x1>;
-			#size-cells = <0x0>;
-		};
-
 		usb0: usb@e0002000 {
 			compatible = "xlnx,zynq-usb-1.00.a";
 			status = "disabled";
