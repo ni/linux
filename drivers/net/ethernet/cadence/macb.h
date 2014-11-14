@@ -823,6 +823,7 @@ struct macb {
 	struct clk		*hclk;
 	struct clk		*tx_clk;
 	struct clk		*rx_clk;
+	struct device_node	*phy_node;
 	struct net_device	*dev;
 	struct napi_struct	napi;
 	struct net_device_stats	stats;
