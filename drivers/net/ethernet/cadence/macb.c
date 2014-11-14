@@ -33,12 +33,12 @@
 
 #include "macb.h"
 
-#define MACB_RX_BUFFER_SIZE	128
+#define MACB_RX_BUFFER_SIZE	1536
 #define RX_BUFFER_MULTIPLE	64  /* bytes */
 #define RX_RING_SIZE		512 /* must be power of 2 */
 #define RX_RING_BYTES		(sizeof(struct macb_dma_desc) * RX_RING_SIZE)
 
-#define TX_RING_SIZE		128 /* must be power of 2 */
+#define TX_RING_SIZE		512 /* must be power of 2 */
 #define TX_RING_BYTES		(sizeof(struct macb_dma_desc) * TX_RING_SIZE)
 
 /* level of occupied TX descriptors under which we wake up TX process */
