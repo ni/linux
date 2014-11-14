@@ -405,7 +405,12 @@ static int macb_mii_probe(struct net_device *dev)
 	int phy_irq;
 	int ret;
 
-	phydev = phy_find_first(bp->mii_bus);
+	if (bp->phy_node)
+		phydev = of_phy_find_device(bp->phy_node);
+	else
+		/* No PHY node specified. Find the first PHY instead. */
+		phydev = phy_find_first(bp->mii_bus);
+
 	if (!phydev) {
 		netdev_err(dev, "no PHY found\n");
 		return -ENXIO;
@@ -3114,6 +3119,12 @@ static int macb_probe(struct platform_device *pdev)
 		}
 	}
 	of_node_put(phy_node);
+
+	bp->phy_node = of_parse_phandle(np, "phy-handle", 0);
+	if (!bp->phy_node) {
+		netdev_info(dev, "No phy-handle\n");
+		bp->phy_node = NULL;
+	}
 
 	err = of_get_phy_mode(np);
 	if (err < 0) {
