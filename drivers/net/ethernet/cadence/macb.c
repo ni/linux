@@ -356,7 +356,12 @@ static int macb_mii_probe(struct net_device *dev)
 	int phy_irq;
 	int ret;
 
-	phydev = phy_find_first(bp->mii_bus);
+	if (bp->phy_node)
+		phydev = of_phy_find_device(bp->phy_node);
+	else
+		/* No PHY node specified. Find the first PHY instead. */
+		phydev = phy_find_first(bp->mii_bus);
+
 	if (!phydev) {
 		netdev_err(dev, "no PHY found\n");
 		return -ENXIO;
@@ -2123,6 +2128,12 @@ static int __init macb_probe(struct platform_device *pdev)
 	else
 		macb_get_hwaddr(bp);
 
+	bp->phy_node = of_parse_phandle(pdev->dev.of_node, "phy-handle", 0);
+	if (!bp->phy_node) {
+		netdev_info(dev, "No phy-handle\n");
+		bp->phy_node = NULL;
+	}
+
 	err = of_get_phy_mode(pdev->dev.of_node);
 	if (err < 0) {
 		pdata = dev_get_platdata(&pdev->dev);
@@ -2179,7 +2190,12 @@ static int __init macb_probe(struct platform_device *pdev)
 	if (of_get_property(pdev->dev.of_node, "cdns,no_mdio_bus", NULL))
 		create_mdio_bus = 0;
 
-	if (create_mdio_bus && macb_mii_init(bp) != 0)
+	if (create_mdio_bus)
+		err = macb_mii_init(bp);
+	else
+		/* Don't create an MDIO bus, but do try to probe for one. */
+		err = macb_mii_probe(bp->dev);
+	if (err)
 		goto err_out_unregister_netdev;
 
 	platform_set_drvdata(pdev, dev);
