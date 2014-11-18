@@ -1263,6 +1263,7 @@ struct task_struct {
 	/* Revert to default priority/policy when forking */
 	unsigned sched_reset_on_fork:1;
 	unsigned sched_contributes_to_load:1;
+	unsigned sched_is_softirqd:1;
 
 	pid_t pid;
 	pid_t tgid;
@@ -1676,6 +1677,11 @@ static inline struct pid *task_pid(struct task_struct *task)
 static inline struct pid *task_tgid(struct task_struct *task)
 {
 	return task->group_leader->pids[PIDTYPE_PID].pid;
+}
+
+static inline bool task_is_softirqd(struct task_struct *task)
+{
+	return task->sched_is_softirqd;
 }
 
 /*

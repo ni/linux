@@ -428,6 +428,7 @@ struct softirq_action
 asmlinkage void do_softirq(void);
 asmlinkage void __do_softirq(void);
 static inline void thread_do_softirq(void) { do_softirq(); }
+#define NR_SOFTIRQ_THREADS 1
 #ifdef __ARCH_HAS_DO_SOFTIRQ
 void do_softirq_own_stack(void);
 #else
@@ -438,6 +439,7 @@ static inline void do_softirq_own_stack(void)
 #endif
 #else
 extern void thread_do_softirq(void);
+#define NR_SOFTIRQ_THREADS NR_SOFTIRQS
 #endif
 
 extern void open_softirq(int nr, void (*action)(struct softirq_action *));
@@ -448,12 +450,7 @@ extern void raise_softirq_irqoff(unsigned int nr);
 extern void raise_softirq(unsigned int nr);
 extern void softirq_check_pending_idle(void);
 
-DECLARE_PER_CPU(struct task_struct *, ksoftirqd);
-
-static inline struct task_struct *this_cpu_ksoftirqd(void)
-{
-	return this_cpu_read(ksoftirqd);
-}
+DECLARE_PER_CPU(struct task_struct * [NR_SOFTIRQ_THREADS], ksoftirqd);
 
 /* Tasklets --- multithreaded analogue of BHs.
 

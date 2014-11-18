@@ -68,7 +68,7 @@ void irqtime_account_irq(struct task_struct *curr)
 	 */
 	if (hardirq_count())
 		__this_cpu_add(cpu_hardirq_time, delta);
-	else if (in_serving_softirq() && curr != this_cpu_ksoftirqd())
+	else if (in_serving_softirq() && !task_is_softirqd(curr))
 		__this_cpu_add(cpu_softirq_time, delta);
 
 	irq_time_write_end();
@@ -342,7 +342,7 @@ static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
 		cpustat[CPUTIME_IRQ] += cputime;
 	} else if (irqtime_account_si_update()) {
 		cpustat[CPUTIME_SOFTIRQ] += cputime;
-	} else if (this_cpu_ksoftirqd() == p) {
+	} else if (task_is_softirqd(p)) {
 		/*
 		 * ksoftirqd time do not get accounted in cpu_softirq_time.
 		 * So, we have to handle it separately here.

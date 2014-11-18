@@ -3187,6 +3187,9 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			Force threading of all interrupt handlers except those
 			marked explicitly IRQF_NO_THREAD.
 
+	threadsirqs	[KNL]
+			Enable or disable threading of all softirqs for -rt.
+
 	tmem		[KNL,XEN]
 			Enable the Transcendent memory driver if built-in.
 
