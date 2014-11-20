@@ -582,6 +582,10 @@ struct macb {
 		struct gem_stats	gem;
 	}			hw_stats;
 
+	unsigned long		tx_task_start_jiffies;
+	struct delayed_work	tx_task;
+	struct timer_list	tx_timer;
+
 	dma_addr_t		rx_ring_dma;
 	dma_addr_t		tx_ring_dma;
 	dma_addr_t		rx_buffers_dma;

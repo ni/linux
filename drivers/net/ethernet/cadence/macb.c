@@ -542,25 +542,19 @@ static void macb_tx_error_task(struct work_struct *work)
 
 	/* Now we are ready to start transmission again */
 	netif_wake_queue(bp->dev);
-
-	/* Housework before enabling TX IRQ */
-	macb_writel(bp, TSR, macb_readl(bp, TSR));
-	macb_writel(bp, IER, MACB_TX_INT_FLAGS);
 }
 
-static void macb_tx_interrupt(struct macb *bp)
+static unsigned int macb_tx_clean(struct macb *bp)
 {
 	unsigned int tail;
 	unsigned int head;
+	unsigned int count = 0;
 	u32 status;
 
 	status = macb_readl(bp, TSR);
 	macb_writel(bp, TSR, status);
 
-	if (bp->caps & MACB_CAPS_ISR_CLEAR_ON_WRITE)
-		macb_writel(bp, ISR, MACB_BIT(TCOMP));
-
-	netdev_vdbg(bp->dev, "macb_tx_interrupt status = 0x%03lx\n",
+	netdev_vdbg(bp->dev, "macb_tx_clean status = 0x%03lx\n",
 		(unsigned long)status);
 
 	head = bp->tx_head;
@@ -590,7 +584,8 @@ static void macb_tx_interrupt(struct macb *bp)
 		bp->stats.tx_packets++;
 		bp->stats.tx_bytes += skb->len;
 		tx_skb->skb = NULL;
-		dev_kfree_skb_irq(skb);
+		dev_kfree_skb(skb);
+		count++;
 	}
 
 	bp->tx_tail = tail;
@@ -598,6 +593,8 @@ static void macb_tx_interrupt(struct macb *bp)
 			&& CIRC_CNT(bp->tx_head, bp->tx_tail,
 				    TX_RING_SIZE) <= MACB_TX_WAKEUP_THRESH)
 		netif_wake_queue(bp->dev);
+
+	return count;
 }
 
 static void gem_rx_refill(struct macb *bp)
@@ -952,9 +949,6 @@ static irqreturn_t macb_interrupt(int irq, void *dev_id)
 			break;
 		}
 
-		if (status & MACB_BIT(TCOMP))
-			macb_tx_interrupt(bp);
-
 		/*
 		 * Link change detection isn't possible with RMII, so we'll
 		 * add that if/when we get our hands on a full-blown MII PHY.
@@ -1014,7 +1008,6 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct macb_dma_desc *desc;
 	struct macb_tx_skb *tx_skb;
 	u32 ctrl;
-	unsigned long flags;
 
 #if defined(DEBUG) && defined(VERBOSE_DEBUG)
 	netdev_vdbg(bp->dev,
@@ -1026,15 +1019,17 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 #endif
 
 	len = skb->len;
-	spin_lock_irqsave(&bp->lock, flags);
+
+	macb_tx_clean(bp);
 
 	/* This is a hard error, log it. */
 	if (CIRC_SPACE(bp->tx_head, bp->tx_tail, TX_RING_SIZE) < 1) {
 		netif_stop_queue(dev);
-		spin_unlock_irqrestore(&bp->lock, flags);
-		netdev_err(bp->dev, "BUG! Tx Ring full when queue awake!\n");
+		netdev_info(bp->dev, "Tx Ring full when queue awake!\n");
 		netdev_dbg(bp->dev, "tx_head = %u, tx_tail = %u\n",
 			   bp->tx_head, bp->tx_tail);
+		bp->tx_task_start_jiffies = jiffies;
+		schedule_delayed_work(&bp->tx_task, 1);
 		return NETDEV_TX_BUSY;
 	}
 
@@ -1044,7 +1039,7 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 				 len, DMA_TO_DEVICE);
 	if (dma_mapping_error(&bp->pdev->dev, mapping)) {
 		kfree_skb(skb);
-		goto unlock;
+		return NETDEV_TX_OK;
 	}
 
 	bp->tx_head++;
@@ -1073,8 +1068,10 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (CIRC_SPACE(bp->tx_head, bp->tx_tail, TX_RING_SIZE) < 1)
 		netif_stop_queue(dev);
 
-unlock:
-	spin_unlock_irqrestore(&bp->lock, flags);
+	/* If no other packets are transmitted in the meantime, the timer
+	 * callback will clean things up later.
+	 */
+	mod_timer(&bp->tx_timer, jiffies + HZ);
 
 	return NETDEV_TX_OK;
 }
@@ -1410,9 +1407,46 @@ static void macb_init_hw(struct macb *bp)
 
 	/* Enable interrupts */
 	macb_writel(bp, IER, (MACB_RX_INT_FLAGS
-			      | MACB_TX_INT_FLAGS
 			      | MACB_BIT(HRESP)));
 
+}
+
+static void macb_tx_timer(unsigned long arg)
+{
+	struct macb *bp = (struct macb *)arg;
+
+	netif_tx_lock(bp->dev);
+	macb_tx_clean(bp);
+	netif_tx_unlock(bp->dev);
+}
+
+static void macb_tx_task(struct work_struct *work)
+{
+	struct macb *bp = container_of(work, struct macb, tx_task.work);
+	int cleaned;
+
+	netdev_dbg(bp->dev, "Running TX clean task...\n");
+
+	netif_tx_lock(bp->dev);
+	cleaned = macb_tx_clean(bp);
+	netif_tx_unlock(bp->dev);
+
+	if (cleaned)
+		netif_start_queue(bp->dev);
+	else if (time_after(jiffies, bp->tx_task_start_jiffies + HZ)) {
+		/* Realistically, I don't know what circumstances could lead
+		 * to this, since in my testing we clean some descriptors
+		 * the first time through and restart the transmit queue.
+		 */
+		netdev_err(bp->dev,
+			   "Transmit didn't complete, resetting interface\n");
+		macb_init_hw(bp);
+	} else
+		/* In the testing I've done, we never get here. We always
+		 * clean some descriptors the first time through and
+		 * restart the transmit queue.
+		 */
+		schedule_delayed_work(&bp->tx_task, 1);
 }
 
 /*
@@ -1577,6 +1611,13 @@ static int macb_close(struct net_device *dev)
 
 	netif_stop_queue(dev);
 	napi_disable(&bp->napi);
+
+	/* Make sure any calls to macb_start_xmit have completed. */
+	netif_tx_lock(bp->dev);
+	netif_tx_unlock(bp->dev);
+
+	/* Wait for any outstanding transmit timer calls to complete. */
+	del_timer_sync(&bp->tx_timer);
 
 	if (bp->phy_dev)
 		phy_stop(bp->phy_dev);
@@ -1954,6 +1995,9 @@ static int __init macb_probe(struct platform_device *pdev)
 		goto err_out_unregister_netdev;
 
 	platform_set_drvdata(pdev, dev);
+
+	INIT_DELAYED_WORK(&bp->tx_task, macb_tx_task);
+	setup_timer(&bp->tx_timer, macb_tx_timer, (unsigned long)bp);
 
 	netif_carrier_off(dev);
 
