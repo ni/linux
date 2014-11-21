@@ -31,6 +31,10 @@
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+#include <linux/netdev_poll.h>
+#endif
+
 #include "macb.h"
 
 #define MACB_RX_BUFFER_SIZE	1536
@@ -1000,6 +1004,23 @@ static void macb_poll_controller(struct net_device *dev)
 }
 #endif
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+static void macb_device_poll_interrupt(struct device_poll *device_poll)
+{
+	struct net_device *dev = to_net_dev(device_poll->device);
+
+	/* Since we don't know whether NAPI will be scheduled to run,
+	 * just keep polling rather than trying to be smart and disable
+	 * IRQ polling when napi_schedule is called.
+	 */
+	macb_interrupt(dev->irq, dev);
+}
+
+static struct device_poll_ops macb_device_poll_ops = {
+		.interrupt = macb_device_poll_interrupt,
+};
+#endif
+
 static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct macb *bp = netdev_priv(dev);
@@ -1274,6 +1295,9 @@ static void macb_reset_hw(struct macb *bp)
 	macb_writel(bp, RSR, -1);
 
 	/* Disable all interrupts */
+#ifdef CONFIG_MACB_DEVICE_POLL
+	device_poll_disable_irq(&bp->device_poll);
+#endif
 	macb_writel(bp, IDR, -1);
 	macb_readl(bp, ISR);
 }
@@ -1408,6 +1432,9 @@ static void macb_init_hw(struct macb *bp)
 	/* Enable interrupts */
 	macb_writel(bp, IER, (MACB_RX_INT_FLAGS
 			      | MACB_BIT(HRESP)));
+#ifdef CONFIG_MACB_DEVICE_POLL
+	device_poll_enable_irq(&bp->device_poll);
+#endif
 
 }
 
@@ -1581,6 +1608,24 @@ static int macb_open(struct net_device *dev)
 	if (!bp->phy_dev)
 		return -EAGAIN;
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+	err = device_poll_request_irq(&bp->device_poll);
+	if (!err) {
+		netdev_info(bp->dev, "polling mode is enabled\n");
+		goto done_irq;
+	} else
+		netdev_info(bp->dev, "polling mode is disabled, using interrupts\n");
+#endif
+
+	err = devm_request_irq(&bp->pdev->dev, dev->irq, macb_interrupt, 0,
+			dev->name, dev);
+	if (err) {
+		netdev_err(bp->dev, "Unable to request IRQ %d (error %d)\n",
+			dev->irq, err);
+		return err;
+	}
+
+done_irq:
 	/* RX buffers initialization */
 	macb_init_rx_buffer_size(bp, bufsz);
 
@@ -1626,6 +1671,13 @@ static int macb_close(struct net_device *dev)
 	macb_reset_hw(bp);
 	netif_carrier_off(dev);
 	spin_unlock_irqrestore(&bp->lock, flags);
+
+#ifdef CONFIG_MACB_DEVICE_POLL
+	if (device_poll_is_active(&bp->device_poll))
+		device_poll_free_irq(&bp->device_poll);
+	else
+#endif
+	free_irq(bp->dev->irq, bp->dev);
 
 	macb_free_consistent(bp);
 
@@ -1919,13 +1971,6 @@ static int __init macb_probe(struct platform_device *pdev)
 	}
 
 	dev->irq = platform_get_irq(pdev, 0);
-	err = devm_request_irq(&pdev->dev, dev->irq, macb_interrupt, 0,
-			dev->name, dev);
-	if (err) {
-		dev_err(&pdev->dev, "Unable to request IRQ %d (error %d)\n",
-			dev->irq, err);
-		goto err_out_disable_clocks;
-	}
 
 	dev->netdev_ops = &macb_netdev_ops;
 	netif_napi_add(dev, &bp->napi, macb_poll, 64);
@@ -2000,6 +2045,22 @@ static int __init macb_probe(struct platform_device *pdev)
 	setup_timer(&bp->tx_timer, macb_tx_timer, (unsigned long)bp);
 
 	netif_carrier_off(dev);
+
+#ifdef CONFIG_MACB_DEVICE_POLL
+	bp->device_poll.device = &dev->dev;
+	bp->device_poll.ops = &macb_device_poll_ops;
+
+	/* Default to using interrupts */
+	bp->device_poll.interval = 0;
+
+	/* Default to SCHED_FIFO priority 10 */
+	bp->device_poll.policy = SCHED_FIFO;
+	bp->device_poll.priority = 10;
+
+	err = netdev_poll_init(&bp->device_poll);
+	if (err)
+		dev_err(&pdev->dev, "failed to init netdev polling\n");
+#endif
 
 	netdev_info(dev, "Cadence %s at 0x%08lx irq %d (%pM)\n",
 		    macb_is_gem(bp) ? "GEM" : "MACB", dev->base_addr,

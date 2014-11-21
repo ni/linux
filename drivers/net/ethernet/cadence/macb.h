@@ -586,6 +586,10 @@ struct macb {
 	struct delayed_work	tx_task;
 	struct timer_list	tx_timer;
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+	struct device_poll device_poll;
+#endif
+
 	dma_addr_t		rx_ring_dma;
 	dma_addr_t		tx_ring_dma;
 	dma_addr_t		rx_buffers_dma;
