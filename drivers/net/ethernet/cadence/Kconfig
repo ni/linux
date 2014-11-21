@@ -31,4 +31,15 @@ config MACB
 	  To compile this driver as a module, choose M here: the module
 	  will be called macb.
 
+config MACB_DEVICE_POLL
+	bool "Device polling for Cadence MACB ethernet"
+	default n
+	depends on MACB
+	select NETDEV_POLL
+	---help---
+		Say Y if you want the ability to use polling instead of interrupts
+		on the Cadence MACB interface.
+
+		If unsure, say N.
+
 endif # NET_CADENCE
