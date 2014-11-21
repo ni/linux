@@ -14,6 +14,10 @@
 #include <linux/ptp_clock_kernel.h>
 #include <linux/net_tstamp.h>
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+#include <linux/device_poll.h>
+#endif
+
 #if defined(CONFIG_ARCH_DMA_ADDR_T_64BIT) || defined(CONFIG_MACB_USE_HWSTAMP)
 #define MACB_EXT_DESC
 #endif
@@ -1022,6 +1026,10 @@ struct macb {
 #ifdef CONFIG_FPGA_PERIPHERAL
 	struct notifier_block	fpga_notifier;
 	bool			fpga_down;
+#endif
+
+#ifdef CONFIG_MACB_DEVICE_POLL
+	struct device_poll device_poll;
 #endif
 
 	dma_addr_t		rx_ring_dma;
