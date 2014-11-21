@@ -837,6 +837,10 @@ struct macb {
 	bool			fpga_down;
 #endif
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+	struct device_poll device_poll;
+#endif
+
 	dma_addr_t		rx_ring_dma;
 	dma_addr_t		rx_buffers_dma;
 

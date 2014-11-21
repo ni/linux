@@ -38,6 +38,10 @@
 #include <misc/fpgaperipheral.h>
 #endif
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+#include <linux/netdev_poll.h>
+#endif
+
 #include "macb.h"
 
 #define MACB_RX_BUFFER_SIZE	128
@@ -1244,6 +1248,27 @@ static void macb_poll_controller(struct net_device *dev)
 }
 #endif
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+static void macb_device_poll_interrupt(struct device_poll *device_poll)
+{
+	struct net_device *dev = to_net_dev(device_poll->device);
+	struct macb *bp = netdev_priv(dev);
+	struct macb_queue *queue;
+	unsigned int q;
+
+	/* Since we don't know whether NAPI will be scheduled to run,
+	 * just keep polling rather than trying to be smart and disable
+	 * IRQ polling when napi_schedule is called.
+	 */
+	for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue)
+		macb_interrupt(dev->irq, queue);
+}
+
+static struct device_poll_ops macb_device_poll_ops = {
+		.interrupt = macb_device_poll_interrupt,
+};
+#endif
+
 static unsigned int macb_tx_map(struct macb *bp,
 				struct macb_queue *queue,
 				struct sk_buff *skb)
@@ -1675,6 +1700,10 @@ static void macb_reset_hw(struct macb *bp)
 	macb_writel(bp, RSR, -1);
 
 	/* Disable all interrupts */
+#ifdef CONFIG_MACB_DEVICE_POLL
+	device_poll_disable_irq(&bp->device_poll);
+#endif
+
 	for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue) {
 		queue_writel(queue, IDR, -1);
 		queue_readl(queue, ISR);
@@ -1839,6 +1868,10 @@ static void macb_init_hw(struct macb *bp)
 			     MACB_BIT(HRESP));
 	}
 
+#ifdef CONFIG_MACB_DEVICE_POLL
+	device_poll_enable_irq(&bp->device_poll);
+#endif
+
 	/* Enable TX and RX */
 	macb_writel(bp, NCR, MACB_BIT(RE) | MACB_BIT(TE) | MACB_BIT(MPE));
 }
@@ -1965,6 +1998,8 @@ static void macb_set_rx_mode(struct net_device *dev)
 static int macb_open(struct net_device *dev)
 {
 	struct macb *bp = netdev_priv(dev);
+	struct macb_queue *queue;
+	unsigned int q;
 	size_t bufsz = dev->mtu + ETH_HLEN + ETH_FCS_LEN + NET_IP_ALIGN;
 	int err;
 
@@ -1999,6 +2034,27 @@ static int macb_open(struct net_device *dev)
 	napi_enable(&bp->napi);
 
 	bp->macbgem_ops.mog_init_rings(bp);
+
+#ifdef CONFIG_MACB_DEVICE_POLL
+	err = device_poll_request_irq(&bp->device_poll);
+	if (!err) {
+		netdev_info(bp->dev, "polling mode is enabled\n");
+		goto done_irq;
+	} else {
+		netdev_info(bp->dev, "polling mode is disabled, using interrupts\n");
+	}
+#endif
+	for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue)
+		err = devm_request_irq(&bp->pdev->dev, dev->irq,
+				       macb_interrupt, 0, dev->name, queue);
+
+	if (err) {
+		netdev_err(bp->dev, "Unable to request IRQ %d (error %d)\n",
+			   dev->irq, err);
+		return err;
+	}
+
+done_irq:
 	macb_init_hw(bp);
 
 	/* schedule a link state check */
@@ -2012,6 +2068,8 @@ static int macb_open(struct net_device *dev)
 static int macb_close(struct net_device *dev)
 {
 	struct macb *bp = netdev_priv(dev);
+	struct macb_queue *queue;
+	unsigned int q;
 	unsigned long flags;
 
 #ifdef CONFIG_FPGA_PERIPHERAL
@@ -2032,6 +2090,14 @@ static int macb_close(struct net_device *dev)
 	macb_reset_hw(bp);
 	netif_carrier_off(dev);
 	spin_unlock_irqrestore(&bp->lock, flags);
+
+#ifdef CONFIG_MACB_DEVICE_POLL
+	if (device_poll_is_active(&bp->device_poll))
+		device_poll_free_irq(&bp->device_poll);
+	else
+#endif
+	for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue)
+		devm_free_irq(&bp->pdev->dev, bp->dev->irq, queue);
 
 	macb_free_consistent(bp);
 
@@ -2541,7 +2607,6 @@ static int macb_init(struct platform_device *pdev)
 	unsigned int hw_q, q;
 	struct macb *bp = netdev_priv(dev);
 	struct macb_queue *queue;
-	int err;
 	u32 val;
 
 #ifdef CONFIG_FPGA_PERIPHERAL
@@ -2589,14 +2654,6 @@ static int macb_init(struct platform_device *pdev)
 		 * hardware queue mask.
 		 */
 		queue->irq = platform_get_irq(pdev, q);
-		err = devm_request_irq(&pdev->dev, queue->irq, macb_interrupt,
-				       IRQF_SHARED, dev->name, queue);
-		if (err) {
-			dev_err(&pdev->dev,
-				"Unable to request IRQ %d (error %d)\n",
-				queue->irq, err);
-			return err;
-		}
 
 		INIT_WORK(&queue->tx_error_task, macb_tx_error_task);
 		q++;
@@ -3254,6 +3311,22 @@ static int macb_probe(struct platform_device *pdev)
 	}
 
 	phy_attached_info(phydev);
+
+#ifdef CONFIG_MACB_DEVICE_POLL
+	bp->device_poll.device = &dev->dev;
+	bp->device_poll.ops = &macb_device_poll_ops;
+
+	/* Default to using interrupts */
+	bp->device_poll.interval = 0;
+
+	/* Default to SCHED_FIFO priority 10 */
+	bp->device_poll.policy = SCHED_FIFO;
+	bp->device_poll.priority = 10;
+
+	err = netdev_poll_init(&bp->device_poll);
+	if (err)
+		dev_err(&pdev->dev, "failed to init netdev polling\n");
+#endif
 
 	netdev_info(dev, "Cadence %s rev 0x%08x at 0x%08lx irq %d (%pM)\n",
 		    macb_is_gem(bp) ? "GEM" : "MACB", macb_readl(bp, MID),
