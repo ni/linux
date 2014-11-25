@@ -1,0 +1,124 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/* NIDEVCODE 77D4 */
+
+/ {
+	model = "NI sbRIO-9637";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba {
+		eth0: eth@e000b000 {
+			status = "okay";
+			clocks = <&clkc 13>, <&clkc 30>, <&clkc 15>;
+			clock-names = "ref_clk", "aper_clk", "fpga_clk";
+			phy-handle = <&phy0>;
+			phy-mode = "rgmii-id";
+			xlnx,emio-gpio-speed-1000 = <54>;
+
+			phy0: phy@0 {
+				compatible = "micrel,KSZ9031";
+				device_type = "ethernet-phy";
+				reg = <0x0>;
+				/* Interrupt on GPIO25, shared with phy1. */
+				interrupts = <25 0>;
+				interrupt-parent = <&gpio>;
+			};
+		};
+
+		gpio: gpio@e000a000 {
+			/* You can specify GPIO settings here:
+			 *
+			 *  gpioN-label      String label.
+			 *  gpioN-direction  "input" or "output".
+			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
+			 */
+
+			/* GPIO1 (MIO1) */
+			gpio1-label     = "wdt_interrupt";
+			gpio1-direction = "input";
+			gpio1-settings  = "edge-falling";
+
+			/* GPIO25 (MIO25) */
+			gpio25-label     = "phy_interrupt";
+			gpio25-direction = "input";
+			gpio25-settings  = "level-low";
+
+			/* GPIO54 (EMIO0) */
+			gpio54-label     = "eth0_link_speed_1000";
+			gpio54-direction = "output";
+			gpio54-settings  = "low";
+		};
+
+		i2c0: i2c@e0004000 {
+			nizynqcpld@40 {
+				interrupts = <1 0>;
+			};
+
+			ds3231_rtc@68 {
+				status = "okay";
+			};
+		};
+	};
+};
+
+&sdhci0 {
+	status = "okay";
+};
+
+&sdhci1 {
+	status = "okay";
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart2 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
+&ni_uart3 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart4 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart5 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&can0 {
+	status = "okay";
+};
+
+&can1 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&clkc {
+	/* Enable fclk1 for serial. */
+	fclk-enable = <0x2>;
+};
