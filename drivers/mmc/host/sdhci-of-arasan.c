@@ -36,6 +36,21 @@ struct sdhci_arasan_data {
 	struct clk	*clk_ahb;
 };
 
+static unsigned int sdhci_arasan_get_max_clock(struct sdhci_host *host)
+{
+	unsigned int max_clock;
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+
+	/* Make sure we can listen to the mmc 'max-frequency' parameter, which
+	 * gets set in host->mmc->f_max in mmc_of_parse. */
+	if (host->mmc->f_max)
+		max_clock = host->mmc->f_max;
+	else
+		max_clock = sdhci_pltfm_clk_get_max_clock(host);
+
+	return max_clock;
+}
+
 static unsigned int sdhci_arasan_get_timeout_clock(struct sdhci_host *host)
 {
 	u32 div;
@@ -52,7 +67,7 @@ static unsigned int sdhci_arasan_get_timeout_clock(struct sdhci_host *host)
 }
 
 static struct sdhci_ops sdhci_arasan_ops = {
-	.get_max_clock = sdhci_pltfm_clk_get_max_clock,
+	.get_max_clock = sdhci_arasan_get_max_clock,
 	.get_timeout_clock = sdhci_arasan_get_timeout_clock,
 };
 
@@ -169,6 +184,9 @@ static int sdhci_arasan_probe(struct platform_device *pdev)
 	pltfm_host = sdhci_priv(host);
 	pltfm_host->priv = sdhci_arasan;
 	pltfm_host->clk = clk_xin;
+
+	/* Call generic mmc_of_parse to support additional capabilities. */
+	mmc_of_parse(host->mmc);
 
 	ret = sdhci_add_host(host);
 	if (ret) {
