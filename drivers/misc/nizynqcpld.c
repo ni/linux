@@ -1068,13 +1068,13 @@ static struct nizynqcpld_led_desc proto_leds[] = {
 		.name			= "nilrt:eth1:green",
 		.addr			= PROTO_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000:00:100Mb",
+		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
 		.name			= "nilrt:eth1:yellow",
 		.addr			= PROTO_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000:00:Gb",
+		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
@@ -1116,25 +1116,25 @@ static struct nizynqcpld_led_desc dosx_leds[] = {
 		.name			= "nilrt:eth1:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 3,
-		.default_trigger	= "e000b000:01:100Mb",
+		.default_trigger	= "e000b000.etherne:01:100Mb",
 	},
 	{
 		.name			= "nilrt:eth1:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 2,
-		.default_trigger	= "e000b000:01:Gb",
+		.default_trigger	= "e000b000.etherne:01:Gb",
 	},
 	{
 		.name			= "nilrt:eth0:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000:00:100Mb",
+		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
 		.name			= "nilrt:eth0:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000:00:Gb",
+		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
@@ -1157,25 +1157,25 @@ static struct nizynqcpld_led_desc sol_leds[] = {
 		.name			= "nilrt:eth1:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 3,
-		.default_trigger	= "e000b000:01:100Mb",
+		.default_trigger	= "e000b000.etherne:01:100Mb",
 	},
 	{
 		.name			= "nilrt:eth1:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 2,
-		.default_trigger	= "e000b000:01:Gb",
+		.default_trigger	= "e000b000.etherne:01:Gb",
 	},
 	{
 		.name			= "nilrt:eth0:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000:00:100Mb",
+		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
 		.name			= "nilrt:eth0:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000:00:Gb",
+		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
@@ -1198,13 +1198,13 @@ static struct nizynqcpld_led_desc tecate_leds[] = {
 		.name			= "nilrt:eth0:green",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000:00:100Mb",
+		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
 		.name			= "nilrt:eth0:yellow",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000:00:Gb",
+		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
