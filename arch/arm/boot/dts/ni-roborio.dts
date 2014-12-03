@@ -8,21 +8,6 @@
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba {
-		eth0: eth@e000b000 {
-			status = "okay";
-			phy-handle = <&phy0>;
-			phy-mode = "rgmii-id";
-			xlnx,emio-gpio-speed-100 = <54>;
-
-                        phy0: phy@0 {
-                                compatible = "smsc,lan8720";
-                                device_type = "ethernet-phy";
-                                reg = <0x0>;
-                                /* Interrupt pin is connected from PL pin to FPGA IRQ 3 */
-                                interrupts = <0 32 4>;
-                        };
-		};
-
 		gpio: gpio@e000a000 {
 			/* You can specify GPIO settings here:
 			 *
@@ -104,6 +89,21 @@
                                 reg = <0>;
 			};
 		};
+	};
+};
+
+&gem0 {
+	status = "okay";
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	cdns,emio-gpio-speed-100 = <54>;
+
+	phy0: phy@0 {
+		compatible = "smsc,lan8720";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt pin is connected from PL pin to FPGA IRQ 3 */
+		interrupts = <0 32 4>;
 	};
 };
 
