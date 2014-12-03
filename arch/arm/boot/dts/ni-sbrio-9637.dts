@@ -8,24 +8,6 @@
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba {
-		eth0: eth@e000b000 {
-			status = "okay";
-			clocks = <&clkc 13>, <&clkc 30>, <&clkc 15>;
-			clock-names = "ref_clk", "aper_clk", "fpga_clk";
-			phy-handle = <&phy0>;
-			phy-mode = "rgmii-id";
-			xlnx,emio-gpio-speed-1000 = <54>;
-
-			phy0: phy@0 {
-				compatible = "micrel,KSZ9031";
-				device_type = "ethernet-phy";
-				reg = <0x0>;
-				/* Interrupt on GPIO25, shared with phy1. */
-				interrupts = <25 0>;
-				interrupt-parent = <&gpio>;
-			};
-		};
-
 		gpio: gpio@e000a000 {
 			/* You can specify GPIO settings here:
 			 *
@@ -64,6 +46,27 @@
 				status = "okay";
 			};
 		};
+	};
+};
+
+&gem0 {
+	status = "okay";
+	clocks = <&clkc 30>, <&clkc 13>, <&clkc 15>;
+	clock-names = "pclk", "hclk", "tx_clk";
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	cdns,emio-gpio-speed-1000 = <54>;
+
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	phy0: phy@0 {
+		compatible = "micrel,KSZ9031";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt on GPIO25. */
+		interrupts = <25 0>;
+		interrupt-parent = <&gpio>;
 	};
 };
 
