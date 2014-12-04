@@ -614,6 +614,10 @@ void phy_stop(struct phy_device *phydev)
 out_unlock:
 	mutex_unlock(&phydev->lock);
 
+#ifdef CONFIG_PHY_NO_UNNECESSARY_POLLING
+	phy_start_machine(phydev);
+#endif
+
 	/* Cannot call flush_scheduled_work() here as desired because
 	 * of rtnl_lock(), but PHY_HALTED shall guarantee phy_change()
 	 * will not reenable interrupts.
@@ -648,6 +652,11 @@ void phy_start(struct phy_device *phydev)
 		break;
 	}
 	mutex_unlock(&phydev->lock);
+
+#ifdef CONFIG_PHY_NO_UNNECESSARY_POLLING
+	phy_start_machine(phydev);
+	phy_enable_interrupts(phydev);
+#endif
 }
 EXPORT_SYMBOL(phy_start);
 
