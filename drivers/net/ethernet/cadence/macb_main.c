@@ -39,6 +39,12 @@
 #include <linux/udp.h>
 #include <linux/gcd.h>
 #include <net/pkt_sched.h>
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+#include <linux/rtnetlink.h>
+#include <misc/fpgaperipheral.h>
+#endif
+
 #include "macb.h"
 
 /* This structure is only used for MACB on SiFive FU540 devices */
@@ -3076,6 +3082,15 @@ static int macb_open(struct net_device *dev)
 	if (err < 0)
 		return err;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	/* If we're being opened while the FPGA is being reprogrammed, we can
+	 * just return. The interface will be brought up when the FPGA is back
+	 * up.
+	 */
+	if (bp->fpga_down)
+		return 0;
+#endif
+
 	/* RX buffers initialization */
 	macb_init_rx_buffer_size(bp, bufsz);
 
@@ -3132,6 +3147,14 @@ static int macb_close(struct net_device *dev)
 	struct macb_queue *queue;
 	unsigned long flags;
 	unsigned int q;
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	/* If we're being closed while the FPGA is being reprogrammed, the
+	 * interface is already down. We can just return.
+	 */
+	if (bp->fpga_down)
+		return 0;
+#endif
 
 	netif_tx_stop_all_queues(dev);
 
@@ -4436,6 +4459,60 @@ static const struct net_device_ops macb_netdev_ops = {
 	.ndo_setup_tc		= macb_setup_tc,
 };
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+static int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void *data)
+{
+	struct macb *bp = container_of(nb, struct macb, fpga_notifier);
+
+	switch (val) {
+	case FPGA_PERIPHERAL_DOWN:
+		netdev_dbg(bp->dev,
+			   "macb_fpga_notifier: going down\n");
+
+		/* Synchronize with macb_open/close. */
+		rtnl_lock();
+		if (!bp->fpga_down) {
+			/* If the interface has been opened. */
+			if (netif_running(bp->dev))
+				macb_close(bp->dev);
+
+			bp->fpga_down = 1;
+		}
+		rtnl_unlock();
+		break;
+
+	case FPGA_PERIPHERAL_UP:
+		netdev_dbg(bp->dev,
+			   "macb_fpga_notifier: coming up\n");
+
+		BUG_ON(!bp->fpga_down);
+
+		/* Synchronize with macb_open/close. */
+		rtnl_lock();
+
+		bp->fpga_down = 0;
+
+		/* If the interface has been opened. */
+		if (netif_running(bp->dev))
+			macb_open(bp->dev);
+
+		rtnl_unlock();
+		break;
+
+	case FPGA_PERIPHERAL_FAILED:
+		/* This interface is not coming back up. */
+		break;
+
+	default:
+		netdev_err(bp->dev,
+			   "unsupported FPGA notifier value %lu\n", val);
+		break;
+	}
+
+	return notifier_from_errno(0);
+}
+#endif
+
 /* Configure peripheral capabilities according to device tree
  * and integration options used
  */
@@ -4616,6 +4693,14 @@ static int macb_init(struct platform_device *pdev)
 
 	bp->tx_ring_size = DEFAULT_TX_RING_SIZE;
 	bp->rx_ring_size = DEFAULT_RX_RING_SIZE;
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	bp->fpga_notifier.notifier_call = macb_fpga_notifier;
+
+	blocking_notifier_chain_register(
+		&fpgaperipheral_notifier_list,
+		&bp->fpga_notifier);
+#endif
 
 	/* set the queue register mapping once for all: queue0 has a special
 	 * register mapping but we don't want to test the queue index then
@@ -5750,6 +5835,12 @@ static void macb_remove(struct platform_device *pdev)
 
 	if (dev) {
 		bp = netdev_priv(dev);
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+		blocking_notifier_chain_unregister(
+			&fpgaperipheral_notifier_list, &bp->fpga_notifier);
+#endif
+
 		unregister_netdev(dev);
 		phy_exit(bp->sgmii_phy);
 		mdiobus_unregister(bp->mii_bus);

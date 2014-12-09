@@ -1317,6 +1317,11 @@ struct macb {
 		struct gem_stats	gem;
 	}			hw_stats;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct notifier_block	fpga_notifier;
+	bool			fpga_down;
+#endif
+
 	struct macb_or_gem_ops	macbgem_ops;
 
 	struct mii_bus		*mii_bus;
