@@ -831,6 +831,11 @@ struct macb {
 		struct gem_stats	gem;
 	}			hw_stats;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct notifier_block	fpga_notifier;
+	bool			fpga_down;
+#endif
+
 	dma_addr_t		rx_ring_dma;
 	dma_addr_t		rx_buffers_dma;
 
