@@ -35,6 +35,11 @@
 #include <linux/netdev_poll.h>
 #endif
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+#include <linux/rtnetlink.h>
+#include <misc/fpgaperipheral.h>
+#endif
+
 #include "macb.h"
 
 #define MACB_RX_BUFFER_SIZE	1536
@@ -1636,6 +1641,15 @@ static int macb_open(struct net_device *dev)
 
 	netdev_dbg(bp->dev, "open\n");
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	/* If we're being opened while the FPGA is being reprogrammed, we can
+	 * just return. The interface will be brought up when the FPGA is back
+	 * up.
+	 */
+	if (bp->fpga_down)
+		return 0;
+#endif
+
 	/* carrier starts down */
 	netif_carrier_off(dev);
 
@@ -1688,6 +1702,14 @@ static int macb_close(struct net_device *dev)
 {
 	struct macb *bp = netdev_priv(dev);
 	unsigned long flags;
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	/* If we're being closed while the FPGA is being reprogrammed, the
+	 * interface is already down. We can just return.
+	 */
+	if (bp->fpga_down)
+		return 0;
+#endif
 
 	netif_stop_queue(dev);
 	napi_disable(&bp->napi);
@@ -1927,6 +1949,60 @@ static const struct of_device_id macb_dt_ids[] = {
 MODULE_DEVICE_TABLE(of, macb_dt_ids);
 #endif
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void *data)
+{
+	struct macb *bp = container_of(nb, struct macb, fpga_notifier);
+
+	switch (val) {
+	case FPGA_PERIPHERAL_DOWN:
+		netdev_dbg(bp->dev,
+			"macb_fpga_notifier: going down\n");
+
+		/* Synchronize with macb_open/close. */
+		rtnl_lock();
+		if (!bp->fpga_down) {
+			/* If the interface has been opened. */
+			if (netif_running(bp->dev))
+				macb_close(bp->dev);
+
+			bp->fpga_down = 1;
+		}
+		rtnl_unlock();
+		break;
+
+	case FPGA_PERIPHERAL_UP:
+		netdev_dbg(bp->dev,
+			"macb_fpga_notifier: coming up\n");
+
+		BUG_ON(!bp->fpga_down);
+
+		/* Synchronize with macb_open/close. */
+		rtnl_lock();
+
+		bp->fpga_down = 0;
+
+		/* If the interface has been opened. */
+		if (netif_running(bp->dev))
+			macb_open(bp->dev);
+
+		rtnl_unlock();
+		break;
+
+	case FPGA_PERIPHERAL_FAILED:
+		/* This interface is not coming back up. */
+		break;
+
+	default:
+		netdev_err(bp->dev,
+			 "unsupported FPGA notifier value %lu\n", val);
+		break;
+	}
+
+	return notifier_from_errno(0);
+}
+#endif
+
 static int __init macb_probe(struct platform_device *pdev)
 {
 	struct macb_platform_data *pdata;
@@ -1999,6 +2075,14 @@ static int __init macb_probe(struct platform_device *pdev)
 			goto err_out_disable_hclk;
 		}
 	}
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+	bp->fpga_notifier.notifier_call = macb_fpga_notifier;
+
+	blocking_notifier_chain_register(
+		&fpgaperipheral_notifier_list,
+		&bp->fpga_notifier);
+#endif
 
 	bp->regs = devm_ioremap(&pdev->dev, regs->start, resource_size(regs));
 	if (!bp->regs) {

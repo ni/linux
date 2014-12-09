@@ -590,6 +590,11 @@ struct macb {
 	struct device_poll device_poll;
 #endif
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct notifier_block	fpga_notifier;
+	bool			fpga_down;
+#endif
+
 	dma_addr_t		rx_ring_dma;
 	dma_addr_t		tx_ring_dma;
 	dma_addr_t		rx_buffers_dma;
