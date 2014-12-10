@@ -1417,9 +1417,6 @@ static int igb_request_irq(struct igb_adapter *adapter)
 
 		igb_assign_vector(adapter->q_vector[0], 0);
 
-		igb_reset_interrupt_capability(adapter);
-		adapter->flags &= ~IGB_FLAG_HAS_MSI;
-
 		goto request_done;
 	}
 #endif
