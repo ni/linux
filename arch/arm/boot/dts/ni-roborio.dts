@@ -21,6 +21,11 @@
 			 *                              "edge-both".
 			 */
 
+			/* GPIO24 (MIO24) */
+			gpio24-label		= "wdt_interrupt";
+			gpio24-direction	= "input";
+			gpio24-settings		= "edge-falling"
+
 			/* GPIO54 (EMIO0) */
 			gpio54-label		= "eth0_link_speed";
 			gpio54-direction	= "output";
