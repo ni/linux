@@ -59,10 +59,20 @@
 	 * have its CD line connected correctly. */
 	force-sd-cd-test-mode = <1>;
 
+	non-removable = <1>;
+
 	wl12xx: wl12xx@0 {
-		compatible = "ti,wl12xx_sdio";
+		compatible = "ti,wilink6";
 		interrupt-parent = <&gpio>;
-		interrupts = <15 0>;
+		interrupts = <15 0x4>;
+		clocks = <&refclock>;
+		clock-names = "refclock";
+
+		refclock: refclock {
+			compatible = "ti,wilink-clock";
+			#clock-cells = <0>;
+			clock-frequency = <38400000>;
+		};
 	};
 };
 
