@@ -478,6 +478,9 @@ struct igb_adapter {
 #define IGB_FLAG_MAS_CAPABLE		(1 << 11)
 #define IGB_FLAG_MAS_ENABLE		(1 << 12)
 #define IGB_FLAG_HAS_MSIX		(1 << 13)
+#ifdef CONFIG_IGB_DEVICE_POLL
+#define IGB_FLAG_POLL_ENABLED		(1 << 14)
+#endif
 
 /* Media Auto Sense */
 #define IGB_MAS_ENABLE_0		0X0001

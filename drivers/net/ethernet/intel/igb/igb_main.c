@@ -126,6 +126,7 @@ static void igb_free_all_rx_resources(struct igb_adapter *);
 static void igb_setup_mrqc(struct igb_adapter *);
 static int igb_probe(struct pci_dev *, const struct pci_device_id *);
 static void igb_remove(struct pci_dev *pdev);
+static void igb_init_queue_configuration(struct igb_adapter *);
 static int igb_sw_init(struct igb_adapter *);
 static int igb_open(struct net_device *);
 static int igb_close(struct net_device *);
@@ -1420,7 +1421,29 @@ static int igb_request_irq(struct igb_adapter *adapter)
 
 		igb_assign_vector(adapter->q_vector[0], 0);
 
+		adapter->flags |= IGB_FLAG_POLL_ENABLED;
+
 		goto request_done;
+	} else {
+		/* Set the queue config back to the default, using legacy
+		 * interrupts for polling changes it to 1 queue for TX/RX.
+		 */
+		if (adapter->flags & IGB_FLAG_POLL_ENABLED) {
+			adapter->flags &= ~IGB_FLAG_QUEUE_PAIRS;
+			igb_init_queue_configuration(adapter);
+
+			igb_free_all_tx_resources(adapter);
+			igb_free_all_rx_resources(adapter);
+
+			igb_clear_interrupt_scheme(adapter);
+			igb_init_interrupt_scheme(adapter, true);
+
+			igb_setup_all_tx_resources(adapter);
+			igb_setup_all_rx_resources(adapter);
+			igb_configure(adapter);
+
+			adapter->flags &= ~IGB_FLAG_POLL_ENABLED;
+		}
 	}
 #endif
 	if (adapter->flags & IGB_FLAG_HAS_MSIX) {
