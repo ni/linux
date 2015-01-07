@@ -1716,6 +1716,9 @@ static int macb_close(struct net_device *dev)
 		return 0;
 #endif
 
+	/* Wait for any outstanding Tx polling to complete. */
+	cancel_delayed_work_sync(&bp->tx_task);
+
 	netif_stop_queue(dev);
 	napi_disable(&bp->napi);
 
