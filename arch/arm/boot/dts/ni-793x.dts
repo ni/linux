@@ -1,10 +1,12 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 775E */
+/* NIDEVCODE 77AC */
+/* NIDEVCODE 77B2 */
+/* NIDEVCODE 77B1 */
 
 / {
-	model = "NI Tecate";
+	model = "NI-793x";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba {
