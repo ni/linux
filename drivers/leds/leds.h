@@ -31,7 +31,10 @@ static inline void __led_set_brightness(struct led_classdev *led_cdev,
 
 static inline int led_get_brightness(struct led_classdev *led_cdev)
 {
-	return led_cdev->brightness;
+	if (led_cdev->inverted)
+		return (led_cdev->max_brightness - led_cdev->brightness);
+	else
+		return led_cdev->brightness;
 }
 
 void led_stop_software_blink(struct led_classdev *led_cdev);
