@@ -102,6 +102,8 @@
 	phy-handle = <&phy0>;
 	phy-mode = "rgmii-id";
 	cdns,emio-gpio-speed-100 = <54>;
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
 
 	phy0: phy@0 {
 		compatible = "smsc,lan8720";
