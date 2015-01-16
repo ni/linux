@@ -2046,7 +2046,6 @@ static int process_ep_req(struct zynq_udc *udc, int pipe,
 	int	td_complete, actual, remaining_length, j, tmp;
 	int	status = 0;
 	int	errors = 0;
-	int	size_ioc_sts = 0;
 	struct  ep_queue_head *curr_qh = &udc->ep_qh[pipe];
 	int direction = pipe % 2;
 
@@ -2055,12 +2054,12 @@ static int process_ep_req(struct zynq_udc *udc, int pipe,
 	actual = curr_req->req.length;
 
 	for (j = 0; j < curr_req->dtd_count; j++) {
-		size_ioc_sts = le32_to_cpu(ACCESS_ONCE(curr_td->size_ioc_sts));
-
-		remaining_length = (size_ioc_sts & DTD_PACKET_SIZE)
+		remaining_length = (le32_to_cpu(curr_td->size_ioc_sts)
+					& DTD_PACKET_SIZE)
 				>> DTD_LENGTH_BIT_POS;
 		actual -= remaining_length;
-		errors = size_ioc_sts & DTD_ERROR_MASK;
+		errors = le32_to_cpu(curr_td->size_ioc_sts) &
+						DTD_ERROR_MASK;
 		if (errors) {
 			if (errors & DTD_STATUS_HALTED) {
 				ERR("dTD error %08x QH=%d\n", errors, pipe);
@@ -2085,7 +2084,8 @@ static int process_ep_req(struct zynq_udc *udc, int pipe,
 				ERR("Unknown error has occured (0x%x)!\n",
 					errors);
 
-		} else if (size_ioc_sts & DTD_STATUS_ACTIVE) {
+		} else if (le32_to_cpu(curr_td->size_ioc_sts)
+				& DTD_STATUS_ACTIVE) {
 			VDBG("Request not complete");
 			status = REQ_UNCOMPLETE;
 			return status;
@@ -2104,8 +2104,7 @@ static int process_ep_req(struct zynq_udc *udc, int pipe,
 		}
 
 		if (j != curr_req->dtd_count - 1)
-			curr_td = (struct ep_td_struct *)
-				ACCESS_ONCE(curr_td->next_td_virt);
+			curr_td = (struct ep_td_struct *)curr_td->next_td_virt;
 	}
 
 	if (status)
