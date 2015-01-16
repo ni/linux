@@ -304,9 +304,6 @@
 #define E1000_TCTL_COLD   0x003ff000    /* collision distance */
 #define E1000_TCTL_RTLC   0x01000000    /* Re-transmit on late collision */
 
-/* Transmit Packet Buffer Size */
-#define E1000_TXPBSIZE_RESET 0x04000014
-
 /* DMA Coalescing register fields */
 #define E1000_DMACR_DMACWT_MASK         0x00003FFF /* DMA Coalescing
 							* Watchdog Timer */

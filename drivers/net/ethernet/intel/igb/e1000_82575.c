@@ -2251,10 +2251,6 @@ static s32 igb_reset_hw_82580(struct e1000_hw *hw)
 	wr32(E1000_TCTL, E1000_TCTL_PSP);
 	wrfl();
 
-	if (hw->mac.type == e1000_i210)
-		/* TXPBSIZE resets only on power-up. */
-		wr32(E1000_TXPBSIZE, E1000_TXPBSIZE_RESET);
-
 	msleep(10);
 
 	/* Determine whether or not a global dev reset is requested */

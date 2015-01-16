@@ -63,7 +63,6 @@
 #define E1000_TCTL     0x00400  /* TX Control - RW */
 #define E1000_TCTL_EXT 0x00404  /* Extended TX Control - RW */
 #define E1000_TIPG     0x00410  /* TX Inter-packet gap -RW */
-#define E1000_TXPBSIZE 0x03404  /* Transmit Packet Buffer Size - RW */
 #define E1000_AIT      0x00458  /* Adaptive Interframe Spacing Throttle - RW */
 #define E1000_LEDCTL   0x00E00  /* LED Control - RW */
 #define E1000_LEDMUX   0x08130  /* LED MUX Control */
