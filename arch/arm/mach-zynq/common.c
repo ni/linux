@@ -73,24 +73,10 @@ static int __init zynq_l2c_init(void)
 
 	/*
 	 * 64KB way size, 8-way associativity, parity disabled,
-	 * prefetching option.
-	 *
-	 * We are not setting shared attribute override enable
-	 * (L2X0_AUX_CTRL_SHARE_OVERRIDE_EN_MASKV) in auxctrl because NI-RIO
-	 * currently depends on the shared attribute bit to DMA between FPGA
-	 * and CPU (i.e. RIO Host Interface DMA). RIO Host Interface DMA
-	 * encounters data corruption when the override bit is set. See CAR
-	 * 496676 for details on how RIO DMA fails.
-	 *
-	 * Not setting the shared attribute override enable bit is counter to
-	 * the recommendations of both ARM
-	 * (1a8e41cd672f894bbd74874eac601e6cedf838fb) and Xilinx
-	 * (1a85939af40acca2bf963407b497cc31c303ff3e) and is not a shippable
-	 * solution as it will cause Linux-native DMA (which RIO doesn't
-	 * currently use, but many other drivers we depend on do use) to
-	 * encounter data corruption.
+	 * prefetching option, shared attribute override enable
 	 */
-	auxctrl = L2X0_AUX_CTRL_WAY_SIZE64K_MASK |
+	auxctrl = L2X0_AUX_CTRL_SHARE_OVERRIDE_EN_MASK |
+			L2X0_AUX_CTRL_WAY_SIZE64K_MASK |
 			L2X0_AUX_CTRL_REPLACE_POLICY_RR_MASK;
 #ifdef CONFIG_XILINX_L2_PREFETCH
 	auxctrl |= L2X0_AUX_CTRL_EARLY_BRESP_EN_MASK |
