@@ -323,9 +323,6 @@ struct zynq_udc {
 	u32 ep0_dir;		/* Endpoint zero direction: can be
 				   USB_DIR_IN or USB_DIR_OUT */
 	u8 device_address;	/* Device USB address */
-
-	struct timer_list irq_timer; /* irq workaround timer */
-	spinlock_t irq_watchdog_lock; /* irq workaround lock */
 };
 
 /*-------------------------------------------------------------------------*/
@@ -921,7 +918,6 @@ static int zynq_ep_disable(struct usb_ep *_ep)
 	zynq_writel(epctrl, &dr_regs->endptctrl[ep_num]);
 
 	udc = (struct zynq_udc *)ep->udc;
-	spin_lock(&udc->irq_watchdog_lock);
 	spin_lock_irqsave(&udc->lock, flags);
 
 	/* nuke all pending requests (does flush) */
@@ -930,7 +926,6 @@ static int zynq_ep_disable(struct usb_ep *_ep)
 	ep->ep.desc = NULL;
 	ep->stopped = 1;
 	spin_unlock_irqrestore(&udc->lock, flags);
-	spin_unlock(&udc->irq_watchdog_lock);
 
 	VDBG("disabled %s OK", _ep->name);
 	return 0;
@@ -1540,9 +1535,7 @@ static int reset_queues(struct zynq_udc *udc)
 
 	/* report disconnect; the driver is already quiesced */
 	spin_unlock(&udc->lock);
-	spin_unlock(&udc->irq_watchdog_lock);
 	udc->driver->disconnect(&udc->gadget);
-	spin_lock(&udc->irq_watchdog_lock);
 	spin_lock(&udc->lock);
 
 	return 0;
@@ -1689,7 +1682,6 @@ static int zynq_udc_stop(struct usb_gadget *g,
 	udc_controller->ep0_dir = 0;
 
 	/* stand operation */
-	spin_lock(&udc_controller->irq_watchdog_lock);
 	spin_lock_irqsave(&udc_controller->lock, flags);
 	udc_controller->gadget.speed = USB_SPEED_UNKNOWN;
 	nuke(&udc_controller->eps[0], -ESHUTDOWN);
@@ -1697,7 +1689,6 @@ static int zynq_udc_stop(struct usb_gadget *g,
 			ep.ep_list)
 		nuke(loop_ep, -ESHUTDOWN);
 	spin_unlock_irqrestore(&udc_controller->lock, flags);
-	spin_unlock(&udc_controller->irq_watchdog_lock);
 
 #ifdef CONFIG_USB_ZYNQ_PHY
 	if (gadget_is_otg(&udc_controller->gadget)) {
@@ -1964,11 +1955,9 @@ status_phase:
 		udc->ep0_dir = (setup->bRequestType & USB_DIR_IN)
 				?  USB_DIR_IN : USB_DIR_OUT;
 		spin_unlock(&udc->lock);
-		spin_unlock(&udc->irq_watchdog_lock);
 		if (udc->driver->setup(&udc->gadget,
 				&udc->local_setup_buff) < 0)
 			ep0stall(udc);
-		spin_lock(&udc->irq_watchdog_lock);
 		spin_lock(&udc->lock);
 		udc->ep0_state = (setup->bRequestType & USB_DIR_IN)
 				?  DATA_STATE_XMIT : DATA_STATE_RECV;
@@ -1976,11 +1965,9 @@ status_phase:
 		/* No data phase, IN status from gadget */
 		udc->ep0_dir = USB_DIR_IN;
 		spin_unlock(&udc->lock);
-		spin_unlock(&udc->irq_watchdog_lock);
 		if (udc->driver->setup(&udc->gadget,
 				&udc->local_setup_buff) < 0)
 			ep0stall(udc);
-		spin_lock(&udc->irq_watchdog_lock);
 		spin_lock(&udc->lock);
 		udc->ep0_state = WAIT_FOR_OUT_STATUS;
 	}
@@ -2168,14 +2155,8 @@ static void dtd_complete_irq(struct zynq_udc *udc)
 
 			VDBG("status of process_ep_req= %d, ep = %d",
 					status, ep_num);
-			if (status == REQ_UNCOMPLETE) {
-				/* OK, it could be complete but not written */
-				/* yet - schedule the workaround timer */
-				mod_timer(&udc->irq_timer,
-					jiffies + msecs_to_jiffies(20));
+			if (status == REQ_UNCOMPLETE)
 				break;
-			}
-
 			/* Clear the endpoint complete events */
 			zynq_writel(bit_mask, &dr_regs->endptcomplete);
 			/* write back status to req */
@@ -2188,59 +2169,6 @@ static void dtd_complete_irq(struct zynq_udc *udc)
 				done(curr_ep, curr_req, status);
 		}
 	}
-}
-
-static void irq_watchdog(unsigned long param)
-{
-	struct zynq_udc *udc = (struct zynq_udc *)param;
-	unsigned long flags;
-	int i, ep_num, direction, bit_mask, status;
-	struct zynq_ep *curr_ep;
-	struct zynq_req *curr_req, *temp_req;
-
-	/* try to handle uncomplete reqs the IRQ left behind */
-	spin_lock(&udc->irq_watchdog_lock);
-	spin_lock_irqsave(&udc->lock, flags);
-
-	for (i = 0; i < udc->max_ep; i++) {
-		ep_num = i >> 1;
-		direction = i % 2;
-
-		bit_mask = 1 << (ep_num + 16 * direction);
-
-		curr_ep = get_ep_by_pipe(udc, i);
-
-		/* If the ep is configured */
-		if (curr_ep->name == NULL) {
-			WARNING("Invalid EP?");
-			continue;
-		}
-
-		/* process the req queue until an uncomplete request */
-		list_for_each_entry_safe(curr_req, temp_req, &curr_ep->queue,
-				queue) {
-			status = process_ep_req(udc, i, curr_req);
-
-			VDBG("status of process_ep_req= %d, ep = %d",
-					status, ep_num);
-			if (status == REQ_UNCOMPLETE) {
-				mod_timer(&udc->irq_timer,
-					jiffies + msecs_to_jiffies(100));
-				break;
-			}
-			/* write back status to req */
-			curr_req->req.status = status;
-
-			if (ep_num == 0) {
-				ep0_req_complete(udc, curr_ep, curr_req);
-				break;
-			} else
-				done(curr_ep, curr_req, status);
-		}
-	}
-
-	spin_unlock_irqrestore(&udc->lock, flags);
-	spin_unlock(&udc->irq_watchdog_lock);
 }
 
 /* Process a port change interrupt */
@@ -2394,7 +2322,6 @@ static irqreturn_t zynq_udc_irq(int irq, void *_udc)
 			return IRQ_NONE;
 	}
 #endif
-	spin_lock(&udc->irq_watchdog_lock);
 	spin_lock_irqsave(&udc->lock, flags);
 	irq_src = zynq_readl(&dr_regs->usbsts) &
 		zynq_readl(&dr_regs->usbintr);
@@ -2484,7 +2411,6 @@ static irqreturn_t zynq_udc_irq(int irq, void *_udc)
 		VDBG("Error IRQ %x", irq_src);
 
 	spin_unlock_irqrestore(&udc->lock, flags);
-	spin_unlock(&udc->irq_watchdog_lock);
 	return status;
 }
 
@@ -2833,12 +2759,6 @@ static int zynq_udc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	/* set up workaround timer and lock */
-	init_timer(&udc_controller->irq_timer);
-	udc_controller->irq_timer.function = irq_watchdog;
-	udc_controller->irq_timer.data = (unsigned long)udc_controller;
-
-	spin_lock_init(&udc_controller->irq_watchdog_lock);
 	spin_lock_init(&udc_controller->lock);
 	udc_controller->stopped = 1;
 
@@ -2979,8 +2899,6 @@ static int __exit zynq_udc_remove(struct platform_device *pdev)
 
 	if (!udc_controller)
 		return -ENODEV;
-
-	del_timer_sync(&udc_controller->irq_timer);
 
 	usb_del_gadget_udc(&udc_controller->gadget);
 	udc_controller->done = &done;
