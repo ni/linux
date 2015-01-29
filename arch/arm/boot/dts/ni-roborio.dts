@@ -55,7 +55,7 @@
 		spi0: spi@e0006000 {
 			status = "okay";
 			num-cs = <7>;
-			is-decoded-cs = <0>;
+			is-decoded-cs = <1>;
 			speed-hz = <200000000>;
 			bus-num = <0>;
 
