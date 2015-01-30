@@ -2291,8 +2291,6 @@ void igb_power_up_phy_copper(struct e1000_hw *hw)
 		hw->phy.ops.write_reg(hw, GS40G_COPPER_SPEC, power_reg);
 	}
 	hw->phy.ops.write_reg(hw, PHY_CONTROL, mii_reg);
-
-	igb_setup_link(hw);
 }
 
 /**
