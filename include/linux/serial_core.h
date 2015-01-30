@@ -98,16 +98,6 @@ struct uart_ops {
 #endif
 };
 
-/*
- * This structure describes all the operations that can be done through
- * tranceiver controllers.
- */
-struct txvr_ops {
-	int (*enable_transceivers)(struct uart_port *);
-	int (*disable_transceivers)(struct uart_port *);
-	int (*config_rs485)(struct uart_port *, struct serial_rs485 *rs485);
-};
-
 #define NO_POLL_CHAR		0x00ff0000
 #define UART_CONFIG_TYPE	(1 << 0)
 #define UART_CONFIG_IRQ		(1 << 1)
@@ -223,8 +213,6 @@ struct uart_port {
 	unsigned int		timeout;		/* character-based timeout */
 	unsigned int		type;			/* port type */
 	const struct uart_ops	*ops;
-	const struct txvr_ops	*txvr_ops;		/* transceiver ops */
-	struct serial_rs485	rs485;			/* rs485 settings */
 	unsigned int		custom_divisor;
 	unsigned int		line;			/* port index */
 	resource_size_t		mapbase;		/* for ioremap */
