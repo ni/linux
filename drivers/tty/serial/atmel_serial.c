@@ -295,7 +295,6 @@ static void atmel_set_mctrl(struct uart_port *port, u_int mctrl)
 {
 	unsigned int control = 0;
 	unsigned int mode;
-	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
 
 #ifdef CONFIG_ARCH_AT91RM9200
 	if (cpu_is_at91rm9200()) {
@@ -2396,7 +2395,7 @@ static int atmel_serial_probe(struct platform_device *pdev)
 	/*
 	 * Get port name of usart or uart
 	 */
-	atmel_get_ip_name(&port->uart);
+	atmel_get_ip_name(&atmel_port->uart);
 
 	return 0;
 
