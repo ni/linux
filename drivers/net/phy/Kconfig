@@ -106,11 +106,6 @@ config MICREL_PHY
 	---help---
 	  Supports the KSZ9021, VSC8201, KS8001 PHYs.
 
-config MICREL_KSZ9031_PHY
-	tristate "Driver for the Micrel KSZ9031 PHY"
-	---help---
-	  Supports the KSZ9031 PHY.
-
 config PHY_NO_UNNECESSARY_POLLING
 	bool "Don't poll unnecessarily when PHY interrupts are in use"
 	---help---
