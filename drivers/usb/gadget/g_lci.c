@@ -21,17 +21,15 @@
 
 /* USB strings */
 static char *manufacturer = "National Instruments";
-static char *product = "VB-8012";
+static char *product = "NI VB-8012";
 
 module_param(manufacturer, charp, S_IRUGO);
 module_param(product, charp, S_IRUGO);
 
-/* Mass Storage inquiry strings */
+/* Manufacturer string for mass storage must be shorter. */
 static char *fsg_manuf = "NI";
-static char *fsg_prod = "VB-8012";
 
 module_param(fsg_manuf, charp, S_IRUGO);
-module_param(fsg_prod, charp, S_IRUGO);
 
 /*-------------------------------------------------------------------------*/
 
@@ -248,12 +246,31 @@ static int msg_add_to_config(struct usb_configuration *c)
 	struct fsg_common *retp;
 	struct fsg_config config;
 	int ret;
+	size_t product_len;
+	size_t vendor_len;
 
 	fsg_config_from_params(&config, &mod_data);
 	config.ops = &lci_fsg_operations;
 	/* vendor must be 8 chars, product 16 or less */
 	config.vendor_name = fsg_manuf;
-	config.product_name = fsg_prod;
+
+	/*
+	 * If the 'product' string starts with the 'manufacturer' string
+	 * followed by a space, skip over that part of it.
+	 * (that is, if the product string is "NI VB-8012" and our
+	 * manufacturer string is "NI", we just want "VB-8012").
+	 */
+	product_len = strlen(product);
+	vendor_len = strlen(config.vendor_name);
+	if ((product_len > vendor_len+1) &&
+	    (!strncmp(product, config.vendor_name, vendor_len)) &&
+	    (product[vendor_len] == ' ')) {
+		/* Skip over vendor name and space. */
+		config.product_name = product + (vendor_len + 1);
+	} else {
+		/* Use the whole product name. */
+		config.product_name = product;
+	}
 
 	retp = fsg_common_init(&common, c->cdev, &config);
 	if (IS_ERR(retp))	return PTR_ERR(retp);
