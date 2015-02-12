@@ -157,7 +157,6 @@ ni16550_set_rs485_defaults(struct serial_rs485 *rs485)
 static struct txvr_ops ni16550_txvr_ops = {
 	.enable_transceivers = ni16550_enable_transceivers,
 	.disable_transceivers = ni16550_disable_transceivers,
-	.config_rs485 = ni16550_config_rs485,
 };
 
 bool is_rs232_mode(unsigned long iobase)
@@ -187,6 +186,7 @@ int ni16550_register_port(struct uart_8250_port *uart)
 	dev_dbg(uart->port.dev, ">ni16550_register_port\n");
 
 	uart->port.txvr_ops = &ni16550_txvr_ops;
+	uart->port.rs485_config = &ni16550_config_rs485;
 	ni16550_set_rs485_defaults(&(uart->port.rs485));
 
 	line = serial8250_register_8250_port(uart);
