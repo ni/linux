@@ -68,12 +68,13 @@ void __init xilinx_init_machine(void)
 	__raw_writel(0x121, l2cache_base + L2X0_DATA_LATENCY_CTRL);
 
 	/*
-	 * 64KB way size, 8-way associativity, parity disabled, prefetching option
+	 * 64KB way size, 8-way associativity, parity disabled, prefetching option,
+	 * enable shared attribute override
 	 */
 #ifndef	CONFIG_XILINX_L2_PREFETCH
-	l2x0_init(l2cache_base, 0x02060000, 0xF0F0FFFF);
+	l2x0_init(l2cache_base, 0x02460000, 0xF0F0FFFF);
 #else
-	l2x0_init(l2cache_base, 0x72060000, 0xF0F0FFFF);
+	l2x0_init(l2cache_base, 0x72460000, 0xF0F0FFFF);
 #endif
 #endif
 
