@@ -63,6 +63,9 @@
 #define DOSX_WATCHDOGCONTROL_RESET		0x02
 #define DOSX_WATCHDOGCONTROL_ALARM		0x01
 
+#define DOSX_WATCHDOGCONTROL_RW_BITS \
+	(DOSX_WATCHDOGCONTROL_PROC_INTERRUPT | DOSX_WATCHDOGCONTROL_PROC_RESET)
+
 #define DOSX_WATCHDOG_MAX_COUNTER	0x00FFFFFF
 #define DOSX_WATCHDOG_COUNTER_BYTES	3
 
@@ -715,28 +718,18 @@ static int nizynqcpld_watchdog_check_action(u32 action)
 static int nizynqcpld_watchdog_add_action(struct nizynqcpld *cpld, u32 action)
 {
 	int err;
-	u8 action_mask;
-	u8 control;
+	u8 action_bit;
 
 	if (NIWATCHDOG_ACTION_INTERRUPT == action)
-		action_mask = DOSX_WATCHDOGCONTROL_PROC_INTERRUPT;
+		action_bit = DOSX_WATCHDOGCONTROL_PROC_INTERRUPT;
 	else if (NIWATCHDOG_ACTION_RESET == action)
-		action_mask = DOSX_WATCHDOGCONTROL_PROC_RESET;
+		action_bit = DOSX_WATCHDOGCONTROL_PROC_RESET;
 	else
 		return -ENOTSUPP;
 
 	nizynqcpld_lock(cpld);
 
-	err = nizynqcpld_read(cpld, DOSX_WATCHDOGCONTROL, &control);
-
-	if (err) {
-		dev_err(cpld->dev,
-			"Error %d reading watchdog control.\n", err);
-		goto out_unlock;
-	}
-	control |= action_mask;
-
-	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL, control);
+	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL, action_bit);
 
 	if (err) {
 		dev_err(cpld->dev,
@@ -763,6 +756,9 @@ static int nizynqcpld_watchdog_start(struct nizynqcpld *cpld)
 			"Error %d reading watchdog control.\n", err);
 		goto out_unlock;
 	}
+
+	/* Mask off all the read-only and write-only bits. */
+	control &= DOSX_WATCHDOGCONTROL_RW_BITS;
 
 	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL,
 			       control | DOSX_WATCHDOGCONTROL_RESET);
@@ -801,6 +797,9 @@ static int nizynqcpld_watchdog_pet(struct nizynqcpld *cpld, u32 *state)
 				"Error %d reading watchdog control.\n", err);
 			goto out_unlock;
 		}
+
+		/* Mask off all the read-only and write-only bits. */
+		control &= DOSX_WATCHDOGCONTROL_RW_BITS;
 
 		control |= DOSX_WATCHDOGCONTROL_PET;
 
@@ -855,6 +854,9 @@ static int nizynqcpld_watchdog_counter_get(struct nizynqcpld *cpld,
 		goto out_unlock;
 	}
 
+	/* Mask off all the read-only and write-only bits. */
+	control &= DOSX_WATCHDOGCONTROL_RW_BITS;
+
 	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL,
 			       control | DOSX_WATCHDOGCONTROL_CAPTURECOUNTER);
 	if (err) {
@@ -905,6 +907,9 @@ static irqreturn_t nizynqcpld_watchdog_irq(int irq, void *data)
 	}
 
 	cpld->watchdog.expired = true;
+
+	/* Mask off all the read-only and write-only bits. */
+	control &= DOSX_WATCHDOGCONTROL_RW_BITS;
 
 	/* Acknowledge the interrupt. */
 	control |= DOSX_WATCHDOGCONTROL_RESET;
