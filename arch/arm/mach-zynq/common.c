@@ -20,7 +20,6 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/clk/zynq.h>
-#include <linux/export.h>
 #include <linux/clocksource.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
@@ -49,7 +48,7 @@ void __iomem *zynq_scu_base;
  * We need to stop things allocating the low memory as DMA can't work in
  * the 1st 512K of memory.  Using reserve vs remove is not totally clear yet.
  */
-void __init zynq_memory_init(void)
+static void __init zynq_memory_init(void)
 {
 	/*
 	 * Reserve the 0-0x4000 addresses (before swapper page tables
@@ -116,7 +115,7 @@ static void __init zynq_init_late(void)
  * zynq_init_machine - System specific initialization, intended to be
  *		       called from board specific initialization.
  */
-void __init zynq_init_machine(void)
+static void __init zynq_init_machine(void)
 {
 	struct platform_device_info devinfo = { .name = "cpufreq-cpu0", };
 
@@ -128,7 +127,7 @@ void __init zynq_init_machine(void)
 	zynq_slcr_init();
 }
 
-void __init zynq_timer_init(void)
+static void __init zynq_timer_init(void)
 {
 	zynq_early_slcr_init();
 
@@ -158,7 +157,7 @@ static void __init zynq_scu_map_io(void)
 /**
  * zynq_map_io - Create memory mappings needed for early I/O.
  */
-void __init zynq_map_io(void)
+static void __init zynq_map_io(void)
 {
 	debug_ll_io_init();
 	zynq_scu_map_io();

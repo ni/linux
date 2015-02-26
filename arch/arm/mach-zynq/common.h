@@ -27,11 +27,6 @@ extern bool zynq_slcr_cpu_state_read(int cpu);
 extern void zynq_slcr_cpu_state_write(int cpu, bool die);
 extern u32 zynq_slcr_get_ocm_config(void);
 
-void zynq_map_io(void);
-void zynq_init_machine(void);
-void zynq_timer_init(void);
-void zynq_memory_init(void);
-
 #ifdef CONFIG_SMP
 extern void zynq_secondary_startup(void);
 extern void secondary_startup(void);
