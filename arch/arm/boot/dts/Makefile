@@ -902,7 +902,18 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	zynq-zc702.dtb \
 	zynq-zc706.dtb \
 	zynq-zed.dtb \
-	zynq-zybo.dtb
+	zynq-zybo.dtb \
+	ni-793x.dtb \
+	ni-dosequis.dtb \
+	ni-myrio.dtb \
+	ni-roborio.dtb \
+	ni-sbrio-9607.dtb \
+	ni-sbrio-9627.dtb \
+	ni-sbrio-9637.dtb \
+	ni-solbetter.dtb \
+	ni-solenetexp.dtb \
+	ni-solgood.dtb \
+	ni-tecate.dtb
 dtb-$(CONFIG_MACH_ARMADA_370) += \
 	armada-370-db.dtb \
 	armada-370-dlink-dns327l.dtb \
