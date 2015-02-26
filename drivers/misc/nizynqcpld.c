@@ -993,6 +993,7 @@ static int nizynqcpld_watchdog_misc_release(struct inode *inode,
 	return 0;
 }
 
+static
 long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
 				    unsigned long arg)
 {
@@ -1072,6 +1073,7 @@ long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	return err;
 }
 
+static
 unsigned int nizynqcpld_watchdog_misc_poll(struct file *file,
 					   struct poll_table_struct *wait)
 {
