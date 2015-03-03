@@ -93,7 +93,7 @@ static void wl1271_reg_notify(struct wiphy *wiphy,
 	/* Never speak first on channels 12, 13, and 14 even if
 	 * the user hints that it's OK
 	 */
-	band = wiphy->bands[IEEE80211_BAND_2GHZ];
+	band = wiphy->bands[NL80211_BAND_2GHZ];
 	for (i = 0; i < band->n_channels; i++) {
 		ch = &band->channels[i];
 		if (ch->flags & IEEE80211_CHAN_DISABLED)
