@@ -44,6 +44,8 @@
 
 #define WL1271_BOOT_RETRIES 3
 
+#define MAX_GLOBAL_80211_ISM_CENTER_FREQ 2462
+
 static char *fwlog_param;
 static int fwlog_mem_blocks = -1;
 static int bug_on_recovery = -1;
@@ -84,6 +86,18 @@ static void wl1271_reg_notify(struct wiphy *wiphy,
 	int i;
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
 	struct wl1271 *wl = hw->priv;
+
+	/* Never speak first on channels 12, 13, and 14 even if
+	 * the user hints that it's OK
+	 */
+	band = wiphy->bands[IEEE80211_BAND_2GHZ];
+	for (i = 0; i < band->n_channels; i++) {
+		ch = &band->channels[i];
+		if (ch->flags & IEEE80211_CHAN_DISABLED)
+			continue;
+		if (ch->center_freq > MAX_GLOBAL_80211_ISM_CENTER_FREQ)
+			ch->flags |= IEEE80211_CHAN_NO_IR;
+	}
 
 	band = wiphy->bands[IEEE80211_BAND_5GHZ];
 	for (i = 0; i < band->n_channels; i++) {
