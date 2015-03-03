@@ -43,6 +43,8 @@
 
 #define WL1271_BOOT_RETRIES 3
 
+#define MAX_GLOBAL_80211_ISM_CENTER_FREQ 2462
+
 static char *fwlog_param;
 static int fwlog_mem_blocks = -1;
 static int bug_on_recovery = -1;
@@ -78,12 +80,27 @@ static int wl12xx_set_authorized(struct wl1271 *wl, struct wl12xx_vif *wlvif)
 static void wl1271_reg_notify(struct wiphy *wiphy,
 			      struct regulatory_request *request)
 {
+	struct ieee80211_supported_band *band;
+	struct ieee80211_channel *ch;
+	int i;
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
 	struct wl1271 *wl = hw->priv;
 
 	/* copy the current dfs region */
 	if (request)
 		wl->dfs_region = request->dfs_region;
+
+	/* Never speak first on channels 12, 13, and 14 even if
+	 * the user hints that it's OK
+	 */
+	band = wiphy->bands[IEEE80211_BAND_2GHZ];
+	for (i = 0; i < band->n_channels; i++) {
+		ch = &band->channels[i];
+		if (ch->flags & IEEE80211_CHAN_DISABLED)
+			continue;
+		if (ch->center_freq > MAX_GLOBAL_80211_ISM_CENTER_FREQ)
+			ch->flags |= IEEE80211_CHAN_NO_IR;
+	}
 
 	wlcore_regdomain_config(wl);
 }
