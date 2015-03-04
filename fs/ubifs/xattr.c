@@ -100,32 +100,24 @@ static const struct file_operations empty_fops;
 static int create_xattr(struct ubifs_info *c, struct inode *host,
 			const struct qstr *nm, const void *value, int size)
 {
-	int err, xattr_name_list_size;
+	int err;
 	struct inode *inode;
 	struct ubifs_inode *ui, *host_ui = ubifs_inode(host);
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
 				.new_ino_d = ALIGN(size, 8), .dirtied_ino = 1,
 				.dirtied_ino_d = ALIGN(host_ui->data_len, 8) };
 
-	if (host_ui->xattr_cnt >= MAX_XATTRS_PER_INODE) {
-		ubifs_err("ubifs xattr_cnt %d exceeds MAX_XATTR_PER_NODE (%d)",
-			  host_ui->xattr_cnt, MAX_XATTRS_PER_INODE);
+	if (host_ui->xattr_cnt >= MAX_XATTRS_PER_INODE)
 		return -ENOSPC;
-	}
 	/*
 	 * Linux limits the maximum size of the extended attribute names list
 	 * to %XATTR_LIST_MAX. This means we should not allow creating more
 	 * extended attributes if the name list becomes larger. This limitation
 	 * is artificial for UBIFS, though.
 	 */
-	xattr_name_list_size = host_ui->xattr_names + host_ui->xattr_cnt +
-					nm->len + 1;
-
-	if (xattr_name_list_size > XATTR_LIST_MAX) {
-		ubifs_err("xattr name list too large %d > %d",
-			  xattr_name_list_size, XATTR_LIST_MAX);
+	if (host_ui->xattr_names + host_ui->xattr_cnt +
+					nm->len + 1 > XATTR_LIST_MAX)
 		return -ENOSPC;
-	}
 
 	err = ubifs_budget_space(c, &req);
 	if (err)
@@ -659,10 +651,6 @@ int ubifs_init_security(struct inode *dentry, struct inode *inode,
 	err = security_inode_init_security(inode, dentry, qstr,
 					   &ubifs_initxattrs, 0);
 	mutex_unlock(&inode->i_mutex);
-
-	if (err)
-		ubifs_err("cannot initialize extended attribute, error %d",
-			  err);
 
 	return err;
 }
