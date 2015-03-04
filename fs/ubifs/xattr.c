@@ -143,10 +143,10 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 		err = -ENOMEM;
 		goto out_free;
 	}
-
-	mutex_lock(&host_ui->ui_mutex);
 	inode->i_size = ui->ui_size = size;
 	ui->data_len = size;
+
+	mutex_lock(&host_ui->ui_mutex);
 	host->i_ctime = ubifs_current_time(host);
 	host_ui->xattr_cnt += 1;
 	host_ui->xattr_size += CALC_DENT_SIZE(nm->len);
@@ -208,10 +208,10 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 		err = -ENOMEM;
 		goto out_free;
 	}
-
-	mutex_lock(&host_ui->ui_mutex);
 	inode->i_size = ui->ui_size = size;
 	ui->data_len = size;
+
+	mutex_lock(&host_ui->ui_mutex);
 	host->i_ctime = ubifs_current_time(host);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(ui->data_len);
 	host_ui->xattr_size += CALC_XATTR_BYTES(size);
