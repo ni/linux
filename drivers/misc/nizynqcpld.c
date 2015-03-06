@@ -1172,32 +1172,6 @@ static struct nizynqcpld_led_desc sol_leds[] = {
 	},
 };
 
-static struct nizynqcpld_led_desc tecate_leds[] = {
-	{
-		.of_node_name		= "user1-0",
-		.addr			= DOSX_LED,
-		.bit			= 1 << 5,
-	},
-	{
-		.of_node_name		= "status-0",
-		.addr			= DOSX_LED,
-		.bit			= 1 << 2,
-		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
-		/* write byte 1 first */
-		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1,
-	},
-	{
-		.of_node_name		= "eth0-0",
-		.addr			= DOSX_ETHERNETLED,
-		.bit			= 1 << 1,
-	},
-	{
-		.of_node_name		= "eth0-1",
-		.addr			= DOSX_ETHERNETLED,
-		.bit			= 1 << 0,
-	},
-};
-
 static struct nizynqcpld_watchdog_desc dosxv4_watchdog_desc = {
 	.watchdog_period_ns	= 24000,
 };
@@ -1280,8 +1254,8 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.supported_version	= 1,
 		.supported_product	= 2,
 		.watchdog_desc		= &dosxv5_watchdog_desc,
-		.led_descs		= tecate_leds,
-		.num_led_descs		= ARRAY_SIZE(tecate_leds),
+		.led_descs		= sol_leds,
+		.num_led_descs		= ARRAY_SIZE(sol_leds),
 		.reboot_addr		= DOSX_PROCESSORRESET,
 		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
 		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
