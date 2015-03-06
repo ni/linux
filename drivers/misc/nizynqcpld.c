@@ -1593,7 +1593,6 @@ MODULE_DEVICE_TABLE(i2c, nizynqcpld_ids);
 static struct i2c_driver nizynqcpld_driver = {
 	.driver = {
 		.name		= "nizynqcpld",
-		.owner		= THIS_MODULE,
 	},
 	.probe		= nizynqcpld_probe,
 	.remove		= nizynqcpld_remove,
