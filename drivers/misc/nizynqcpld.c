@@ -74,13 +74,11 @@
 #define MYRIO_WIFISWCTRL_RELIRQ		0x40
 
 struct nizynqcpld_led_desc {
-	const char *name;
-	const char *default_trigger;
+	const char *of_node_name;
 	u8 addr;
 	u8 bit;
 	u8 pattern_lo_addr;
 	u8 pattern_hi_addr;
-	int max_brightness;
 };
 
 struct nizynqcpld;
@@ -133,6 +131,7 @@ struct nizynqcpld_desc {
 
 struct nizynqcpld {
 	struct device *dev;
+	int irq;
 	struct nizynqcpld_desc *desc;
 	struct nizynqcpld_led *leds;
 	struct nizynqcpld_watchdog watchdog;
@@ -241,6 +240,8 @@ static int nizynqcpld_led_register(struct nizynqcpld *cpld,
 {
 	int err;
 	u8 tmp;
+	struct device_node *leds_node;
+	struct device_node *node;
 
 	nizynqcpld_lock(cpld);
 	err = nizynqcpld_read(cpld, desc->addr, &tmp);
@@ -254,10 +255,33 @@ static int nizynqcpld_led_register(struct nizynqcpld *cpld,
 	led->on = !!(tmp & desc->bit);
 	INIT_WORK(&led->deferred_work, nizynqcpld_set_brightness_work);
 
-	led->cdev.name = desc->name;
-	led->cdev.default_trigger = desc->default_trigger;
-	led->cdev.max_brightness = desc->max_brightness ? desc->max_brightness
-							: 1;
+	/* Find the LEDs node. */
+	leds_node = of_find_node_by_name(cpld->client->dev.of_node,
+					 "leds");
+	if (!leds_node)
+		return -ENOENT;
+
+	/* For the current led, get the device node under 'leds'. */
+	node = of_get_child_by_name(leds_node, desc->of_node_name);
+	if (!node) {
+		/* Don't register the LED if the LED is not specified in device
+		 * tree. */
+		err = -ENOENT;
+		goto err_out;
+	}
+
+	/* Read the label from device tree. */
+	led->cdev.name = of_get_property(node, "label", NULL) ? : node->name;
+
+	/* Read the default trigger from device tree. */
+	led->cdev.default_trigger = of_get_property(node,
+				    "linux,default-trigger", NULL);
+
+	/* Read the max brightness from device tree. */
+	led->cdev.max_brightness = 1; /* Default to max of 1 */
+	of_property_read_u32(node, "max-brightness",
+			     &led->cdev.max_brightness);
+
 	led->cdev.brightness_set = nizynqcpld_led_set_brightness;
 	led->cdev.brightness_get = nizynqcpld_led_get_brightness;
 
@@ -268,6 +292,7 @@ static int nizynqcpld_led_register(struct nizynqcpld *cpld,
 	}
 
 err_led:
+	of_node_put(node);
 err_out:
 	return err;
 }
@@ -890,15 +915,31 @@ static int nizynqcpld_watchdog_misc_open(struct inode *inode,
 	struct miscdevice *misc_dev = file->private_data;
 	struct nizynqcpld *cpld = container_of(misc_dev, struct nizynqcpld,
 					       watchdog.misc_dev);
+	struct device_node *watchdogs_node;
+	struct device_node *boot_watchdog_node;
+
 	file->private_data = cpld;
+
+	/* Find the watchdogs node. */
+	watchdogs_node = of_find_node_by_name(cpld->client->dev.of_node,
+					      "watchdogs");
+	if (!watchdogs_node)
+		return -ENOENT;
+
+	/* Get the boot watchdog node. */
+	boot_watchdog_node = of_find_node_by_name(watchdogs_node,
+						  "boot-watchdog");
+	if (!boot_watchdog_node)
+		return -ENOENT;
 
 	if (!atomic_dec_and_test(&cpld->watchdog.available)) {
 		atomic_inc(&cpld->watchdog.available);
 		return -EBUSY;
 	}
 
-	return request_threaded_irq(cpld->client->irq,
-				    NULL, nizynqcpld_watchdog_irq,
+	cpld->irq = irq_of_parse_and_map(boot_watchdog_node, 0);
+
+	return request_threaded_irq(cpld->irq, NULL, nizynqcpld_watchdog_irq,
 				    0, NIWATCHDOG_NAME, cpld);
 }
 
@@ -906,7 +947,7 @@ static int nizynqcpld_watchdog_misc_release(struct inode *inode,
 					    struct file *file)
 {
 	struct nizynqcpld *cpld = file->private_data;
-	free_irq(cpld->client->irq, cpld);
+	free_irq(cpld->irq, cpld);
 	atomic_inc(&cpld->watchdog.available);
 	return 0;
 }
@@ -1014,161 +1055,146 @@ static const struct file_operations nizynqcpld_watchdog_misc_fops = {
 
 static struct nizynqcpld_led_desc proto_leds[] = {
 	{
-		.name			= "nilrt:user1:green",
+		.of_node_name		= "user1-0",
 		.addr			= PROTO_SWITCHANDLED,
 		.bit			= 1 << 4,
 	},
 	{
-		.name			= "nilrt:user1:yellow",
+		.of_node_name		= "user1-1",
 		.addr			= PROTO_SWITCHANDLED,
 		.bit			= 1 << 3,
 	},
 	{
-		.name			= "nilrt:status:yellow",
+		.of_node_name		= "status-0",
 		.addr			= PROTO_SWITCHANDLED,
 		.bit			= 1 << 2,
 	},
 	{
-		.name			= "nilrt:eth1:green",
+		.of_node_name		= "eth1-0",
 		.addr			= PROTO_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
-		.name			= "nilrt:eth1:yellow",
+		.of_node_name		= "eth1-1",
 		.addr			= PROTO_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
 static struct nizynqcpld_led_desc dosx_leds[] = {
 	{
-		.name			= "nilrt:user1:green",
+		.of_node_name		= "user1-0",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nilrt:user1:yellow",
+		.of_node_name		= "user1-1",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 4,
 	},
 	{
-		.name			= "nilrt:status:red",
+		.of_node_name		= "status-0",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 3,
 	},
 	{
-		.name			= "nilrt:status:yellow",
+		.of_node_name		= "status-1",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 2,
 		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
 		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1,
-		.max_brightness		= 0xffff,
 	},
 	{
-		.name			= "nilrt:wifi:primary",
+		.of_node_name		= "wifi-0",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nilrt:wifi:secondary",
+		.of_node_name		= "wifi-1",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 4,
 	},
 	{
-		.name			= "nilrt:eth1:green",
+		.of_node_name		= "eth1-0",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 3,
-		.default_trigger	= "e000b000.etherne:01:100Mb",
 	},
 	{
-		.name			= "nilrt:eth1:yellow",
+		.of_node_name		= "eth1-1",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 2,
-		.default_trigger	= "e000b000.etherne:01:Gb",
 	},
 	{
-		.name			= "nilrt:eth0:green",
+		.of_node_name		= "eth0-0",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
-		.name			= "nilrt:eth0:yellow",
+		.of_node_name		= "eth0-1",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
 static struct nizynqcpld_led_desc sol_leds[] = {
 	{
-		.name			= "nilrt:user1:green",
+		.of_node_name		= "user1-0",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nilrt:status:yellow",
+		.of_node_name		= "status-0",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 2,
 		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
 		/* write byte 1 first */
 		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1,
-		.max_brightness		= 0xffff,
 	},
 	{
-		.name			= "nilrt:eth1:green",
+		.of_node_name		= "eth1-0",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 3,
-		.default_trigger	= "e000b000.etherne:01:100Mb",
 	},
 	{
-		.name			= "nilrt:eth1:yellow",
+		.of_node_name		= "eth1-1",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 2,
-		.default_trigger	= "e000b000.etherne:01:Gb",
 	},
 	{
-		.name			= "nilrt:eth0:green",
+		.of_node_name		= "eth0-0",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
-		.name			= "nilrt:eth0:yellow",
+		.of_node_name		= "eth0-1",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
 static struct nizynqcpld_led_desc tecate_leds[] = {
 	{
-		.name			= "nilrt:user1:green",
+		.of_node_name		= "user1-0",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 5,
 	},
 	{
-		.name			= "nilrt:status:yellow",
+		.of_node_name		= "status-0",
 		.addr			= DOSX_LED,
 		.bit			= 1 << 2,
 		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
 		/* write byte 1 first */
 		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1,
-		.max_brightness		= 0xffff,
 	},
 	{
-		.name			= "nilrt:eth0:green",
+		.of_node_name		= "eth0-0",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 1,
-		.default_trigger	= "e000b000.etherne:00:100Mb",
 	},
 	{
-		.name			= "nilrt:eth0:yellow",
+		.of_node_name		= "eth0-1",
 		.addr			= DOSX_ETHERNETLED,
 		.bit			= 1 << 0,
-		.default_trigger	= "e000b000.etherne:00:Gb",
 	},
 };
 
@@ -1368,12 +1394,26 @@ static int myrio_wifi_sw_init(struct nizynqcpld *cpld)
 	u8 data;
 	int err = 0;
 	struct input_dev *input;
+	struct device_node *switches_node;
+	struct device_node *wifi_switch_node;
 
 	if (!cpld->desc->wifi_sw_addr)
 		goto wifi_sw_init_exit;
 
 	INIT_WORK(&cpld->wifi_sw.deferred_work, wifi_sw_work_func);
-	cpld->wifi_sw.irq = irq_of_parse_and_map(cpld->client->dev.of_node, 1);
+
+	/* Find the switches node. */
+	switches_node = of_find_node_by_name(cpld->client->dev.of_node,
+					     "switches");
+	if (!switches_node)
+		goto wifi_sw_init_exit;
+
+	/* Find the WiFi switch node. */
+	wifi_switch_node = of_find_node_by_name(switches_node, "wifi-switch");
+	if (!wifi_switch_node)
+		goto wifi_sw_init_exit;
+
+	cpld->wifi_sw.irq = irq_of_parse_and_map(wifi_switch_node, 0);
 
 	/* ensure that the interrupt was mapped */
 	if (!cpld->wifi_sw.irq)
@@ -1503,8 +1543,12 @@ static int nizynqcpld_probe(struct i2c_client *client,
 	for (i = 0; i < desc->num_led_descs; i++) {
 		err = nizynqcpld_led_register(cpld, &desc->led_descs[i],
 					      &cpld->leds[i]);
+		/* Skip LEDs that are missing from device tree, but continue
+		 * adding other LEDs. */
 		if (err)
-			goto err_led;
+			dev_info(&client->dev,
+				 "Omitting %s LED\n",
+				 desc->led_descs[i].of_node_name);
 	}
 
 	/* don't care about errors */
@@ -1550,7 +1594,6 @@ err_watchdog_register:
 	sysfs_remove_files(&client->dev.kobj, desc->attrs);
 err_sysfs_create_files:
 	myrio_wifi_sw_uninit(cpld);
-err_led:
 	while (i--)
 		nizynqcpld_led_unregister(&cpld->leds[i]);
 	kfree(cpld->leds);
@@ -1584,15 +1627,22 @@ static int nizynqcpld_remove(struct i2c_client *client)
 	return 0;
 }
 
+static const struct of_device_id nizynqcpld_dt_ids[] = {
+	{ .compatible = "ni,cpld" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, nizynqcpld_dt_ids);
+
 static const struct i2c_device_id nizynqcpld_ids[] = {
-	{ .name = "nizynqcpld" },
+	{ .name = "cpld" },
 	{ },
 };
 MODULE_DEVICE_TABLE(i2c, nizynqcpld_ids);
 
 static struct i2c_driver nizynqcpld_driver = {
 	.driver = {
-		.name		= "nizynqcpld",
+		.name		= "nicpld",
+		.of_match_table	= nizynqcpld_dt_ids,
 	},
 	.probe		= nizynqcpld_probe,
 	.remove		= nizynqcpld_remove,
