@@ -54,8 +54,33 @@
 		};
 
 		i2c0: i2c@e0004000 {
-			nizynqcpld@40 {
-				interrupts = <15 0>;
+			nicpld@40 {
+				watchdogs {
+					boot-watchdog {
+						interrupt-parent = <&gpio>;
+						interrupts = <15 0>;
+					};
+				};
+
+				leds {
+					user1-0 {
+						label = "nilrt:user1:green";
+					};
+					status-0 {
+						label = "nilrt:status:yellow";
+						max-brightness = <0xFFFF>;
+					};
+					eth0-0 {
+						label = "nilrt:eth0:green";
+						linux,default-trigger =
+						  "e000b000.etherne:00:100Mb";
+					};
+					eth0-1 {
+						label = "nilrt:eth0:yellow";
+						linux,default-trigger =
+						  "e000b000.etherne:00:Gb";
+					};
+				};
 			};
 
 			ds3231_rtc@68 {
