@@ -43,8 +43,33 @@
 		};
 
 		i2c0: i2c@e0004000 {
-			nizynqcpld@40 {
-				interrupts = <24 0 25 0>;
+			nicpld@40 {
+				watchdogs {
+					boot-watchdog {
+						interrupt-parent = <&gpio>;
+						interrupts = <24 0>;
+					};
+				};
+
+				switches {
+					wifi-switch {
+						interrupt-parent = <&gpio>;
+						interrupts = <25 0>;
+					};
+				};
+
+				leds {
+					status-1 {
+						label = "nilrt:status:yellow";
+						max-brightness = <0xFFFF>;
+					};
+					wifi-0 {
+						label = "nilrt:wifi:primary";
+					};
+					wifi-1 {
+						label = "nilrt:wifi:secondary";
+					};
+				};
 			};
 		};
 	};
