@@ -1599,17 +1599,7 @@ static struct i2c_driver nizynqcpld_driver = {
 	.id_table	= nizynqcpld_ids,
 };
 
-static int __init nizynqcpld_init(void)
-{
-	return i2c_add_driver(&nizynqcpld_driver);
-}
-module_init(nizynqcpld_init);
-
-static void __exit nizynqcpld_exit(void)
-{
-	i2c_del_driver(&nizynqcpld_driver);
-}
-module_exit(nizynqcpld_exit);
+module_i2c_driver(nizynqcpld_driver);
 
 MODULE_DESCRIPTION("Driver for CPLD on NI's Zynq RIO products");
 MODULE_AUTHOR("National Instruments");
