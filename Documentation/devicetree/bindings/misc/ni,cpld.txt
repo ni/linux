@@ -1,0 +1,156 @@
+National Instruments CPLD
+
+National Instruments (NI) boards often have CPLDs on them to handle
+board-specific tasks like LED control, board switches and buttons,
+power sequencing, and CPU-independent watchdogs.
+
+NI's CPLDs are connected over i2c. As such, 'nicpld' must be a child
+of an i2c node.
+
+nicpld properties:
+- compatible : (required)
+  Should be "ni,cpld"
+- reg: (required)
+  Address of the CPLD on the i2c bus
+
+Required sub-nodes:
+- watchdogs : A node containing sub-nodes describing watchdogs
+
+Optional sub-nodes:
+- switches : A node containing sub-nodes describing switches
+- leds : A node containing sub-nodes describing LEDs
+
+
+Watchdogs Child Node
+====================
+
+Each watchdog controlled by the CPLD is represented as a sub-node of
+the nicpld's 'watchdogs' node. Each sub-node of 'watchdogs' has the
+following properties.
+
+Required properties:
+- interrupts : Should be the CPLD watchdog interrupt specifier
+
+Optional properties:
+- label: A name for the CPLD switch
+
+
+Switches Child Node
+===================
+
+Each switch or button controlled by the CPLD is represented as a
+sub-node of the nicpld's 'switches' node. Each sub-node of 'switches'
+has the following properties.
+
+Required properties:
+- interrupts : The CPLD switch interrupt specifier
+
+
+LEDs Child Node
+===============
+
+Each LED controlled by the CPLD is represented as a sub-node of the
+nicpld's 'leds' node.  The name of each LED node corresponds to an
+LED type. The "-0" or "-1" suffixes specify an LED element (single
+color) within a multi-color LED.
+
+Possible LED types:
+- user1-0
+- user1-1
+- status-0
+- status-1
+- temp-alert-0
+- wifi-0
+- wifi-1
+- eth0-0
+- eth0-1
+- eth1-0
+- eth1-1
+
+Different CPLDs support different LED types. The set of LEDs that
+various CPLDs support can be determined by examining their product
+code. The product code for a CPLD can be determined by reading the
+"NICPLD_PRODUCT" (0x1D) register of the CPLD over i2c. Below is a
+list of which CPLDs support which LED types.
+
+CPLD Products 0x00 and 0x01
+---------------------------
+user1-0
+user1-1
+status-0
+status-1
+wifi-0
+wifi-1
+eth0-0
+eth0-1
+eth1-0
+eth1-1
+
+CPLD Product 0x02
+-----------------
+status-0
+temp-alert-0
+eth0-0
+eth0-1
+eth1-0
+eth1-1
+
+CPLD Products 0x03 and 0x04
+---------------------------
+user1-0
+status-0
+eth0-0
+eth0-1
+eth1-0
+eth1-1
+
+
+LED sub-node properties:
+- label :  (optional)
+  see bindings/leds/common.txt
+- max-brightness : (optional)
+  The number of possible special blinking patterns. Selecting a
+  brightness will pick the blink pattern.
+- linux,default-trigger :  (optional)
+  see bindings/leds/common.txt
+
+Example:
+
+nicpld@40 {
+	compatible = "ni,cpld";
+	reg = <0x40>;
+
+	watchdogs {
+		boot-watchdog {
+			interrupt-parent = <&gpio>;
+			interrupts = <24 0>;
+		};
+	};
+
+	switches {
+		wifi-switch {
+			interrupt-parent = <&gpio>;
+			interrupts = <25 0>;
+		};
+	};
+
+	leds {
+		user1-0 {
+			label = "nilrt:user1:green";
+		};
+		status-0 {
+			label = "nilrt:status:yellow";
+			max-brightness = <0xFFFF>;
+		};
+		eth0-0 {
+			label = "nilrt:eth0:green";
+			linux,default-trigger =
+				"e000b000.etherne:00:100Mb";
+		};
+		eth0-1 {
+			label = "nilrt:eth0:yellow";
+			linux,default-trigger =
+				"e000b000.etherne:00:Gb";
+		};
+	};
+};
