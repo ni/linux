@@ -189,8 +189,8 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			nizynqcpld@40 {
-				compatible = "nizynqcpld";
+			nicpld@40 {
+				compatible = "ni,cpld";
 				reg = <0x40>;
 				interrupt-parent = <&gpio>;
 			};
