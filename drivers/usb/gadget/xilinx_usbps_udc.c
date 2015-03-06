@@ -1967,6 +1967,8 @@ static irqreturn_t xusbps_udc_irq(int irq, void *_udc)
 		if (otg_sts & OTGSC_BSEIS) {
 			xusbps_writel(otg_sts, &dr_regs->otgsc);
 			reset_queues(udc);
+			usb_gadget_set_state(&udc->gadget,
+				 USB_STATE_NOTATTACHED);
 			status = IRQ_HANDLED;
 		}
 	}
