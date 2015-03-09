@@ -2356,7 +2356,7 @@ static int atmel_serial_probe(struct platform_device *pdev)
 
 	ret = atmel_init_port(atmel_port, pdev);
 	if (ret)
-		goto err;
+		goto err_clear_bit;
 
 	if (!atmel_use_pdc_rx(&atmel_port->uart)) {
 		ret = -ENOMEM;
@@ -2407,6 +2407,8 @@ err_alloc_ring:
 		clk_put(atmel_port->clk);
 		atmel_port->clk = NULL;
 	}
+err_clear_bit:
+	clear_bit(port->uart.line, atmel_ports_in_use);
 err:
 	return ret;
 }
