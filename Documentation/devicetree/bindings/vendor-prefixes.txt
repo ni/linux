@@ -58,6 +58,7 @@ microchip	Microchip Technology Inc.
 mosaixtech	Mosaix Technologies, Inc.
 national	National Semiconductor
 neonode		Neonode Inc.
+ni		National Instruments
 nintendo	Nintendo
 nvidia	NVIDIA
 nxp	NXP Semiconductors
