@@ -192,7 +192,6 @@
 			nicpld@40 {
 				compatible = "ni,cpld";
 				reg = <0x40>;
-				interrupt-parent = <&gpio>;
 			};
 
 			ds3231_rtc@68 {
