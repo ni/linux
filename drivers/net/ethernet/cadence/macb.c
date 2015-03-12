@@ -1453,6 +1453,7 @@ static void macb_configure_dma(struct macb *bp)
 		dmacfg |= GEM_BF(FBLDO, 16);
 		dmacfg |= GEM_BIT(TXPBMS) | GEM_BF(RXBMS, -1L);
 		dmacfg &= ~GEM_BIT(ENDIA);
+		dmacfg &= ~GEM_BIT(TXCOEN);
 		gem_writel(bp, DMACFG, dmacfg);
 	}
 }
