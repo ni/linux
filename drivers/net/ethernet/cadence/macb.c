@@ -1700,9 +1700,7 @@ static int macb_close(struct net_device *dev)
 #ifdef CONFIG_MACB_DEVICE_POLL
 	if (device_poll_is_active(&bp->device_poll))
 		device_poll_free_irq(&bp->device_poll);
-	else
 #endif
-	free_irq(bp->dev->irq, bp->dev);
 
 	macb_free_consistent(bp);
 
