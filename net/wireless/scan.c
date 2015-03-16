@@ -1180,6 +1180,9 @@ int cfg80211_wext_siwscan(struct net_device *dev,
 	/* Set real number of channels specified in creq->channels[] */
 	creq->n_channels = i;
 
+	/* Force the scan if we are in AP mode */
+	creq->flags |= NL80211_SCAN_FLAG_AP;
+
 	/* translate "Scan for SSID" request */
 	if (wreq) {
 		if (wrqu->data.flags & IW_SCAN_THIS_ESSID) {
