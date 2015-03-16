@@ -795,8 +795,14 @@ void phy_state_machine(struct work_struct *work)
 	case PHY_HALTED:
 		if (phydev->link) {
 			phydev->link = 0;
-			netif_carrier_off(phydev->attached_dev);
-			phydev->adjust_link(phydev->attached_dev);
+			/* HACK We are not sure why attached_dev is NULL here
+			 * when we are linked. For now, to prevent the crash,
+			 * we'll just avoid dereferencing attached_dev when it
+			 * is NULL. */
+			if (phydev->attached_dev) {
+				netif_carrier_off(phydev->attached_dev);
+				phydev->adjust_link(phydev->attached_dev);
+			}
 			phy_led_trigger_change_speed(phydev);
 			do_suspend = true;
 		}
