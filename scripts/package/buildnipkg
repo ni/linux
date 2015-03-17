@@ -84,8 +84,9 @@ EOF
 			echo "Creating dtb for ${TARGET_BOARD}"
 			SRC_DTS=${srctree}/arch/arm/boot/dts/${TARGET_BOARD}.dts
 			${srctree}/scripts/dtc/dtc -O dtb -o "${bootdir}/${TARGET_BOARD}.dtb" -b 0 -p 1024 "${SRC_DTS}"
-			DEVCODE=`grep NIDEVCODE ${SRC_DTS} | sed "s/.* \([A-Fa-f0-9]\{4\}\) .*/\1/"`
-			cat <<EOF >> ${bootdir}/linux.its
+			DEVCODES=`grep NIDEVCODE ${SRC_DTS} | sed "s/.* \([A-Fa-f0-9]\{4\}\) .*/\1/"`
+			for DEVCODE in ${DEVCODES}; do
+				cat <<EOF >> ${bootdir}/linux.its
 
                 fdt_$DEVCODE@1 {
                         description = "$TARGET_BOARD device tree";
@@ -98,7 +99,8 @@ EOF
                         };
                 };
 EOF
-			TARGET_DEVCODES="${TARGET_DEVCODES} ${DEVCODE}"
+				TARGET_DEVCODES="${TARGET_DEVCODES} ${DEVCODE}"
+			done
 		done
 		cat <<EOF >> ${bootdir}/linux.its
 
