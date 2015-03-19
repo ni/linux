@@ -170,11 +170,6 @@ static void __init zynq_irq_init(void)
 	irqchip_init();
 }
 
-static void zynq_system_reset(enum reboot_mode mode, const char *cmd)
-{
-	zynq_slcr_system_reset();
-}
-
 static const char * const zynq_dt_match[] = {
 	"xlnx,zynq-7000",
 	NULL
@@ -189,5 +184,4 @@ DT_MACHINE_START(XILINX_EP107, "Xilinx Zynq Platform")
 	.init_time	= zynq_timer_init,
 	.dt_compat	= zynq_dt_match,
 	.reserve	= zynq_memory_init,
-	.restart	= zynq_system_reset,
 MACHINE_END
