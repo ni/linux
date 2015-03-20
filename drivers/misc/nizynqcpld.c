@@ -19,8 +19,8 @@
 #include <linux/module.h>
 #include <linux/niwatchdog.h>
 #include <linux/of.h>
-#include <linux/platform_data/ni-zynq.h>
 #include <linux/poll.h>
+#include <linux/reboot.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
@@ -140,7 +140,7 @@ struct nizynqcpld {
 	struct nizynqcpld_watchdog watchdog;
 	struct i2c_client *client;
 	struct mutex lock;
-	struct ni_zynq_board_reset reset;
+	struct notifier_block restart_nb;
 	struct myrio_wifi_sw wifi_sw;
 };
 
@@ -330,12 +330,15 @@ static int nizynqcpld_read(struct nizynqcpld *cpld, u8 reg, u8 *data)
 	return err == ARRAY_SIZE(msgs) ? 0 : err;
 }
 
-static void nizynqcpld_reset(struct ni_zynq_board_reset *reset)
+static int nizynqcpld_restart(struct notifier_block *nb,
+			      unsigned long action, void *data)
 {
-	struct nizynqcpld *cpld = container_of(reset, struct nizynqcpld, reset);
+	struct nizynqcpld *cpld = container_of(nb, struct nizynqcpld,
+					       restart_nb);
 	struct nizynqcpld_desc *desc = cpld->desc;
 
 	nizynqcpld_write(cpld, desc->reboot_addr, 0x80);
+	return 0;
 }
 
 static inline ssize_t nizynqcpld_scratch_show(struct nizynqcpld *cpld,
@@ -1596,8 +1599,9 @@ static int nizynqcpld_probe(struct i2c_client *client,
 		}
 	}
 
-	cpld->reset.reset = nizynqcpld_reset;
-	ni_zynq_board_reset = &cpld->reset;
+	cpld->restart_nb.notifier_call = nizynqcpld_restart;
+	cpld->restart_nb.priority = 255;
+	register_restart_handler(&cpld->restart_nb);
 
 	i2c_set_clientdata(client, cpld);
 
@@ -1628,7 +1632,7 @@ static int nizynqcpld_remove(struct i2c_client *client)
 	struct nizynqcpld_desc *desc = cpld->desc;
 	int i;
 
-	ni_zynq_board_reset = NULL;
+	unregister_restart_handler(&cpld->restart_nb);
 
 	if (desc->watchdog_desc)
 		misc_deregister(&cpld->watchdog.misc_dev);
