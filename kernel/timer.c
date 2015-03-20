@@ -84,6 +84,7 @@ struct tvec_base {
 	unsigned long timer_jiffies;
 	unsigned long next_timer;
 	unsigned long active_timers;
+	unsigned long all_timers;
 	struct tvec_root tv1;
 	struct tvec tv2;
 	struct tvec tv3;
@@ -340,6 +341,20 @@ void set_timer_slack(struct timer_list *timer, int slack_hz)
 }
 EXPORT_SYMBOL_GPL(set_timer_slack);
 
+/*
+ * If the list is empty, catch up ->timer_jiffies to the current time.
+ * The caller must hold the tvec_base lock.  Returns true if the list
+ * was empty and therefore ->timer_jiffies was updated.
+ */
+static bool catchup_timer_jiffies(struct tvec_base *base)
+{
+	if (!base->all_timers) {
+		base->timer_jiffies = jiffies;
+		return true;
+	}
+	return false;
+}
+
 static void
 __internal_add_timer(struct tvec_base *base, struct timer_list *timer)
 {
@@ -386,6 +401,7 @@ __internal_add_timer(struct tvec_base *base, struct timer_list *timer)
 
 static void internal_add_timer(struct tvec_base *base, struct timer_list *timer)
 {
+	(void)catchup_timer_jiffies(base);
 	__internal_add_timer(base, timer);
 	/*
 	 * Update base->active_timers and base->next_timer
@@ -395,6 +411,7 @@ static void internal_add_timer(struct tvec_base *base, struct timer_list *timer)
 			base->next_timer = timer->expires;
 		base->active_timers++;
 	}
+	base->all_timers++;
 }
 
 #ifdef CONFIG_TIMER_STATS
@@ -674,6 +691,8 @@ detach_expired_timer(struct timer_list *timer, struct tvec_base *base)
 	detach_timer(timer, true);
 	if (!tbase_get_deferrable(timer->base))
 		base->active_timers--;
+	base->all_timers--;
+	(void)catchup_timer_jiffies(base);
 }
 
 static int detach_if_pending(struct timer_list *timer, struct tvec_base *base,
@@ -688,6 +707,8 @@ static int detach_if_pending(struct timer_list *timer, struct tvec_base *base,
 		if (timer->expires == base->next_timer)
 			base->next_timer = base->timer_jiffies;
 	}
+	base->all_timers--;
+	(void)catchup_timer_jiffies(base);
 	return 1;
 }
 
@@ -1199,6 +1220,10 @@ static inline void __run_timers(struct tvec_base *base)
 	struct timer_list *timer;
 
 	spin_lock_irq(&base->lock);
+	if (catchup_timer_jiffies(base)) {
+		spin_unlock_irq(&base->lock);
+		return;
+	}
 	while (time_after_eq(jiffies, base->timer_jiffies)) {
 		struct list_head work_list;
 		struct list_head *head = &work_list;
@@ -1439,6 +1464,8 @@ static void run_timer_softirq(struct softirq_action *h)
 {
 	struct tvec_base *base = __this_cpu_read(tvec_bases);
 
+	hrtimer_run_pending();
+
 #if defined(CONFIG_IRQ_WORK) && defined(CONFIG_PREEMPT_RT_FULL)
 	irq_work_run();
 #endif
@@ -1452,52 +1479,8 @@ static void run_timer_softirq(struct softirq_action *h)
  */
 void run_local_timers(void)
 {
-	struct tvec_base *base = __this_cpu_read(tvec_bases);
-
 	hrtimer_run_queues();
-	/*
-	 * We can access this lockless as we are in the timer
-	 * interrupt. If there are no timers queued, nothing to do in
-	 * the timer softirq.
-	 */
-#ifdef CONFIG_PREEMPT_RT_FULL
-
-#ifndef CONFIG_SMP
-	/*
-	 * The spin_do_trylock() later may fail as the lock may be hold before
-	 * the interrupt arrived. The spin-lock debugging code will raise a
-	 * warning if the try_lock fails on UP. Since this is only an
-	 * optimization for the FULL_NO_HZ case (not to run the timer softirq on
-	 * an nohz_full CPU) we don't really care and shedule the softirq.
-	 */
 	raise_softirq(TIMER_SOFTIRQ);
-	return;
-#endif
-
-	/* On RT, irq work runs from softirq */
-	if (irq_work_needs_cpu()) {
-		raise_softirq(TIMER_SOFTIRQ);
-		return;
-	}
-
-	if (!spin_do_trylock(&base->lock)) {
-		raise_softirq(TIMER_SOFTIRQ);
-		return;
-	}
-#endif
-
-	if (!base->active_timers)
-		goto out;
-
-	/* Check whether the next pending timer has expired */
-	if (time_before_eq(base->next_timer, jiffies))
-		raise_softirq(TIMER_SOFTIRQ);
-out:
-#ifdef CONFIG_PREEMPT_RT_FULL
-	rt_spin_unlock_after_trylock_in_irq(&base->lock);
-#endif
-	/* The ; ensures that gcc won't complain in the !RT case */
-	;
 }
 
 #ifdef __ARCH_WANT_SYS_ALARM
@@ -1677,6 +1660,7 @@ static int init_timers_cpu(int cpu)
 	base->timer_jiffies = jiffies;
 	base->next_timer = base->timer_jiffies;
 	base->active_timers = 0;
+	base->all_timers = 0;
 	return 0;
 }
 
