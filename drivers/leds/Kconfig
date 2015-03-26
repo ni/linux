@@ -936,6 +936,16 @@ config LEDS_USER
 	  support in kernel. To compile this driver as a module, choose 'm' here:
 	  the module will be called uleds.
 
+config LEDS_NI793X
+	tristate "LED support for NI 793xR devices"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for the User1 LED on the NI 793xR family
+	  of devices.
+
+	  To compile this driver as a module, choose M here: the module will be
+	  called leds-ni793x.
+
 config LEDS_NIC78BX
 	tristate "LED support for NI PXI NIC78bx devices"
 	depends on LEDS_CLASS
