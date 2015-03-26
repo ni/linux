@@ -312,6 +312,16 @@ config LEDS_LP8860
 	  on the LP8860 4 channel LED driver using the I2C communication
 	  bus.
 
+config LEDS_NI793X
+	tristate "LED support for NI 793xR devices"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for the User1 LED on the NI 793xR family
+	  of devices.
+
+	  To compile this driver as a module, choose M here: the module will be
+	  called leds-ni793x.
+
 config LEDS_CLEVO_MAIL
 	tristate "Mail LED on Clevo notebook"
 	depends on LEDS_CLASS
