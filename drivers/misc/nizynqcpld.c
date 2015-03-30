@@ -1525,9 +1525,9 @@ static int nizynqcpld_probe(struct i2c_client *client,
 		/* Skip LEDs that are missing from device tree, but continue
 		 * adding other LEDs. */
 		if (err)
-			dev_info(&client->dev,
-				 "Omitting %s LED\n",
-				 desc->led_descs[i].of_node_name);
+			dev_dbg(&client->dev,
+				"Omitting %s LED\n",
+				desc->led_descs[i].of_node_name);
 	}
 
 	/* don't care about errors */
