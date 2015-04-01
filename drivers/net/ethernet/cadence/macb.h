@@ -751,10 +751,6 @@ struct macb {
 		struct gem_stats	gem;
 	}			hw_stats;
 
-	unsigned long		tx_task_start_jiffies;
-	struct delayed_work	tx_task;
-	struct timer_list	tx_timer;
-
 #ifdef CONFIG_MACB_DEVICE_POLL
 	struct device_poll device_poll;
 #endif
