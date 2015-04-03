@@ -4570,13 +4570,6 @@ static int wake_affine(struct sched_domain *sd, struct task_struct *p, int sync)
 	unsigned long weight;
 	int balanced;
 
-	/*
-	 * If we wake multiple tasks be careful to not bounce
-	 * ourselves around too much.
-	 */
-	if (wake_wide(p))
-		return 0;
-
 	idx	  = sd->wake_idx;
 	this_cpu  = smp_processor_id();
 	prev_cpu  = task_cpu(p);
