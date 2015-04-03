@@ -1,0 +1,21 @@
+LEDs connected to NI-793xR
+
+Required properties:
+- compatible : should be : "ni,led-793x".
+- reg: base address of LED control register space.
+
+The ni,led-793x device node only contains a single sub-node, 'user1'.
+
+LED sub-node properties:
+- label : (optional) see leds/common.txt
+- linux,default-trigger : (optional) see leds/common.txt
+
+Examples:
+
+leds-ni793x@4020F000 {
+        compatible = "ni,led-793x";
+        reg = <0x4020F000 4>;
+        user1 {
+                label = "nilrt:user1:green";
+        };
+};
