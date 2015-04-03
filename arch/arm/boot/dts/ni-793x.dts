@@ -11,6 +11,14 @@
 
 	amba {
 
+		leds-ni793x@4020F000 {
+			compatible = "ni,led-793x";
+			reg = <0x4020F000 4>;
+			user1 {
+				label = "nilrt:user1:green";
+			};
+		};
+
 		gpio: gpio@e000a000 {
 			/* You can specify GPIO settings here:
 			 *
