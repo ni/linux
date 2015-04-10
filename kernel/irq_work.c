@@ -16,6 +16,7 @@
 #include <linux/tick.h>
 #include <linux/cpu.h>
 #include <linux/notifier.h>
+#include <linux/interrupt.h>
 #include <asm/processor.h>
 
 
@@ -51,11 +52,7 @@ static bool irq_work_claim(struct irq_work *work)
 	return true;
 }
 
-#ifdef CONFIG_PREEMPT_RT_FULL
-void arch_irq_work_raise(void)
-#else
 void __weak arch_irq_work_raise(void)
-#endif
 {
 	/*
 	 * Lame architectures will get the timer tick callback
