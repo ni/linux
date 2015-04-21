@@ -2038,7 +2038,6 @@ static int __init macb_probe(struct platform_device *pdev)
 	int err = -ENXIO;
 	const char *mac;
 	const void *prop;
-	int create_mdio_bus = 1;
 
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!regs) {
@@ -2207,14 +2206,7 @@ static int __init macb_probe(struct platform_device *pdev)
 		goto err_out_disable_clocks;
 	}
 
-	if (of_get_property(pdev->dev.of_node, "cdns,no_mdio_bus", NULL))
-		create_mdio_bus = 0;
-
-	if (create_mdio_bus)
-		err = macb_mii_init(bp);
-	else
-		/* Don't create an MDIO bus, but do try to probe for one. */
-		err = macb_mii_probe(bp->dev);
+	err = macb_mii_init(bp);
 	if (err)
 		goto err_out_unregister_netdev;
 
@@ -2242,13 +2234,9 @@ static int __init macb_probe(struct platform_device *pdev)
 		    macb_is_gem(bp) ? "GEM" : "MACB", dev->base_addr,
 		    dev->irq, dev->dev_addr);
 
-	if (bp->phy_dev) {
-		phydev = bp->phy_dev;
-		netdev_info(dev,
-			    "attached PHY driver [%s] (mii_bus:phy_addr=%s, irq=%d)\n",
-			    phydev->drv->name, dev_name(&phydev->dev),
-			    phydev->irq);
-	}
+	phydev = bp->phy_dev;
+	netdev_info(dev, "attached PHY driver [%s] (mii_bus:phy_addr=%s, irq=%d)\n",
+		    phydev->drv->name, dev_name(&phydev->dev), phydev->irq);
 
 	return 0;
 
