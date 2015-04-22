@@ -41,7 +41,7 @@
 		reg = < 0xf8891000 0x1000 0xf8893000 0x1000 >;
 	};
 
-	amba {
+	amba@0 {
 		compatible = "simple-bus";
 		#address-cells = <1>;
 		#size-cells = <1>;

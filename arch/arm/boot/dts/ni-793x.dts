@@ -9,7 +9,7 @@
 	model = "NI-793x";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
-	amba {
+	amba@0 {
 
 		leds-ni793x@4020F000 {
 			compatible = "ni,led-793x";

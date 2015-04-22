@@ -7,7 +7,7 @@
 	model = "NI sbRIO-9637";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
-	amba {
+	amba@0 {
 		gpio: gpio@e000a000 {
 			/* You can specify GPIO settings here:
 			 *

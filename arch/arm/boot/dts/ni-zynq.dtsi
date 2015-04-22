@@ -30,7 +30,7 @@
 		};
 	};
 
-	amba {
+	amba@0 {
 		ni_uart0: serial@80000000 {
 			device_type = "serial";
 			compatible = "ni16550-fifo128";
