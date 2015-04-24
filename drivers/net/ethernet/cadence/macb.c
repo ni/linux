@@ -1991,7 +1991,7 @@ static int macb_close(struct net_device *dev)
 	else
 #endif
 	for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue)
-		free_irq(dev->irq, queue);
+		devm_free_irq(&bp->pdev->dev, bp->dev->irq, queue);
 
 	macb_free_consistent(bp);
 
