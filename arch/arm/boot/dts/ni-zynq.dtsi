@@ -33,7 +33,7 @@
 	amba@0 {
 		ni_uart0: serial@80000000 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000000 0x8>;
 			interrupts = <0 30 4>;
@@ -44,7 +44,7 @@
 
 		ni_uart1: serial@80000010 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000010 0x8>;
 			interrupts = <0 31 4>;
@@ -53,7 +53,7 @@
 
 		ni_uart2: serial@80000020 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000020 0x8>;
 			interrupts = <0 32 4>;
@@ -62,7 +62,7 @@
 
 		ni_uart3: serial@80000030 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000030 0x8>;
 			interrupts = <0 33 0>;
@@ -71,7 +71,7 @@
 
 		ni_uart4: serial@80000040 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000040 0x8>;
 			interrupts = <0 34 0>;
@@ -80,7 +80,7 @@
 
 		ni_uart5: serial@80000050 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000050 0x8>;
 			interrupts = <0 35 0>;
@@ -89,7 +89,7 @@
 
 		ni_uart6: serial@80000060 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000060 0x8>;
 			interrupts = <0 36 0>;
@@ -98,7 +98,7 @@
 
 		ni_uart7: serial@80000070 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000070 0x8>;
 			interrupts = <0 37 0>;
@@ -107,7 +107,7 @@
 
 		ni_uart8: serial@80000080 {
 			device_type = "serial";
-			compatible = "ni16550-fifo128";
+			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000080 0x8>;
 			interrupts = <0 38 0>;
