@@ -32,17 +32,6 @@
 # define LL_UART_VADDR		UART0_VIRT
 #endif
 
-#ifdef CONFIG_SERIAL_8250_CONSOLE
-
-		.macro  addruart, rp, rv, tmp
-		ldr     \rp, =0x80000000        @ physical
-		ldr     \rv, =0xE0700000        @ virtual
-		.endm
-
-#define UART_SHIFT 0
-#include <asm/hardware/debug-8250.S>
-
-#else
 		.macro	addruart, rp, rv, tmp
 		ldr	\rp, =LL_UART_PADDR	@ physical
 		ldr	\rv, =LL_UART_VADDR	@ virtual
@@ -65,4 +54,3 @@ ARM_BE8(	rev	\rd, \rd )
 		tst	\rd, #UART_SR_TXFULL		@
 		bne	1002b			@ wait if FIFO is full
 		.endm
-#endif
