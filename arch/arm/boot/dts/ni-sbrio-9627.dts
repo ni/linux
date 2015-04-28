@@ -172,6 +172,21 @@
 	transceiver = "RS-232";
 };
 
+&ni_uart6 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart7 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
+&ni_uart8 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
 &can0 {
 	status = "okay";
 };
