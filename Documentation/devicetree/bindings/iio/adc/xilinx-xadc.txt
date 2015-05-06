@@ -68,6 +68,8 @@ Optional properties:
 			  Note each channel number should only be used at most
 			  once.
 		Optional properties:
+			* xlnx,extend-name: Custom extended name for the
+			  channel.
 			* xlnx,bipolar: If set the channel is used in bipolar
 			  mode.
 
@@ -107,6 +109,7 @@ Examples:
 			#size-cells = <0>;
 			channel@0 {
 				reg = <0>;
+				xlnx,extend-name = "vin_v";
 				xlnx,bipolar;
 			};
 		};
