@@ -8,6 +8,53 @@
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba@0 {
+		adc: adc@f8007100 {
+			xlnx,channels {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				/* Channel 0 maps to VPVN */
+				channel@0 {
+					reg = <0>;
+				};
+				/* Channel 1 maps to VAUX0 */
+				channel@1 {
+					reg = <1>;
+				};
+				/* Channel 2 maps to VAUX1 */
+				channel@2 {
+					reg = <2>;
+				};
+				/* Channel 3 maps to VAUX2 */
+				channel@3 {
+					reg = <3>;
+				};
+				/* Channel 4 maps to VAUX3 */
+				channel@4 {
+					reg = <4>;
+				};
+				/* Channel 5 maps to VAUX4 */
+				channel@5 {
+					reg = <5>;
+				};
+				/* Channel 9 maps to VAUX8 */
+				channel@9 {
+					reg = <9>;
+				};
+				/* Channel 10 maps to VAUX9 */
+				channel@10 {
+					reg = <10>;
+				};
+				/* Channel 11 maps to VAUX10 */
+				channel@11 {
+					reg = <11>;
+				};
+				/* Channel 12 maps to VAUX11 */
+				channel@12 {
+					reg = <12>;
+				};
+			};
+		};
+
 		gpio: gpio@e000a000 {
 			/* You can specify GPIO settings here:
 			 *
