@@ -133,10 +133,6 @@
 			reg = <0xf8007000 0x100>;
 		};
 
-		adc: adc@f8007100 {
-			status = "okay";
-		};
-
 		smcc@e000e000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
