@@ -4463,6 +4463,7 @@ static const struct net_device_ops macb_netdev_ops = {
 static int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void *data)
 {
 	struct macb *bp = container_of(nb, struct macb, fpga_notifier);
+	struct net_device *dev = bp->dev;
 
 	switch (val) {
 	case FPGA_PERIPHERAL_DOWN:
@@ -4473,8 +4474,11 @@ static int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void
 		rtnl_lock();
 		if (!bp->fpga_down) {
 			/* If the interface has been opened. */
-			if (netif_running(bp->dev))
+			if (netif_running(bp->dev)) {
 				macb_close(bp->dev);
+				phy_stop_interrupts(dev->phydev);
+				phy_stop_machine(dev->phydev);
+			}
 
 			bp->fpga_down = 1;
 		}
@@ -4493,8 +4497,11 @@ static int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void
 		bp->fpga_down = 0;
 
 		/* If the interface has been opened. */
-		if (netif_running(bp->dev))
+		if (netif_running(bp->dev)) {
+			phy_start_machine(dev->phydev);
+			phy_start_interrupts(dev->phydev);
 			macb_open(bp->dev);
+		}
 
 		rtnl_unlock();
 		break;
