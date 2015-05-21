@@ -378,8 +378,10 @@ static int macb_mii_probe(struct net_device *dev)
 	}
 
 	/* mask with MAC supported features */
-	if (macb_is_gem(bp) && bp->caps & MACB_CAPS_GIGABIT_MODE_AVAILABLE)
+	if (macb_is_gem(bp) && bp->caps & MACB_CAPS_GIGABIT_MODE_AVAILABLE) {
 		phydev->supported &= PHY_GBIT_FEATURES;
+		phydev->supported &= ~SUPPORTED_1000baseT_Half;
+	}
 	else
 		phydev->supported &= PHY_BASIC_FEATURES;
 
