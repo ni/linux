@@ -21,11 +21,6 @@
 			 *                              "edge-both".
 			 */
 
-			/* GPIO1 (MIO1) */
-			gpio1-label     = "phy_interupt";
-			gpio1-direction = "input";
-			gpio1-settings  = "level-low";
-
 			/* GPIO15 (MIO15) */
 			gpio15-label     = "wake_interrupt";
 			gpio15-direction = "input";
