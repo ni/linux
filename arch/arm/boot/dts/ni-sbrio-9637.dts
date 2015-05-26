@@ -64,16 +64,6 @@
 						linux,default-trigger =
 						  "e000b000.etherne:00:Gb";
 					};
-					eth1-0 {
-						label = "nilrt:eth1:green";
-						linux,default-trigger =
-						  "e000b000.etherne:01:100Mb";
-					};
-					eth1-1 {
-						label = "nilrt:eth1:yellow";
-						linux,default-trigger =
-						  "e000b000.etherne:01:Gb";
-					};
 				};
 			};
 
