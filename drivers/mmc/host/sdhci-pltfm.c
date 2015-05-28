@@ -87,6 +87,9 @@ void sdhci_get_of_property(struct platform_device *pdev)
 	if (of_get_property(np, "broken-cd", NULL))
 		host->quirks |= SDHCI_QUIRK_BROKEN_CARD_DETECTION;
 
+	if (of_get_property(np, "force-sd-standard", NULL))
+		host->quirks |= SDHCI_QUIRK_NO_HISPD_BIT;
+
 	if (of_get_property(np, "no-1-8-v", NULL))
 		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 
