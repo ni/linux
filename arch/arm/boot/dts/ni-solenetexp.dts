@@ -47,9 +47,6 @@
 				};
 
 				leds {
-					user1-0 {
-						label = "nilrt:user1:green";
-					};
 					status-0 {
 						label = "nilrt:status:yellow";
 						max-brightness = <0xFFFF>;
