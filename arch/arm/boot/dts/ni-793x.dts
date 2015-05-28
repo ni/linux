@@ -103,6 +103,9 @@
 		/* Interrupt on GPIO1. */
 		interrupts = <1 0>;
 		interrupt-parent = <&gpio>;
+
+		/* Set RX_CLK Pad Skew [4:0] to 0b00000. */
+		rxc-skew-ps = <0>;
 	};
 };
 
