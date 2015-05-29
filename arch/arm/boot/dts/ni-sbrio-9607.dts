@@ -203,11 +203,6 @@
 
 &sdhci1 {
 	status = "okay";
-	/* Specify the maximum input frequency as 50 MHz doubled,
-	   so that the driver uses a divisor of 2. This will cause
-	   the base clock of 37.037 MHz to be divided by 2, resulting
-	   in a frequency of 18.518 MHz */
-	max-frequency = <100000000>;
 };
 
 &ni_uart0 {
