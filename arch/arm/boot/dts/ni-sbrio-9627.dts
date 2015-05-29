@@ -207,6 +207,7 @@
 
 &sdhci1 {
 	status = "okay";
+	force-sd-standard;
 };
 
 &ni_uart0 {
