@@ -129,10 +129,6 @@
 	cdns,emio-gpio-speed-1000 = <55>;
 };
 
-&sdhci0 {
-	status = "okay";
-};
-
 &sdhci1 {
 	status = "okay";
 	/* Specify the maximum input frequency as 50 MHz doubled,
