@@ -7,6 +7,11 @@
 	model = "NI roboRIO";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
+	aliases {
+		spi0 = &spi0;
+		spi1 = &spi1;
+	};
+
 	amba@0 {
 		adc: adc@f8007100 {
 			xlnx,channels {
@@ -126,7 +131,6 @@
 			num-cs = <7>;
 			is-decoded-cs = <1>;
 			speed-hz = <200000000>;
-			bus-num = <0>;
 
 			spidev@0 {
                                 compatible = "spidev";
@@ -155,7 +159,6 @@
 			num-cs = <3>;
 			is-decoded-cs = <0>;
 			speed-hz = <200000000>;
-			bus-num = <1>;
 
 			spidev@0 {
                                 compatible = "spidev";
