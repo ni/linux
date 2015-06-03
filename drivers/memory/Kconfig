@@ -143,6 +143,13 @@ config DA8XX_DDRCTL
 	  Texas Instruments da8xx SoCs. It's used to tweak various memory
 	  controller configuration options.
 
+config PL353_SMC
+	bool "ARM PL353 Static Memory Controller(SMC) driver"
+	default y
+	depends on ARM
+	help
+	  This driver is for the ARM PL353 Static Memory Controller(SMC) module.
+
 source "drivers/memory/samsung/Kconfig"
 source "drivers/memory/tegra/Kconfig"
 
