@@ -92,6 +92,13 @@ config JZ4780_NEMC
 	  the Ingenic JZ4780. This controller is used to handle external
 	  memory devices such as NAND and SRAM.
 
+config PL353_SMC
+	bool "ARM PL353 Static Memory Controller(SMC) driver"
+	default y
+	depends on ARM
+	help
+	  This driver is for the ARM PL353 Static Memory Controller(SMC) module.
+
 source "drivers/memory/tegra/Kconfig"
 
 endif
