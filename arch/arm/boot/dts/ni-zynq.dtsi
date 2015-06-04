@@ -101,7 +101,7 @@
 			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000070 0x8>;
-			interrupts = <0 37 0>;
+			interrupts = <0 52 0>;
 			clock-frequency = <58824000>;
 		};
 
@@ -110,7 +110,7 @@
 			compatible = "ni16550-fifo128", "ns16550a";
 			status = "disabled";
 			reg = <0x80000080 0x8>;
-			interrupts = <0 38 0>;
+			interrupts = <0 53 0>;
 			clock-frequency = <58824000>;
 		};
 
