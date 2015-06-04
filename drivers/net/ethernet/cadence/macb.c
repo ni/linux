@@ -2289,6 +2289,12 @@ static int macb_remove(struct platform_device *pdev)
 
 	if (dev) {
 		bp = netdev_priv(dev);
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+		blocking_notifier_chain_unregister(
+			&fpgaperipheral_notifier_list, &bp->fpga_notifier);
+#endif
+
 		if (bp->phy_dev)
 			phy_disconnect(bp->phy_dev);
 		mdiobus_unregister(bp->mii_bus);
