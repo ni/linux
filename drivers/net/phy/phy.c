@@ -38,6 +38,15 @@
 
 #include <asm/irq.h>
 
+static unsigned int an_pending_timeout;
+module_param(an_pending_timeout, uint, 0644);
+MODULE_PARM_DESC(an_pending_timeout,
+	"Timeout period for PHY_AN_PENDING state in second. 0 to disable PHY_AN_PENDING state (default)");
+
+static unsigned int an_pending_guard;
+module_param(an_pending_guard, uint, 0644);
+MODULE_PARM_DESC(an_pending_guard,
+	"Guard band period before firing auto-negotiation from PHY_AN_PENDING state in second. Default to 0");
 /**
  * phy_print_status - Convenience function to print out the current phy status
  * @phydev: the phy_device struct
@@ -401,6 +410,19 @@ int phy_start_aneg(struct phy_device *phydev)
 	if (AUTONEG_DISABLE == phydev->autoneg)
 		phy_sanitize_settings(phydev);
 
+	if (an_pending_timeout) {
+		switch (phydev->state) {
+		case PHY_AN_PENDING:
+		case PHY_HALTED:
+			break;
+		default:
+			phydev->state = PHY_AN_PENDING;
+			phydev->link_timeout = an_pending_timeout;
+			goto out_unlock;
+		}
+
+	}
+
 	err = phydev->drv->config_aneg(phydev);
 	if (err < 0)
 		goto out_unlock;
@@ -704,6 +726,27 @@ void phy_state_machine(struct work_struct *work)
 
 		phydev->link_timeout = PHY_AN_TIMEOUT;
 
+		break;
+	case PHY_AN_PENDING:
+		/* Check if negotiation is done.  Break if there's an error */
+		err = phy_aneg_done(phydev);
+		if (err < 0)
+			break;
+
+		/* If AN is done, we'll proceed with the real aneg triggering */
+		if (err > 0) {
+			if (phydev->link_timeout > 0)
+				phydev->link_timeout = -(an_pending_guard);
+			else if (phydev->link_timeout < 0)
+				phydev->link_timeout++;
+		} else
+			phydev->link_timeout--;
+
+		if (0 == phydev->link_timeout) {
+			needs_aneg = true;
+
+			phydev->link_timeout = PHY_AN_TIMEOUT;
+		}
 		break;
 	case PHY_AN:
 		err = phy_read_status(phydev);
