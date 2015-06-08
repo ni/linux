@@ -73,6 +73,11 @@
 
 #define PS_TO_REG				200
 
+static bool default_flp_timing;
+module_param(default_flp_timing, bool, 0644);
+MODULE_PARM_DESC(default_flp_timing,
+	"Do not change the default FLP centre timing");
+
 struct kszphy_type {
 	u32 led_mode_reg;
 	u16 interrupt_level_mask;
@@ -483,7 +488,10 @@ static int ksz9031_config_init(struct phy_device *phydev)
 				tx_data_skews, 4);
 	}
 
-	return ksz9031_center_flp_timing(phydev);
+	if (!default_flp_timing)
+		return ksz9031_center_flp_timing(phydev);
+
+	return 0;
 }
 
 #define KSZ8873MLL_GLOBAL_CONTROL_4	0x06
