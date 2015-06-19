@@ -46,6 +46,8 @@
 
 #define MARVELL_88E1512_LEDFunctionControl 16
 
+#define MARVELL_88E1512_LEDPolarityControl 17
+
 #define MARVELL_88E1512_LEDTimerControl 18
 
 #define MARVELL_88E1512_LEDTimerControl_InterruptEnable 0x0080
@@ -87,9 +89,15 @@ static int marvell88E1512_config_init(struct phy_device *phydev) {
 	/* Look for LED configuration. */
 	led_prop = of_get_property(phydev->dev.of_node, "leds", &len);
 
-	if (led_prop && (1 == (len / sizeof (u32)))) {
+	if (led_prop && (1 <= (len / sizeof (u32)))) {
 		phy_write (phydev, MARVELL_88E1512_PageAddress, MARVELL_88E1512_PageAddress_LED);
-		phy_write (phydev, MARVELL_88E1512_LEDFunctionControl, be32_to_cpu (*led_prop));
+		phy_write (phydev, MARVELL_88E1512_LEDFunctionControl, be32_to_cpu (led_prop[0]));
+
+		if (2 <= (len / sizeof (u32)))
+			phy_write (phydev, MARVELL_88E1512_LEDPolarityControl, be32_to_cpu (led_prop[1]));
+		if (3 <= (len / sizeof (u32)))
+			phy_write (phydev, MARVELL_88E1512_LEDTimerControl, be32_to_cpu (led_prop[2]));
+
 		phy_write (phydev, MARVELL_88E1512_PageAddress, 0);
 	}
 
