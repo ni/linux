@@ -82,9 +82,9 @@
 				compatible = "marvell,88e1512";
 				device_type = "ethernet-phy";
 				reg = <0x0>;
-				/* Page 3, Register 16, LED[2:0] Function
-				   Control Register */
-				leds = <0x1881>;
+				/* Page 3, Registers 16-18, LED[2:0] Function,
+				   Polarity, and Timer Control Registers */
+				leds = <0x1177 0x15 0x4900>;
 			};
 		};
 
