@@ -42,7 +42,7 @@
 
 struct kvm_vcpu;
 u32 *kvm_vcpu_reg(struct kvm_vcpu *vcpu, u8 reg_num, u32 mode);
-int kvm_target_cpu(void);
+int __attribute_const__ kvm_target_cpu(void);
 int kvm_reset_vcpu(struct kvm_vcpu *vcpu);
 void kvm_reset_coprocs(struct kvm_vcpu *vcpu);
 
@@ -101,6 +101,12 @@ struct kvm_vcpu_arch {
 	/* The CPU type we expose to the VM */
 	u32 midr;
 
+	/* HYP trapping configuration */
+	u32 hcr;
+
+	/* Interrupt related fields */
+	u32 irq_lines;		/* IRQ and FIQ levels */
+
 	/* Exception Information */
 	struct kvm_vcpu_fault_info fault;
 
@@ -127,9 +133,6 @@ struct kvm_vcpu_arch {
 
 	/* IO related fields */
 	struct kvm_decode mmio_decode;
-
-	/* Interrupt related fields */
-	u32 irq_lines;		/* IRQ and FIQ levels */
 
 	/* Cache some mmu pages needed inside spinlock regions */
 	struct kvm_mmu_memory_cache mmu_page_cache;
