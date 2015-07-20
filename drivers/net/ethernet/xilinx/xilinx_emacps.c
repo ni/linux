@@ -909,6 +909,7 @@ static int xemacps_mii_probe(struct net_device *ndev)
 
 	phydev->supported &= (PHY_GBIT_FEATURES | SUPPORTED_Pause |
 							SUPPORTED_Asym_Pause);
+	phydev->supported &= ~SUPPORTED_1000baseT_Half;
 	phydev->advertising = phydev->supported;
 
 	lp->link    = 0;
