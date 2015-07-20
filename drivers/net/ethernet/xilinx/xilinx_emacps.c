@@ -640,12 +640,13 @@ struct net_local {
 #ifdef CONFIG_FPGA_PERIPHERAL
 	struct notifier_block  fpga_notifier;
 #endif
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 	int                    ni_polling_interval;
 	int                    ni_polling_policy;
 	int                    ni_polling_priority;
 
 	struct task_struct     *ni_polling_task;
-
+#endif
 	/* Manage internal timer for packet timestamping */
 	struct cyclecounter    cycles;
 	struct timecounter     clock;
@@ -1383,6 +1384,7 @@ static irqreturn_t xemacps_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 static int xemacps_polling_thread(void *info)
 {
 	struct net_device *ndev = info;
@@ -1431,11 +1433,13 @@ static ssize_t xemacps_get_ni_polling_interval(struct device *dev,
 
 	return sprintf(buf, "%d\n", lp->ni_polling_interval);
 }
+#endif
 
 static int xemacps_start_packet_receive_mechanism(struct net_local *lp)
 {
 	int rc = 0;
 
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 	if (0 <= lp->ni_polling_interval) {
 		lp->ni_polling_task =
 			kthread_create(xemacps_polling_thread, lp->ndev,
@@ -1448,17 +1452,21 @@ static int xemacps_start_packet_receive_mechanism(struct net_local *lp)
 					 "error %d\n", rc);
 		}
 	} else {
+#endif
 		rc = request_irq(lp->ndev->irq, xemacps_interrupt,
 				 IRQF_SAMPLE_RANDOM, lp->ndev->name, lp->ndev);
 		if (rc) {
 			netdev_err(lp->ndev, "Unable to request IRQ, "
 					 "error %d\n", rc);
 		}
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 	}
+#endif
 
 	return rc;
 }
 
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 static ssize_t xemacps_set_ni_polling_interval(struct device *dev,
 					       struct device_attribute *attr,
 					       const char *buf, size_t count)
@@ -1624,6 +1632,7 @@ static ssize_t xemacps_set_ni_polling_priority(struct device *dev,
 static DEVICE_ATTR(ni_polling_priority, S_IWUGO | S_IRUGO,
 		   xemacps_get_ni_polling_priority,
 		   xemacps_set_ni_polling_priority);
+#endif
 
 /*
  * Free all packets presently in the descriptor rings.
@@ -1871,8 +1880,10 @@ static void xemacps_init_hw(struct net_local *lp)
 	/* Enable interrupts */
 	regval  = XEMACPS_IXR_ALL_MASK;
 	xemacps_write(lp->baseaddr, XEMACPS_IER_OFFSET, regval);
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 	if (lp->ni_polling_task)
 		wake_up_process(lp->ni_polling_task);
+#endif
 }
 
 static int xemacps_up(struct net_device *ndev)
@@ -1923,11 +1934,13 @@ static int xemacps_down(struct net_device *ndev)
 
 	set_bit(XEMACPS_STATE_DOWN, &lp->flags);
 
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 	/* Prevent our Rx and Tx polling loops from being scheduled. */
 	if (lp->ni_polling_task) {
 		kthread_stop(lp->ni_polling_task);
 		lp->ni_polling_task = NULL;
 	} else
+#endif
 		free_irq(ndev->irq, ndev);
 
 	/* Disable Rx polling and wait for outstanding Rx polling
@@ -3274,6 +3287,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 	if (0 == regval)
 		lp->needs_tx_stall_workaround = true;
 
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 	/* Default to interrupt mode. */
 	lp->ni_polling_interval = -1;
 
@@ -3300,6 +3314,7 @@ static int __init xemacps_probe(struct platform_device *pdev)
 		netdev_err(ndev, "error creating sysfs file\n");
 		goto err_out_sysfs_remove_file2;
 	}
+#endif
 
 	spin_lock_init(&lp->nwctrl_lock);
 
@@ -3322,12 +3337,14 @@ static int __init xemacps_probe(struct platform_device *pdev)
 
 	return 0;
 
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 err_out_sysfs_remove_file2:
 	sysfs_remove_file(&ndev->dev.kobj,
 			  &dev_attr_ni_polling_policy.attr);
 err_out_sysfs_remove_file1:
 	sysfs_remove_file(&ndev->dev.kobj,
 			  &dev_attr_ni_polling_interval.attr);
+#endif
 err_out_unregister_netdev:
 	unregister_netdev(ndev);
 err_out_iounmap:
@@ -3373,12 +3390,14 @@ static int __exit xemacps_remove(struct platform_device *pdev)
 			kfree(lp->mii_bus->irq);
 			mdiobus_free(lp->mii_bus);
 		}
+#ifdef CONFIG_XILINX_PS_EMAC_NI_POLLING
 		sysfs_remove_file(&ndev->dev.kobj,
 				  &dev_attr_ni_polling_priority.attr);
 		sysfs_remove_file(&ndev->dev.kobj,
 				  &dev_attr_ni_polling_policy.attr);
 		sysfs_remove_file(&ndev->dev.kobj,
 				  &dev_attr_ni_polling_interval.attr);
+#endif
 		unregister_netdev(ndev);
 		iounmap(lp->baseaddr);
 		free_netdev(ndev);
