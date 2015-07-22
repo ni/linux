@@ -531,9 +531,9 @@ static int dr_controller_setup(struct zynq_udc *udc)
 #define ULPI_VIEWPORT_DISABLE_VBUS_IER 0x6010001D
 #define ULPI_VIEWPORT_DISABLE_VBUS_IEF 0x600D001D
 		zynq_writel(ULPI_VIEWPORT_DISABLE_VBUS_IER,
-			      (unsigned __iomem *) XUSBPS_BASE + ULPI_VIEWPORT);
+			   (unsigned __iomem *) (XUSBPS_BASE + ULPI_VIEWPORT));
 		zynq_writel(ULPI_VIEWPORT_DISABLE_VBUS_IEF,
-			      (unsigned __iomem *) XUSBPS_BASE + ULPI_VIEWPORT);
+			   (unsigned __iomem *) (XUSBPS_BASE + ULPI_VIEWPORT));
 
 		portctrl |= PORTSCX_PTS_ULPI;
 		break;
