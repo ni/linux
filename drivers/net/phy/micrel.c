@@ -452,6 +452,21 @@ static int ksz9031_center_flp_timing(struct phy_device *phydev)
 	return genphy_restart_aneg(phydev);
 }
 
+static int ksz9031_resume(struct phy_device *phydev)
+{
+	int result;
+
+	result = genphy_resume(phydev);
+	if (result)
+		return result;
+
+	/* This phy will reset interrupt enables when leaving power down */
+	if (PHY_INTERRUPT_ENABLED & phydev->interrupts)
+		result = kszphy_config_intr(phydev);
+
+	return result;
+}
+
 static int ksz9031_config_init(struct phy_device *phydev)
 {
 	const struct device *dev = &phydev->dev;
@@ -805,7 +820,7 @@ static struct phy_driver ksphy_driver[] = {
 	.ack_interrupt	= kszphy_ack_interrupt,
 	.config_intr	= kszphy_config_intr,
 	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
+	.resume		= ksz9031_resume,
 	.driver		= { .owner = THIS_MODULE, },
 }, {
 	.phy_id		= PHY_ID_KSZ8873MLL,
