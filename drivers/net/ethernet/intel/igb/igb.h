@@ -38,6 +38,8 @@
 #include <linux/i2c-algo-bit.h>
 #include <linux/pci.h>
 #include <linux/mdio.h>
+#include <linux/types.h>
+#include <linux/cdev.h>
 
 struct igb_adapter;
 
@@ -50,12 +52,12 @@ struct igb_adapter;
 #define IGB_70K_ITR		56
 
 /* TX/RX descriptor defines */
-#define IGB_DEFAULT_TXD		256
+#define IGB_DEFAULT_TXD		1024
 #define IGB_DEFAULT_TX_WORK	128
 #define IGB_MIN_TXD		80
 #define IGB_MAX_TXD		4096
 
-#define IGB_DEFAULT_RXD		256
+#define IGB_DEFAULT_RXD		1024
 #define IGB_MIN_RXD		80
 #define IGB_MAX_RXD		4096
 
@@ -504,6 +506,18 @@ struct igb_adapter {
 	spinlock_t nfc_lock;
 	bool etype_bitmap[MAX_ETYPE_FILTER];
 	bool qav_mode;
+
+	struct cdev char_dev;
+	struct list_head user_page_list;
+	/* lock  for user page */
+	struct mutex user_page_mutex;
+	unsigned long tx_uring_init;
+	unsigned long rx_uring_init;
+	/* lock for user rings */
+	struct mutex user_ring_mutex;
+	bool cdev_in_use;
+	/* lock for cdev */
+	struct mutex cdev_mutex;
 };
 
 struct igb_nfc_filter {
