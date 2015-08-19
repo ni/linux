@@ -11,6 +11,16 @@
 	};
 	chosen { };
 
+	usb_phy0: phy0 {
+		compatible = "usb-nop-xceiv";
+		#phy-cells = <0>;
+	};
+
+	usb_phy1: phy1 {
+		compatible = "usb-nop-xceiv";
+		#phy-cells = <0>;
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -170,24 +180,6 @@
 			};
 		};
 
-		usb0: usb@e0002000 {
-			compatible = "xlnx,zynq-usb-1.00.a";
-			status = "disabled";
-			reg = <0xe0002000 0x1000>;
-			interrupts = <0 21 4>;
-			clocks = <&clkc 28>;
-			phy_type = "ulpi";
-		};
-
-		usb1: usb@e0003000 {
-			compatible = "xlnx,zynq-usb-1.00.a";
-			status = "disabled";
-			reg = <0xe0003000 0x1000>;
-			interrupts = <0 44 4>;
-			clocks = <&clkc 29>;
-			phy_type = "ulpi";
-		};
-
 		gpio: gpio@e000a000 {
 			compatible = "xlnx,zynq-gpio-1.0";
 			reg = <0xe000a000 0x1000>;
@@ -264,6 +256,14 @@
 			clocks = <&clkc 26>, <&clkc 35>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+		};
+
+		usb0: usb@e0002000 {
+			usb-phy = <&usb_phy0>;
+		};
+
+		usb1: usb@e0003000 {
+			usb-phy = <&usb_phy1>;
 		};
 	};
 };
