@@ -1,7 +1,9 @@
 * USB2 ChipIdea USB controller for ci13xxx
 
 Required properties:
-- compatible: should be "chipidea,usb2"
+- compatible: should be one of:
+	"chipidea,usb2"
+	"xlnx,zynq-usb-2.20a"
 - reg: base address and length of the registers
 - interrupts: interrupt for the USB controller
 
