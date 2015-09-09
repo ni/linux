@@ -25,6 +25,7 @@
 #include <linux/gpio.h>
 #include <linux/pm_runtime.h>
 #include <linux/mmc/sdhci-pci-data.h>
+#include <linux/acpi.h>
 
 #include "sdhci.h"
 #include "sdhci-pci.h"
@@ -274,6 +275,41 @@ static int byt_emmc_probe_slot(struct sdhci_pci_slot *slot)
 	return 0;
 }
 
+static int ni_byt_sdio_probe_slot(struct sdhci_pci_slot *slot)
+{
+#ifdef CONFIG_ACPI
+	/* Get max freq from ACPI for NI hardware */
+	acpi_handle acpi_hdl;
+	acpi_status status;
+	struct acpi_buffer acpi_result = {
+		ACPI_ALLOCATE_BUFFER, NULL };
+	union acpi_object *acpi_buffer;
+	int max_freq;
+
+	status = acpi_get_handle(ACPI_HANDLE(&slot->chip->pdev->dev), "MXFQ",
+					 &acpi_hdl);
+	if (ACPI_FAILURE(status))
+		return  -ENODEV;
+
+	status = acpi_evaluate_object(acpi_hdl, NULL,
+				      NULL, &acpi_result);
+	if (ACPI_FAILURE(status))
+		return -EINVAL;
+
+	acpi_buffer = (union acpi_object *) acpi_result.pointer;
+
+	if (ACPI_TYPE_INTEGER != acpi_buffer->type)
+		return -EINVAL;
+
+	max_freq = acpi_buffer->integer.value;
+
+	slot->host->mmc->f_max = max_freq * 1000000;
+#endif
+
+	slot->host->mmc->caps |= MMC_CAP_POWER_OFF_CARD | MMC_CAP_NONREMOVABLE;
+	return 0;
+}
+
 static int byt_sdio_probe_slot(struct sdhci_pci_slot *slot)
 {
 	slot->host->mmc->caps |= MMC_CAP_POWER_OFF_CARD | MMC_CAP_NONREMOVABLE;
@@ -283,6 +319,12 @@ static int byt_sdio_probe_slot(struct sdhci_pci_slot *slot)
 static const struct sdhci_pci_fixes sdhci_intel_byt_emmc = {
 	.allow_runtime_pm = true,
 	.probe_slot	= byt_emmc_probe_slot,
+};
+
+static const struct sdhci_pci_fixes sdhci_ni_byt_sdio = {
+	.quirks2	= SDHCI_QUIRK2_HOST_OFF_CARD_ON,
+	.allow_runtime_pm = true,
+	.probe_slot	= ni_byt_sdio_probe_slot,
 };
 
 static const struct sdhci_pci_fixes sdhci_intel_byt_sdio = {
@@ -829,6 +871,14 @@ static const struct pci_device_id pci_ids[] = {
 		.subvendor	= PCI_ANY_ID,
 		.subdevice	= PCI_ANY_ID,
 		.driver_data	= (kernel_ulong_t)&sdhci_intel_byt_emmc,
+	},
+
+	{
+		.vendor		= PCI_VENDOR_ID_INTEL,
+		.device		= PCI_DEVICE_ID_INTEL_BYT_SDIO,
+		.subvendor	= 0x1093,
+		.subdevice	= 0x7884,
+		.driver_data	= (kernel_ulong_t)&sdhci_ni_byt_sdio,
 	},
 
 	{
