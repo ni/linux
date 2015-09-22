@@ -2700,31 +2700,6 @@ static irqreturn_t sdhci_thread_irq(int irq, void *dev_id)
 	return isr ? IRQ_HANDLED : IRQ_NONE;
 }
 
-#ifdef CONFIG_PREEMPT_RT_BASE
-static irqreturn_t sdhci_rt_irq(int irq, void *dev_id)
-{
-	irqreturn_t ret;
-
-	local_bh_disable();
-	ret = sdhci_irq(irq, dev_id);
-	local_bh_enable();
-	if (ret == IRQ_WAKE_THREAD)
-		ret = sdhci_thread_irq(irq, dev_id);
-	return ret;
-}
-#endif
-
-static int sdhci_req_irq(struct sdhci_host *host)
-{
-#ifdef CONFIG_PREEMPT_RT_BASE
-	return request_threaded_irq(host->irq, NULL, sdhci_rt_irq,
-				    IRQF_SHARED, mmc_hostname(host->mmc), host);
-#else
-	return request_threaded_irq(host->irq, sdhci_irq, sdhci_thread_irq,
-				    IRQF_SHARED, mmc_hostname(host->mmc), host);
-#endif
-}
-
 /*****************************************************************************\
  *                                                                           *
  * Suspend/resume                                                            *
@@ -2792,7 +2767,9 @@ int sdhci_resume_host(struct sdhci_host *host)
 	}
 
 	if (!device_may_wakeup(mmc_dev(host->mmc))) {
-		ret = sdhci_req_irq(host);
+		ret = request_threaded_irq(host->irq, sdhci_irq,
+					   sdhci_thread_irq, IRQF_SHARED,
+					   mmc_hostname(host->mmc), host);
 		if (ret)
 			return ret;
 	} else {
@@ -3069,8 +3046,11 @@ int sdhci_add_host(struct sdhci_host *host)
 						      GFP_KERNEL);
 		host->align_buffer = kmalloc(host->align_buffer_sz, GFP_KERNEL);
 		if (!host->adma_table || !host->align_buffer) {
-			dma_free_coherent(mmc_dev(mmc), host->adma_table_sz,
-					  host->adma_table, host->adma_addr);
+			if (host->adma_table)
+				dma_free_coherent(mmc_dev(mmc),
+						  host->adma_table_sz,
+						  host->adma_table,
+						  host->adma_addr);
 			kfree(host->align_buffer);
 			pr_warn("%s: Unable to allocate ADMA buffers - falling back to standard DMA\n",
 				mmc_hostname(mmc));
@@ -3348,12 +3328,13 @@ int sdhci_add_host(struct sdhci_host *host)
 				   SDHCI_MAX_CURRENT_MULTIPLIER;
 	}
 
-	/* If OCR set by external regulators, use it instead */
+	/* If OCR set by host, use it instead. */
+	if (host->ocr_mask)
+		ocr_avail = host->ocr_mask;
+
+	/* If OCR set by external regulators, give it highest prio. */
 	if (mmc->ocr_avail)
 		ocr_avail = mmc->ocr_avail;
-
-	if (host->ocr_mask)
-		ocr_avail &= host->ocr_mask;
 
 	mmc->ocr_avail = ocr_avail;
 	mmc->ocr_avail_sdio = ocr_avail;
@@ -3450,7 +3431,8 @@ int sdhci_add_host(struct sdhci_host *host)
 
 	sdhci_init(host, 0);
 
-	ret = sdhci_req_irq(host);
+	ret = request_threaded_irq(host->irq, sdhci_irq, sdhci_thread_irq,
+				   IRQF_SHARED,	mmc_hostname(mmc), host);
 	if (ret) {
 		pr_err("%s: Failed to request IRQ %d: %d\n",
 		       mmc_hostname(mmc), host->irq, ret);
