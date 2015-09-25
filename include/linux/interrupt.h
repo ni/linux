@@ -738,4 +738,7 @@ extern char __softirqentry_text_end[];
 #define __softirq_entry
 #endif
 
+extern long get_irq_handler_change_count(void);
+extern wait_queue_head_t irq_handler_change_wq;
+
 #endif
