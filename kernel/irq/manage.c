@@ -43,6 +43,22 @@ void init_irq_default_prio(struct irq_desc *desc)
 	desc->irq_data.priority = irqthread_pri;
 }
 
+static atomic_long_t irq_handler_change_count = ATOMIC_LONG_INIT(0);
+DECLARE_WAIT_QUEUE_HEAD(irq_handler_change_wq);
+
+/* Bump change count and wake up anything waiting on changes to
+ * IRQ handlers */
+static void __irq_handler_change_event(void)
+{
+	atomic_long_inc(&irq_handler_change_count);
+	wake_up(&irq_handler_change_wq);
+}
+
+long get_irq_handler_change_count(void)
+{
+	return atomic_long_read(&irq_handler_change_count);
+}
+
 static void __synchronize_hardirq(struct irq_desc *desc)
 {
 	bool inprogress;
@@ -1570,6 +1586,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	irq_add_debugfs_entry(irq, desc);
 	new->dir = NULL;
 	register_handler_proc(irq, new);
+	__irq_handler_change_event();
 	return 0;
 
 mismatch:
@@ -1760,6 +1777,7 @@ static struct irqaction *__free_irq(unsigned int irq, void *dev_id)
 	irq_chip_pm_put(&desc->irq_data);
 	module_put(desc->owner);
 	kfree(action->secondary);
+	__irq_handler_change_event();
 	return action;
 }
 
