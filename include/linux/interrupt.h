@@ -854,6 +854,9 @@ extern int early_irq_init(void);
 extern int arch_probe_nr_irqs(void);
 extern int arch_early_irq_init(void);
 
+extern long get_irq_handler_change_count(void);
+extern wait_queue_head_t irq_handler_change_wq;
+
 /*
  * We want to know which function is an entrypoint of a hardirq or a softirq.
  */
