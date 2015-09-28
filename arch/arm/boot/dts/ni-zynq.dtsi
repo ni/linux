@@ -266,4 +266,10 @@
 			usb-phy = <&usb_phy1>;
 		};
 	};
+
+};
+
+&L2 {
+	prefetch-data = <1>;
+	prefetch-instr = <1>;
 };
