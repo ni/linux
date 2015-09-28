@@ -266,4 +266,10 @@
 			#size-cells = <0>;
 		};
 	};
+
+};
+
+&L2 {
+	prefetch-data = <1>;
+	prefetch-instr = <1>;
 };
