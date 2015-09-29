@@ -762,9 +762,10 @@ static int nirtfeatures_parse_led_pie(
 			return -ENOMEM;
 
 		/* for compatibility with existing LVRT support, PIEs beginning
-		 * with 'user' should not affix the uservisible attribute to
-		 * their name */
-		if (strncasecmp(pie->name, "user", strlen("user")) != 0) {
+		 * with 'user' or 'wifi' should not affix the uservisible
+		 * attribute to their name */
+		if (strncasecmp(pie->name, "user", strlen("user")) != 0 &&
+		    strncasecmp(pie->name, "wifi", strlen("wifi")) != 0) {
 			snprintf(led_dev->name_string, MAX_NODELEN,
 			   "%s:%s:%s:uservisible=%d",
 			   CONFIG_NI_LED_PREFIX,
