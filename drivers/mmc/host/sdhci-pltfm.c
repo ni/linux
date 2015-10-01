@@ -117,9 +117,6 @@ void sdhci_get_of_property(struct platform_device *pdev)
 
 	if (of_find_property(np, "enable-sdio-wakeup", NULL))
 		host->mmc->pm_caps |= MMC_PM_WAKE_SDIO_IRQ;
-
-	if (of_get_property(np, "xlnx,has-cpc", NULL))
-		host->mmc->caps |= MMC_CAP_POWER_OFF_CARD;
 }
 #else
 void sdhci_get_of_property(struct platform_device *pdev) {}
