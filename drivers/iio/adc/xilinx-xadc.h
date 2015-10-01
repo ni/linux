@@ -66,7 +66,7 @@ struct xadc {
 	struct delayed_work zynq_unmask_work;
 
 	struct mutex mutex;
-	raw_spinlock_t lock;
+	spinlock_t lock;
 
 	struct completion completion;
 };
