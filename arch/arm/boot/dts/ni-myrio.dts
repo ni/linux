@@ -52,18 +52,15 @@
 
 	non-removable = <1>;
 
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	wl12xx: wl12xx@0 {
-		compatible = "ti,wilink6";
+		compatible = "ti,wl1271";
+		reg = <2>;
 		interrupt-parent = <&gpio>;
 		interrupts = <15 0x4>;
-		clocks = <&refclock>;
-		clock-names = "refclock";
-
-		refclock: refclock {
-			compatible = "ti,wilink-clock";
-			#clock-cells = <0>;
-			clock-frequency = <38400000>;
-		};
+		ref-clock-frequency = <38400000>;
 	};
 };
 
