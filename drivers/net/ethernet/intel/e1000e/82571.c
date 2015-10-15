@@ -494,6 +494,8 @@ static void e1000_put_hw_semaphore_82571(struct e1000_hw *hw)
 {
 	u32 swsm;
 
+	E1000_WR_DELAY();
+
 	swsm = er32(SWSM);
 	swsm &= ~(E1000_SWSM_SMBI | E1000_SWSM_SWESMBI);
 	ew32(SWSM, swsm);
@@ -545,6 +547,7 @@ static void e1000_put_hw_semaphore_82573(struct e1000_hw *hw)
 {
 	u32 extcnf_ctrl;
 
+	E1000_WR_DELAY();
 	extcnf_ctrl = er32(EXTCNF_CTRL);
 	extcnf_ctrl &= ~E1000_EXTCNF_CTRL_MDIO_SW_OWNERSHIP;
 	ew32(EXTCNF_CTRL, extcnf_ctrl);
@@ -1095,6 +1098,8 @@ static s32 e1000_init_hw_82571(struct e1000_hw *hw)
 	e_dbg("Zeroing the MTA\n");
 	for (i = 0; i < mac->mta_reg_count; i++)
 		E1000_WRITE_REG_ARRAY(hw, E1000_MTA, i, 0);
+
+	E1000_WR_DELAY();
 
 	/* Setup link and flow control */
 	ret_val = mac->ops.setup_link(hw);
