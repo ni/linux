@@ -3360,6 +3360,9 @@ static int e1000e_write_uc_addr_list(struct net_device *netdev)
 	struct e1000_hw *hw = &adapter->hw;
 	unsigned int rar_entries;
 	int count = 0;
+#ifdef CONFIG_E1000_DELAY
+	unsigned int rar_count;
+#endif
 
 	rar_entries = hw->mac.ops.rar_get_count(hw);
 
@@ -3392,11 +3395,21 @@ static int e1000e_write_uc_addr_list(struct net_device *netdev)
 		}
 	}
 
+	/* preserve number of remaining RAR entries for delay
+	 * function in order to prevent latency issues caused by
+	 * MMIO writes */
+#ifdef CONFIG_E1000_DELAY
+	rar_count = rar_entries;
+#endif
+
 	/* zero out the remaining RAR entries not used above */
 	for (; rar_entries > 0; rar_entries--) {
 		ew32(RAH(rar_entries), 0);
 		ew32(RAL(rar_entries), 0);
 	}
+#ifdef CONFIG_E1000_DELAY
+	E1000_WR_DELAY_RNG(rar_count);
+#endif
 	e1e_flush();
 
 	return count;
@@ -3476,6 +3489,9 @@ static void e1000e_setup_rss_hash(struct e1000_adapter *adapter)
 	/* Direct all traffic to queue 0 */
 	for (i = 0; i < 32; i++)
 		ew32(RETA(i), 0);
+#ifdef CONFIG_E1000_DELAY
+	E1000_WR_DELAY();
+#endif
 
 	/* Disable raw packet checksumming so that RSS hash is placed in
 	 * descriptor on writeback.

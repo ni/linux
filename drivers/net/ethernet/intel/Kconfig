@@ -85,6 +85,15 @@ config E1000E
 	  To compile this driver as a module, choose M here. The module
 	  will be called e1000e.
 
+config E1000_DELAY
+	bool "Add delays to e1000x drivers"
+	default n
+	depends on (E1000E || E1000) && PREEMPT_RT_FULL
+	---help---
+	  Enable delays after large numbers of MMIO writes to registers.
+	  The delays aid in preventing noticeable impact on real-time
+	  performance when a connection is interrupted.
+
 config IGB
 	tristate "Intel(R) 82575/82576 PCI-Express Gigabit Ethernet support"
 	depends on PCI

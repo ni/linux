@@ -2331,6 +2331,11 @@ static void e1000_set_rx_mode(struct net_device *netdev)
 		 */
 		E1000_WRITE_REG_ARRAY(hw, MTA, i, mcarray[i]);
 	}
+
+#ifdef CONFIG_E1000_DELAY
+	E1000_WR_DELAY_RNG(mta_reg_count);
+#endif
+
 	E1000_WRITE_FLUSH();
 
 	if (hw->mac_type == e1000_82542_rev2_0)
