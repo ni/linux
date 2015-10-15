@@ -2152,6 +2152,7 @@ static void e1000_enter_82542_rst(struct e1000_adapter *adapter)
 	rctl = er32(RCTL);
 	rctl |= E1000_RCTL_RST;
 	ew32(RCTL, rctl);
+	E1000_WR_DELAY();
 	E1000_WRITE_FLUSH();
 	mdelay(5);
 
@@ -2168,6 +2169,7 @@ static void e1000_leave_82542_rst(struct e1000_adapter *adapter)
 	rctl = er32(RCTL);
 	rctl &= ~E1000_RCTL_RST;
 	ew32(RCTL, rctl);
+	E1000_WR_DELAY();
 	E1000_WRITE_FLUSH();
 	mdelay(5);
 
@@ -2316,6 +2318,9 @@ static void e1000_set_rx_mode(struct net_device *netdev)
 		 */
 		E1000_WRITE_REG_ARRAY(hw, MTA, i, mcarray[i]);
 	}
+
+	E1000_WR_DELAY();
+
 	E1000_WRITE_FLUSH();
 
 	if (hw->mac_type == e1000_82542_rev2_0)
