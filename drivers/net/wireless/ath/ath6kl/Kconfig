@@ -72,3 +72,12 @@ config ATH6KL_NI_BIOS_DOMAIN
 	  regdomain from BIOS DMI tables.
 
 	  If unsure, say N.
+
+config ATH6KL_SILEX_FIRMWARE
+	bool "Atheros ath6kl Silex firmware support"
+	depends on ATH6KL
+	---help---
+	  Enabling this will cause the ath6kl driver to use customizations
+	  required by the firmware from Silex.
+
+	  If unsure, say N.

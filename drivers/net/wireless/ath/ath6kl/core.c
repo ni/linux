@@ -171,6 +171,14 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 			  ar->fw_capabilities);
 		__set_bit(ATH6KL_FW_CAPABILITY_AP_INACTIVITY_MINS,
 			  ar->fw_capabilities);
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+		__set_bit(ATH6KL_FW_CAPABILITY_RSN_CAP_OVERRIDE,
+			  ar->fw_capabilities);
+		__set_bit(ATH6KL_FW_CAPABILITY_HEART_BEAT_POLL,
+			  ar->fw_capabilities);
+		__set_bit(ATH6KL_FW_CAPABILITY_RATETABLE_MCS15,
+			  ar->fw_capabilities);
+#endif
 
 		if (ar->hw.id == AR6004_HW_1_3_VERSION)
 			__set_bit(ATH6KL_FW_CAPABILITY_MAP_LP_ENDPOINT,
