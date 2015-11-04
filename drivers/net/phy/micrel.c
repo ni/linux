@@ -48,7 +48,8 @@
 #define	KSZPHY_INTCS_REMOTE_FAULT		BIT(9)
 #define	KSZPHY_INTCS_LINK_UP			BIT(8)
 #define	KSZPHY_INTCS_ALL			(KSZPHY_INTCS_LINK_UP |\
-						KSZPHY_INTCS_LINK_DOWN)
+						KSZPHY_INTCS_LINK_DOWN |\
+						KSZPHY_INTCS_LINK_PARTNER_ACK)
 
 /* PHY Control 1 */
 #define	MII_KSZPHY_CTRL_1			0x1e
@@ -85,6 +86,8 @@ static struct kszphy_hw_stat kszphy_hw_stats[] = {
 	{ "phy_idle_errors", 10, 8 },
 };
 
+#define KSZ9031_AUTONEG_TIMEOUT (msecs_to_jiffies(20000))
+
 struct kszphy_type {
 	u32 led_mode_reg;
 	u16 interrupt_level_mask;
@@ -94,8 +97,12 @@ struct kszphy_type {
 };
 
 struct kszphy_priv {
+	struct phy_device *phydev;
 	const struct kszphy_type *type;
 	int led_mode;
+	unsigned long autoneg_timeout_jiffies;
+	struct delayed_work poll_work;
+	bool timeout_set;
 	bool rmii_ref_clk_sel;
 	bool rmii_ref_clk_sel_val;
 	u64 stats[ARRAY_SIZE(kszphy_hw_stats)];
@@ -604,10 +611,13 @@ static int ksz8873mll_read_status(struct phy_device *phydev)
 	return 0;
 }
 
+static void ksz9031_autoneg_poll(struct work_struct *work);
+
 static int ksz9031_read_status(struct phy_device *phydev)
 {
 	int err;
 	int regval;
+	struct kszphy_priv *priv = phydev->priv;
 
 	err = genphy_read_status(phydev);
 	if (err)
@@ -625,7 +635,45 @@ static int ksz9031_read_status(struct phy_device *phydev)
 		return genphy_config_aneg(phydev);
 	}
 
+	/* Sometimes the ksz9031 can fail autonegotiation silently.
+	 * It will set the link partner advertising bits when this happens,
+	 * but will not actually finish autonegotiation - so reset it.
+	 */
+	if (phydev->lp_advertising && !phydev->link) {
+		if (!priv->timeout_set) {
+			priv->autoneg_timeout_jiffies =
+				jiffies + KSZ9031_AUTONEG_TIMEOUT;
+			priv->timeout_set = true;
+		}
+
+		if (time_is_before_jiffies(priv->autoneg_timeout_jiffies)) {
+			phy_init_hw(phydev);
+			phydev->link = 0;
+			priv->timeout_set = false;
+			if (phydev->drv->config_intr &&
+			    phy_interrupt_is_valid(phydev))
+				phydev->drv->config_intr(phydev);
+		} else {
+			INIT_DELAYED_WORK(&priv->poll_work,
+					ksz9031_autoneg_poll);
+			queue_delayed_work(system_power_efficient_wq,
+					   &priv->poll_work,
+					   PHY_STATE_TIME * HZ);
+		}
+	} else {
+		priv->timeout_set = false;
+	}
+
 	return 0;
+}
+
+static void ksz9031_autoneg_poll(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct kszphy_priv *priv = container_of(dwork, struct kszphy_priv,
+						poll_work);
+
+	ksz9031_read_status(priv->phydev);
 }
 
 static int ksz8873mll_config_aneg(struct phy_device *phydev)
@@ -742,6 +790,7 @@ static int kszphy_probe(struct phy_device *phydev)
 	if (!priv)
 		return -ENOMEM;
 
+	priv->phydev = phydev;
 	phydev->priv = priv;
 
 	priv->type = type;
