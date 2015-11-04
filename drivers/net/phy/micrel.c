@@ -73,6 +73,13 @@
 
 #define PS_TO_REG				200
 
+#define KSZ9031_AUTONEG_TIMEOUT (msecs_to_jiffies(20000))
+
+struct ksz9031_timeout {
+	unsigned long autoneg_timeout_jiffies;
+	int timeout_set;
+};
+
 static bool default_flp_timing;
 module_param(default_flp_timing, bool, 0644);
 MODULE_PARM_DESC(default_flp_timing,
@@ -452,6 +459,16 @@ static int ksz9031_center_flp_timing(struct phy_device *phydev)
 	return genphy_restart_aneg(phydev);
 }
 
+static int ksz9031_probe(struct phy_device *phydev)
+{
+	phydev->priv = devm_kzalloc(&phydev->dev,
+				    sizeof(struct ksz9031_timeout), GFP_KERNEL);
+	if (!phydev->priv)
+		return -ENOMEM;
+
+	return 0;
+}
+
 static int ksz9031_resume(struct phy_device *phydev)
 {
 	int result;
@@ -541,6 +558,7 @@ static int ksz9031_read_status(struct phy_device *phydev)
 {
 	int err;
 	int regval;
+	struct ksz9031_timeout *timeout = phydev->priv;
 
 	err = genphy_read_status(phydev);
 	if (err)
@@ -553,6 +571,25 @@ static int ksz9031_read_status(struct phy_device *phydev)
 	if ((regval & 0xFF) == 0xFF) {
 		phy_init_hw(phydev);
 		phydev->link = 0;
+	}
+
+	/* Sometimes the ksz9031 can fail autonegotiation silently.
+	 * It will set the link partner advertising bits when this happens,
+	 * but will not actually finish autonegotiation - so reset it.
+	 */
+	if (phydev->lp_advertising && !phydev->link) {
+		if (!timeout->timeout_set) {
+			timeout->autoneg_timeout_jiffies =
+				jiffies + KSZ9031_AUTONEG_TIMEOUT;
+			timeout->timeout_set = 1;
+		}
+
+		if (time_is_before_jiffies(timeout->autoneg_timeout_jiffies)) {
+			phy_init_hw(phydev);
+			timeout->timeout_set = 0;
+		}
+	} else {
+		timeout->timeout_set = 0;
 	}
 
 	return 0;
@@ -814,6 +851,7 @@ static struct phy_driver ksphy_driver[] = {
 	.features	= (PHY_GBIT_FEATURES | SUPPORTED_Pause),
 	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
 	.driver_data	= &ksz9021_type,
+	.probe		= ksz9031_probe,
 	.config_init	= ksz9031_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= ksz9031_read_status,
