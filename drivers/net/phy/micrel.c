@@ -84,6 +84,13 @@ static struct kszphy_hw_stat kszphy_hw_stats[] = {
 	{ "phy_idle_errors", 10, 8 },
 };
 
+#define KSZ9031_AUTONEG_TIMEOUT (msecs_to_jiffies(20000))
+
+struct ksz9031_timeout {
+	unsigned long autoneg_timeout_jiffies;
+	int timeout_set;
+};
+
 struct kszphy_type {
 	u32 led_mode_reg;
 	u16 interrupt_level_mask;
@@ -526,6 +533,16 @@ static int ksz9031_enable_edpd(struct phy_device *phydev)
 				      reg | MII_KSZ9031RN_EDPD_ENABLE);
 }
 
+static int ksz9031_probe(struct phy_device *phydev)
+{
+	phydev->priv = devm_kzalloc(&phydev->mdio.dev,
+				    sizeof(struct ksz9031_timeout), GFP_KERNEL);
+	if (!phydev->priv)
+		return -ENOMEM;
+
+	return 0;
+}
+
 static int ksz9031_config_init(struct phy_device *phydev)
 {
 	const struct device *dev = &phydev->mdio.dev;
@@ -610,6 +627,7 @@ static int ksz9031_read_status(struct phy_device *phydev)
 {
 	int err;
 	int regval;
+	struct ksz9031_timeout *timeout = phydev->priv;
 
 	err = genphy_read_status(phydev);
 	if (err)
@@ -624,6 +642,25 @@ static int ksz9031_read_status(struct phy_device *phydev)
 		phydev->link = 0;
 		if (phydev->drv->config_intr && phy_interrupt_is_valid(phydev))
 			phydev->drv->config_intr(phydev);
+	}
+
+	/* Sometimes the ksz9031 can fail autonegotiation silently.
+	 * It will set the link partner advertising bits when this happens,
+	 * but will not actually finish autonegotiation - so reset it.
+	 */
+	if (phydev->lp_advertising && !phydev->link) {
+		if (!timeout->timeout_set) {
+			timeout->autoneg_timeout_jiffies =
+				jiffies + KSZ9031_AUTONEG_TIMEOUT;
+			timeout->timeout_set = 1;
+		}
+
+		if (time_is_before_jiffies(timeout->autoneg_timeout_jiffies)) {
+			phy_init_hw(phydev);
+			timeout->timeout_set = 0;
+		}
+	} else {
+		timeout->timeout_set = 0;
 	}
 
 	return 0;
@@ -978,6 +1015,7 @@ static struct phy_driver ksphy_driver[] = {
 	.features	= (PHY_GBIT_FEATURES | SUPPORTED_Pause),
 	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
 	.driver_data	= &ksz9021_type,
+	.probe		= ksz9031_probe,
 	.config_init	= ksz9031_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= ksz9031_read_status,
