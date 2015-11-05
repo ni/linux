@@ -644,6 +644,9 @@ enum wmi_cmd_id {
 	WMI_ENABLE_SCHED_SCAN_CMDID,
 };
 
+/* Silex has this command at a different ID */
+#define WMI_SET_REGDOMAIN_SILEX_CMDID 0xf0b0
+
 enum wmi_mgmt_frame_type {
 	WMI_FRAME_BEACON = 0,
 	WMI_FRAME_PROBE_REQ,
