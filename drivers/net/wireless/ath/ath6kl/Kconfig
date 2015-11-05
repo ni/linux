@@ -63,3 +63,12 @@ config ATH6KL_REGDOMAIN
 	  are taken into account.
 
 	  If unsure, say N.
+
+config ATH6KL_NI_BIOS_DOMAIN
+	bool "Atheros ath6kl DMI regdomain support"
+	depends on ATH6KL
+	---help---
+	  Enabling this will cause the ath6kl driver to load the initial
+	  regdomain from BIOS DMI tables.
+
+	  If unsure, say N.
