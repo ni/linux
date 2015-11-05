@@ -3294,9 +3294,15 @@ int ath6kl_wmi_set_regdomain_cmd(struct wmi *wmi, const char *alpha2)
 	cmd = (struct wmi_set_regdomain_cmd *) skb->data;
 	memcpy(cmd->iso_name, alpha2, 2);
 
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+	return ath6kl_wmi_cmd_send(wmi, 0, skb,
+				   WMI_SET_REGDOMAIN_SILEX_CMDID,
+				   NO_SYNC_WMIFLAG);
+#else
 	return ath6kl_wmi_cmd_send(wmi, 0, skb,
 				   WMI_SET_REGDOMAIN_CMDID,
 				   NO_SYNC_WMIFLAG);
+#endif
 }
 
 s32 ath6kl_wmi_get_rate(struct wmi *wmi, s8 rate_index)
