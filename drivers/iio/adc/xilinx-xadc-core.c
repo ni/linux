@@ -163,7 +163,7 @@ static int xadc_zynq_write_adc_reg(struct xadc *xadc, unsigned int reg,
 	uint32_t tmp;
 	int ret;
 
-	raw_spin_lock_irq(&xadc->lock);
+	spin_lock_irq(&xadc->lock);
 	xadc_zynq_update_intmsk(xadc, XADC_ZYNQ_INT_DFIFO_GTH,
 			XADC_ZYNQ_INT_DFIFO_GTH);
 
@@ -177,7 +177,7 @@ static int xadc_zynq_write_adc_reg(struct xadc *xadc, unsigned int reg,
 	xadc_write_reg(xadc, XADC_ZYNQ_REG_CFG, tmp);
 
 	xadc_zynq_update_intmsk(xadc, XADC_ZYNQ_INT_DFIFO_GTH, 0);
-	raw_spin_unlock_irq(&xadc->lock);
+	spin_unlock_irq(&xadc->lock);
 
 	ret = wait_for_completion_interruptible_timeout(&xadc->completion, HZ);
 	if (ret == 0)
@@ -200,7 +200,7 @@ static int xadc_zynq_read_adc_reg(struct xadc *xadc, unsigned int reg,
 	cmd[0] = XADC_ZYNQ_CMD(XADC_ZYNQ_CMD_READ, reg, 0);
 	cmd[1] = XADC_ZYNQ_CMD(XADC_ZYNQ_CMD_NOP, 0, 0);
 
-	raw_spin_lock_irq(&xadc->lock);
+	spin_lock_irq(&xadc->lock);
 	xadc_zynq_update_intmsk(xadc, XADC_ZYNQ_INT_DFIFO_GTH,
 			XADC_ZYNQ_INT_DFIFO_GTH);
 	xadc_zynq_drain_fifo(xadc);
@@ -213,7 +213,7 @@ static int xadc_zynq_read_adc_reg(struct xadc *xadc, unsigned int reg,
 	xadc_write_reg(xadc, XADC_ZYNQ_REG_CFG, tmp);
 
 	xadc_zynq_update_intmsk(xadc, XADC_ZYNQ_INT_DFIFO_GTH, 0);
-	raw_spin_unlock_irq(&xadc->lock);
+	spin_unlock_irq(&xadc->lock);
 	ret = wait_for_completion_interruptible_timeout(&xadc->completion, HZ);
 	if (ret == 0)
 		ret = -EIO;
@@ -252,7 +252,7 @@ static void xadc_zynq_unmask_worker(struct work_struct *work)
 
 	misc_sts &= XADC_ZYNQ_INT_ALARM_MASK;
 
-	raw_spin_lock_irq(&xadc->lock);
+	spin_lock_irq(&xadc->lock);
 
 	/* Clear those bits which are not active anymore */
 	unmask = (xadc->zynq_masked_alarm ^ misc_sts) & xadc->zynq_masked_alarm;
@@ -266,7 +266,7 @@ static void xadc_zynq_unmask_worker(struct work_struct *work)
 
 	xadc_zynq_update_intmsk(xadc, 0, 0);
 
-	raw_spin_unlock_irq(&xadc->lock);
+	spin_unlock_irq(&xadc->lock);
 
 	/* if still pending some alarm re-trigger the timer */
 	if (xadc->zynq_masked_alarm) {
@@ -281,10 +281,10 @@ static irqreturn_t xadc_zynq_threaded_interrupt_handler(int irq, void *devid)
 	struct xadc *xadc = iio_priv(indio_dev);
 	unsigned int alarm;
 
-	raw_spin_lock_irq(&xadc->lock);
+	spin_lock_irq(&xadc->lock);
 	alarm = xadc->zynq_alarm;
 	xadc->zynq_alarm = 0;
-	raw_spin_unlock_irq(&xadc->lock);
+	spin_unlock_irq(&xadc->lock);
 
 	xadc_handle_events(indio_dev, xadc_zynq_transform_alarm(alarm));
 
@@ -309,7 +309,7 @@ static irqreturn_t xadc_zynq_interrupt_handler(int irq, void *devid)
 	if (!status)
 		return IRQ_NONE;
 
-	raw_spin_lock(&xadc->lock);
+	spin_lock(&xadc->lock);
 
 	xadc_write_reg(xadc, XADC_ZYNQ_REG_INTSTS, status);
 
@@ -330,7 +330,7 @@ static irqreturn_t xadc_zynq_interrupt_handler(int irq, void *devid)
 		xadc_zynq_update_intmsk(xadc, 0, 0);
 		ret = IRQ_WAKE_THREAD;
 	}
-	raw_spin_unlock(&xadc->lock);
+	spin_unlock(&xadc->lock);
 
 	return ret;
 }
@@ -419,7 +419,7 @@ static void xadc_zynq_update_alarm(struct xadc *xadc, unsigned int alarm)
 	/* Move OT to bit 7 */
 	alarm = ((alarm & 0x08) << 4) | ((alarm & 0xf0) >> 1) | (alarm & 0x07);
 
-	raw_spin_lock_irqsave(&xadc->lock, flags);
+	spin_lock_irqsave(&xadc->lock, flags);
 
 	/* Clear previous interrupts if any. */
 	xadc_read_reg(xadc, XADC_ZYNQ_REG_INTSTS, &status);
@@ -428,7 +428,7 @@ static void xadc_zynq_update_alarm(struct xadc *xadc, unsigned int alarm)
 	xadc_zynq_update_intmsk(xadc, XADC_ZYNQ_INT_ALARM_MASK,
 		~alarm & XADC_ZYNQ_INT_ALARM_MASK);
 
-	raw_spin_unlock_irqrestore(&xadc->lock, flags);
+	spin_unlock_irqrestore(&xadc->lock, flags);
 }
 
 static const struct xadc_ops xadc_zynq_ops = {
@@ -520,12 +520,12 @@ static void xadc_axi_update_alarm(struct xadc *xadc, unsigned int alarm)
 	alarm = ((alarm & 0x07) << 1) | ((alarm & 0x08) >> 3) |
 			((alarm & 0xf0) << 6);
 
-	raw_spin_lock_irqsave(&xadc->lock, flags);
+	spin_lock_irqsave(&xadc->lock, flags);
 	xadc_read_reg(xadc, XADC_AXI_REG_IPIER, &val);
 	val &= ~XADC_AXI_INT_ALARM_MASK;
 	val |= alarm;
 	xadc_write_reg(xadc, XADC_AXI_REG_IPIER, val);
-	raw_spin_unlock_irqrestore(&xadc->lock, flags);
+	spin_unlock_irqrestore(&xadc->lock, flags);
 }
 
 static unsigned long xadc_axi_get_dclk(struct xadc *xadc)
@@ -674,7 +674,7 @@ static int xadc_trigger_set_state(struct iio_trigger *trigger, bool state)
 		xadc->trigger = NULL;
 	}
 
-	raw_spin_lock_irqsave(&xadc->lock, flags);
+	spin_lock_irqsave(&xadc->lock, flags);
 	xadc_read_reg(xadc, XADC_AXI_REG_IPIER, &val);
 	xadc_write_reg(xadc, XADC_AXI_REG_IPISR, val & XADC_AXI_INT_EOS);
 	if (state)
@@ -682,7 +682,7 @@ static int xadc_trigger_set_state(struct iio_trigger *trigger, bool state)
 	else
 		val &= ~XADC_AXI_INT_EOS;
 	xadc_write_reg(xadc, XADC_AXI_REG_IPIER, val);
-	raw_spin_unlock_irqrestore(&xadc->lock, flags);
+	spin_unlock_irqrestore(&xadc->lock, flags);
 
 err_out:
 	mutex_unlock(&xadc->mutex);
@@ -1179,7 +1179,7 @@ static int xadc_probe(struct platform_device *pdev)
 	xadc->ops = id->data;
 	init_completion(&xadc->completion);
 	mutex_init(&xadc->mutex);
-	raw_spin_lock_init(&xadc->lock);
+	spin_lock_init(&xadc->lock);
 	INIT_DELAYED_WORK(&xadc->zynq_unmask_work, xadc_zynq_unmask_worker);
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
