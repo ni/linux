@@ -21,6 +21,7 @@
 #include <linux/moduleparam.h>
 #include <linux/export.h>
 #include <linux/vmalloc.h>
+#include <linux/dmi.h>
 
 #include "debug.h"
 #include "hif-ops.h"
@@ -49,6 +50,31 @@ MODULE_PARM_DESC(heart_beat_poll, "Enable fw error detection periodic"   \
 		 "polling. This also specifies the polling interval in"  \
 		 "msecs. Set reocvery_enable for this to be effective");
 
+#define WLAN_REGION_ID 161
+#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+struct region_table {
+	struct dmi_header header;
+	char padding[3];
+	char alpha2[2];
+};
+
+static char region[2];
+static void find_region_type(const struct dmi_header *dm, void *private_data)
+{
+	int *found = (int *)private_data;
+
+	if (dm->type == WLAN_REGION_ID) {
+		struct region_table *table =
+			container_of(dm, struct region_table, header);
+
+		ath6kl_dbg(ATH6KL_DBG_TRC, "Region code from BIOS: %c%c\n",
+				table->alpha2[0], table->alpha2[1]);
+		memcpy(region, table->alpha2, 2);
+		*found = 1;
+	}
+}
+#endif
+
 void ath6kl_core_tx_complete(struct ath6kl *ar, struct sk_buff *skb)
 {
 	ath6kl_htc_tx_complete(ar, skb);
@@ -66,6 +92,18 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	struct ath6kl_bmi_target_info targ_info;
 	struct wireless_dev *wdev;
 	int ret = 0, i;
+
+#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+	/* get region code from DMI */
+	dmi_walk(find_region_type, &ret);
+	if (!ret)
+		return -ENODEV;
+
+	/* region code should be US or world */
+	if ((region[0] != 'U' && region[1] != 'S') &&
+	    (region[0] != 0 && region[1] != 0))
+		return -EINVAL;
+#endif
 
 	switch (htc_type) {
 	case ATH6KL_HTC_TYPE_MBOX:
@@ -190,6 +228,13 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 		ath6kl_err("Failed to start hardware: %d\n", ret);
 		goto err_rxbuf_cleanup;
 	}
+
+#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+	/* set region from DMI */
+	ret = ath6kl_wmi_set_regdomain_cmd(ar->wmi, region);
+	if (ret)
+		goto err_rxbuf_cleanup;
+#endif
 
 	/* give our connected endpoints some buffers */
 	ath6kl_rx_refill(ar->htc_target, ar->ctrl_ep);
