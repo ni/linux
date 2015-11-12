@@ -833,7 +833,7 @@ __try_to_take_rt_mutex(struct rt_mutex *lock, struct task_struct *task,
 		 * If waiter is not the highest priority waiter of
 		 * @lock, give up.
 		 */
-		if (waiter != rt_mutex_top_waiter(lock))
+		if (rt_mutex_has_waiters(lock) && waiter != rt_mutex_top_waiter(lock))
 			return 0;
 
 		/*
