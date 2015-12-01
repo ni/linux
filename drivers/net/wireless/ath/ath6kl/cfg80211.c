@@ -3730,8 +3730,10 @@ int ath6kl_cfg80211_init(struct ath6kl *ar)
 	set_wiphy_dev(wiphy, ar->dev);
 
 	wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION) |
-				 BIT(NL80211_IFTYPE_ADHOC) |
-				 BIT(NL80211_IFTYPE_AP);
+				 BIT(NL80211_IFTYPE_ADHOC);
+#ifndef CONFIG_ATH6KL_SILEX_FIRMWARE
+	wiphy->interface_modes |= BIT(NL80211_IFTYPE_AP);
+#endif
 	if (ar->p2p) {
 		wiphy->interface_modes |= BIT(NL80211_IFTYPE_P2P_GO) |
 					  BIT(NL80211_IFTYPE_P2P_CLIENT);
