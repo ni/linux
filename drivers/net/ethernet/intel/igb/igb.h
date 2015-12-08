@@ -343,10 +343,42 @@ struct hwmon_buff {
 	};
 #endif
 
+/* The number of L2 ether-type filter registers, Index 3 is reserved
+ * for PTP 1588 timestamp
+ */
+#define MAX_ETYPE_FILTER  (4 - 1)
+
+/* ETQF filter list: one static filter per filter consumer. This is
+ *                   to avoid filter collisions later. Add new filters
+ *                   here!!
+ *
+ * Current filters:
+ *    1588 (0x88f7):         Filter 3
+ */
+#define IGB_ETQF_FILTER_1588   3
+
 #define IGB_N_EXTTS	2
 #define IGB_N_PEROUT	2
 #define IGB_N_SDP	4
 #define IGB_RETA_SIZE	128
+
+enum igb_filter_match_flags {
+	IGB_FILTER_FLAG_ETHER_TYPE  = 0x1,
+	IGB_FILTER_FLAG_VLAN_TCI  = 0x2,
+};
+
+#define IGB_MAX_RXNFC_FILTERS 16
+
+struct igb_nfc_input {
+	/* Byte layout in order, all values with MSB first:
+	* match_flags - 1 byte
+	* vlan_tci    - 2 bytes
+	* etype       - 2 bytes
+	*/
+	u8     match_flags;
+	__be16 vlan_tci;
+	__be16 etype;
+};
 
 /* board specific private data structure */
 struct igb_adapter {
@@ -463,6 +495,21 @@ struct igb_adapter {
 	int copper_tries;
 	struct e1000_info ei;
 	u16 eee_advert;
+
+	/* rxnfc support */
+	struct hlist_head nfc_filter_list;
+	unsigned int nfc_filter_count;
+	/* lock for nfc filter */
+	spinlock_t nfc_lock;
+	bool etype_bitmap[MAX_ETYPE_FILTER];
+};
+
+struct igb_nfc_filter {
+	struct hlist_node nfc_node;
+	struct igb_nfc_input filter;
+	u16 etype_reg_index;
+	u16 sw_idx;
+	u16 action;
 };
 
 #define IGB_FLAG_HAS_MSI		(1 << 0)
@@ -581,5 +628,10 @@ static inline struct netdev_queue *txring_txq(const struct igb_ring *tx_ring)
 {
 	return netdev_get_tx_queue(tx_ring->netdev, tx_ring->queue_index);
 }
+
+int igb_rxnfc_write_etype_filter(struct igb_adapter *adapter,
+				 struct igb_nfc_filter *input);
+int igb_rxnfc_write_vlan_prio_filter(struct igb_adapter *adapter,
+				     struct igb_nfc_filter *input);
 
 #endif /* _IGB_H_ */

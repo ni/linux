@@ -1019,4 +1019,10 @@
 #define E1000_RTTBCNRC_RF_INT_MASK	\
 	(E1000_RTTBCNRC_RF_DEC_MASK << E1000_RTTBCNRC_RF_INT_SHIFT)
 
+/* VLAN Priority Filter */
+#define E1000_RCTL_VLAN_FILTER_ENABLE     (0x1 << 18)
+#define E1000_VLAPQF_QUEUE_SEL(_n, q_idx) (q_idx << ((_n) * 4))
+#define E1000_VLAPQF_P_VALID(_n)          (0x1 << (3 + (_n) * 4))
+#define E1000_VLAPQF_QUEUE_MASK           0x03
+
 #endif

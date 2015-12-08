@@ -176,6 +176,9 @@ static int igb_ndo_get_vf_config(struct net_device *netdev, int vf,
 				 struct ifla_vf_info *ivi);
 static void igb_check_vf_rate_limit(struct igb_adapter *);
 
+static void igb_nfc_filter_exit(struct igb_adapter *adapter);
+static void igb_nfc_filter_restore(struct igb_adapter *adapter);
+
 #ifdef CONFIG_PCI_IOV
 static int igb_vf_configure(struct igb_adapter *adapter, int vf);
 static int igb_pci_enable_sriov(struct pci_dev *dev, int num_vfs);
@@ -1610,6 +1613,7 @@ static void igb_configure(struct igb_adapter *adapter)
 	igb_setup_mrqc(adapter);
 	igb_setup_rctl(adapter);
 
+	igb_nfc_filter_restore(adapter);
 	igb_configure_tx(adapter);
 	igb_configure_rx(adapter);
 
@@ -2967,6 +2971,8 @@ static int igb_sw_init(struct igb_adapter *adapter)
 	adapter->min_frame_size = ETH_ZLEN + ETH_FCS_LEN;
 
 	spin_lock_init(&adapter->stats64_lock);
+	spin_lock_init(&adapter->nfc_lock);
+
 #ifdef CONFIG_PCI_IOV
 	switch (hw->mac.type) {
 	case e1000_82576:
@@ -3149,6 +3155,8 @@ static int __igb_close(struct net_device *netdev, bool suspending)
 
 	igb_down(adapter);
 	igb_free_irq(adapter);
+
+	igb_nfc_filter_exit(adapter);
 
 	igb_free_all_tx_resources(adapter);
 	igb_free_all_rx_resources(adapter);
@@ -8095,4 +8103,37 @@ int igb_reinit_queues(struct igb_adapter *adapter)
 
 	return err;
 }
+
+static void igb_nfc_filter_exit(struct igb_adapter *adapter)
+{
+	struct hlist_node *node2;
+	struct igb_nfc_filter *filter;
+
+	spin_lock(&adapter->nfc_lock);
+
+	hlist_for_each_entry_safe(filter, node2,
+				  &adapter->nfc_filter_list, nfc_node) {
+		hlist_del(&filter->nfc_node);
+		kfree(filter);
+	}
+	adapter->nfc_filter_count = 0;
+
+	spin_unlock(&adapter->nfc_lock);
+}
+
+static void igb_nfc_filter_restore(struct igb_adapter *adapter)
+{
+	struct igb_nfc_filter *rule;
+
+	spin_lock(&adapter->nfc_lock);
+
+	hlist_for_each_entry(rule, &adapter->nfc_filter_list, nfc_node) {
+		if (rule->filter.etype != 0)
+			igb_rxnfc_write_etype_filter(adapter, rule);
+		if (rule->filter.vlan_tci != 0)
+			igb_rxnfc_write_vlan_prio_filter(adapter, rule);
+	}
+	spin_unlock(&adapter->nfc_lock);
+}
+
 /* igb_main.c */
