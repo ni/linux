@@ -237,6 +237,9 @@ enum ath6kl_hw_flags {
 /* AR6004 3.0 definitions */
 #define AR6004_HW_3_0_VERSION			0x31C809F8
 #define AR6004_HW_3_0_FW_DIR			"ath6k/AR6004/hw3.0"
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+#define AR6004_HW_3_0_OTP_FILE			"otp.bin"
+#endif
 #define AR6004_HW_3_0_FIRMWARE_FILE		"fw.ram.bin"
 #define AR6004_HW_3_0_TCMD_FIRMWARE_FILE	"utf.bin"
 #define AR6004_HW_3_0_UTF_FIRMWARE_FILE		"utf.bin"
