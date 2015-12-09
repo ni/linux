@@ -177,6 +177,9 @@ static const struct ath6kl_hw hw_list[] = {
 
 		.fw = {
 			.dir		= AR6004_HW_3_0_FW_DIR,
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+			.otp		= AR6004_HW_3_0_OTP_FILE,
+#endif
 			.fw		= AR6004_HW_3_0_FIRMWARE_FILE,
 			.tcmd	        = AR6004_HW_3_0_TCMD_FIRMWARE_FILE,
 			.utf		= AR6004_HW_3_0_UTF_FIRMWARE_FILE,
