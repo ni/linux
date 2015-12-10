@@ -368,6 +368,7 @@ enum igb_filter_match_flags {
 };
 
 #define IGB_MAX_RXNFC_FILTERS 16
+#define IGB_MAX_QAV_FRAME_SIZE 1536
 
 struct igb_nfc_input {
 	/* Byte layout in order, all values with MSB first:
@@ -502,6 +503,7 @@ struct igb_adapter {
 	/* lock for nfc filter */
 	spinlock_t nfc_lock;
 	bool etype_bitmap[MAX_ETYPE_FILTER];
+	bool qav_mode;
 };
 
 struct igb_nfc_filter {

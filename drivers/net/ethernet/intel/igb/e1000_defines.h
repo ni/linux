@@ -359,6 +359,7 @@
 #define MAX_JUMBO_FRAME_SIZE    0x3F00
 
 /* PBA constants */
+#define E1000_PBA_32K 0x0020
 #define E1000_PBA_34K 0x0022
 #define E1000_PBA_64K 0x0040    /* 64KB */
 
@@ -1024,5 +1025,25 @@
 #define E1000_VLAPQF_QUEUE_SEL(_n, q_idx) (q_idx << ((_n) * 4))
 #define E1000_VLAPQF_P_VALID(_n)          (0x1 << (3 + (_n) * 4))
 #define E1000_VLAPQF_QUEUE_MASK           0x03
+
+/* Queue mode, 0=strict, 1=SR mode */
+#define E1000_TQAVCC_QUEUEMODE         0x80000000
+/* Transmit mode, 0=legacy, 1=QAV */
+#define E1000_TQAVCTRL_TXMODE          0x00000001
+/* Report DMA time of tx packets */
+#define E1000_TQAVCTRL_1588_STAT_EN    0x00000004
+#define E1000_TQAVCTRL_DATA_FETCH_ARB  0x00000010 /* Data fetch arbitration */
+#define E1000_TQAVCTRL_DATA_TRAN_ARB   0x00000100 /* Data tx arbitration */
+#define E1000_TQAVCTRL_DATA_TRAN_TIM   0x00000200 /* Data launch time valid */
+/* Stall SP to guarantee SR */
+#define E1000_TQAVCTRL_SP_WAIT_SR      0x00000400
+#define E1000_TQAVCTRL_FETCH_TM_SHIFT  (16)
+
+#define E1000_TXPBSIZE_TX0PB_SHIFT    0
+#define E1000_TXPBSIZE_TX1PB_SHIFT    6
+#define E1000_TXPBSIZE_TX2PB_SHIFT    12
+#define E1000_TXPBSIZE_TX3PB_SHIFT    18
+
+#define E1000_DTXMXPKTSZ_DEFAULT      0x00000098
 
 #endif

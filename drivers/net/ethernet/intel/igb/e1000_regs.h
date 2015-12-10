@@ -137,6 +137,12 @@
 #define E1000_FCRTC	0x02170 /* Flow Control Rx high watermark */
 #define E1000_PCIEMISC	0x05BB8 /* PCIE misc config register */
 
+/* High credit registers where _n can be 0 or 1. */
+#define E1000_TQAVHC(_n)	(0x300C + 0x40 * (_n))
+/* QAV Tx mode control registers where _n can be 0 or 1. */
+#define E1000_TQAVCC(_n)	(0x3004 + 0x40 * (_n))
+#define E1000_TQAVCTRL	0x3570 /* Tx Qav Control registers */
+
 /* TX Rate Limit Registers */
 #define E1000_RTTDQSEL	0x3604 /* Tx Desc Plane Queue Select - WO */
 #define E1000_RTTBCNRM	0x3690 /* Tx BCN Rate-scheduler MMW */
@@ -203,6 +209,7 @@
 #define E1000_TDFT     0x03418  /* TX Data FIFO Tail - RW */
 #define E1000_TDFHS    0x03420  /* TX Data FIFO Head Saved - RW */
 #define E1000_TDFPC    0x03430  /* TX Data FIFO Packet Count - RW */
+#define E1000_DTXMXPKT 0x0355C  /* DMA TX Maximum Packet Size */
 #define E1000_DTXCTL   0x03590  /* DMA TX Control - RW */
 #define E1000_CRCERRS  0x04000  /* CRC Error Count - R/clr */
 #define E1000_ALGNERRC 0x04004  /* Alignment Error Count - R/clr */

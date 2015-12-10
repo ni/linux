@@ -179,6 +179,16 @@ static void igb_check_vf_rate_limit(struct igb_adapter *);
 static void igb_nfc_filter_exit(struct igb_adapter *adapter);
 static void igb_nfc_filter_restore(struct igb_adapter *adapter);
 
+static void igb_setup_qav_mode(struct igb_adapter *adapter);
+static void igb_setup_normal_mode(struct igb_adapter *adapter);
+static ssize_t igb_get_qav_mode(struct device *dev,
+				struct device_attribute *attr, char *buf);
+static ssize_t igb_set_qav_mode(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count);
+static DEVICE_ATTR(qav_mode, S_IRUGO | S_IWUSR,
+		   igb_get_qav_mode, igb_set_qav_mode);
+
 #ifdef CONFIG_PCI_IOV
 static int igb_vf_configure(struct igb_adapter *adapter, int vf);
 static int igb_pci_enable_sriov(struct pci_dev *dev, int num_vfs);
@@ -1609,6 +1619,11 @@ static void igb_configure(struct igb_adapter *adapter)
 
 	igb_restore_vlan(adapter);
 
+	if (adapter->qav_mode)
+		igb_setup_qav_mode(adapter);
+	else
+		igb_setup_normal_mode(adapter);
+
 	igb_setup_tctl(adapter);
 	igb_setup_mrqc(adapter);
 	igb_setup_rctl(adapter);
@@ -1883,8 +1898,10 @@ void igb_reset(struct igb_adapter *adapter)
 		pba = rd32(E1000_RXPBS);
 		pba &= E1000_RXPBS_SIZE_MASK_82576;
 		break;
-	case e1000_82575:
 	case e1000_i210:
+		pba = (adapter->qav_mode) ? E1000_PBA_32K : E1000_PBA_34K;
+		break;
+	case e1000_82575:
 	case e1000_i211:
 	default:
 		pba = E1000_PBA_34K;
@@ -2296,6 +2313,7 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	hw = &adapter->hw;
 	hw->back = adapter;
 	adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
+	adapter->qav_mode = false;
 
 	err = -EIO;
 	hw->hw_addr = pci_iomap(pdev, 0, 0);
@@ -2540,6 +2558,15 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;
+
+	if (hw->mac.type == e1000_i210) {
+		err = sysfs_create_file(&netdev->dev.kobj,
+					&dev_attr_qav_mode.attr);
+		if (err) {
+			netdev_err(netdev, "error creating sysfs file\n");
+			goto err_register;
+		}
+	}
 
 	/* carrier off reporting is important to ethtool even BEFORE open */
 	netif_carrier_off(netdev);
@@ -2822,6 +2849,9 @@ static void igb_remove(struct pci_dev *pdev)
 #ifdef CONFIG_PCI_IOV
 	igb_disable_sriov(pdev);
 #endif
+	if (hw->mac.type == e1000_i210)
+		sysfs_remove_file(&netdev->dev.kobj, &dev_attr_qav_mode.attr);
+
 
 	unregister_netdev(netdev);
 
@@ -2900,7 +2930,12 @@ static void igb_init_queue_configuration(struct igb_adapter *adapter)
 		break;
 	}
 
-	adapter->rss_queues = min_t(u32, max_rss_queues, num_online_cpus());
+	/* For QAV mode, always enable all queues */
+	if (adapter->qav_mode)
+		adapter->rss_queues = max_rss_queues;
+	else
+		adapter->rss_queues = min_t(u32, max_rss_queues,
+					    num_online_cpus());
 
 	igb_set_flag_queue_pairs(adapter, max_rss_queues);
 }
@@ -5169,6 +5204,9 @@ static int igb_change_mtu(struct net_device *netdev, int new_mtu)
 		dev_err(&pdev->dev, "Invalid MTU setting\n");
 		return -EINVAL;
 	}
+	/* For i210 Qav mode, the max frame is 1536 */
+	if (adapter->qav_mode && max_frame > IGB_MAX_QAV_FRAME_SIZE)
+		return -EINVAL;
 
 #define MAX_STD_JUMBO_FRAME_SIZE 9238
 	if (max_frame > MAX_STD_JUMBO_FRAME_SIZE) {
@@ -8134,6 +8172,144 @@ static void igb_nfc_filter_restore(struct igb_adapter *adapter)
 			igb_rxnfc_write_vlan_prio_filter(adapter, rule);
 	}
 	spin_unlock(&adapter->nfc_lock);
+}
+
+static void igb_setup_qav_mode(struct igb_adapter *adapter)
+{
+	struct e1000_hw *hw = &adapter->hw;
+	u32	tqavctrl;
+	u32	tqavcc0, tqavcc1;
+	u32	tqavhc0, tqavhc1;
+	u32	txpbsize;
+
+	/* reconfigure the tx packet buffer allocation */
+	txpbsize = (8);
+	txpbsize |= (8) << E1000_TXPBSIZE_TX1PB_SHIFT;
+	txpbsize |= (4) << E1000_TXPBSIZE_TX2PB_SHIFT;
+	txpbsize |= (4) << E1000_TXPBSIZE_TX3PB_SHIFT;
+
+	wr32(E1000_TXPBS, txpbsize);
+
+	/* In Qav mode, the maximum sized frames of 1536 bytes */
+	wr32(E1000_DTXMXPKT, IGB_MAX_QAV_FRAME_SIZE / 64);
+
+	/* The I210 implements 4 queues, up to two queues are dedicated
+	 * for stream reservation or priority, strict priority queuing
+	 * while SR queue are subjected to launch time policy
+	 */
+
+	tqavcc0 = E1000_TQAVCC_QUEUEMODE; /* no idle slope */
+	tqavcc1 = E1000_TQAVCC_QUEUEMODE; /* no idle slope */
+	tqavhc0 = 0xFFFFFFFF; /* unlimited credits */
+	tqavhc1 = 0xFFFFFFFF; /* unlimited credits */
+
+	wr32(E1000_TQAVCC(0), tqavcc0);
+	wr32(E1000_TQAVCC(1), tqavcc1);
+	wr32(E1000_TQAVHC(0), tqavhc0);
+	wr32(E1000_TQAVHC(1), tqavhc1);
+
+	tqavctrl = E1000_TQAVCTRL_TXMODE |
+			E1000_TQAVCTRL_DATA_FETCH_ARB |
+			E1000_TQAVCTRL_DATA_TRAN_TIM |
+			E1000_TQAVCTRL_SP_WAIT_SR;
+
+	/* Default to a 10 usec prefetch delta from launch time - time for
+	 * a 1500 byte rx frame to be received over the PCIe Gen1 x1 link.
+	 */
+	tqavctrl |= (10 << 5) << E1000_TQAVCTRL_FETCH_TM_SHIFT;
+
+	wr32(E1000_TQAVCTRL, tqavctrl);
+}
+
+static void igb_setup_normal_mode(struct igb_adapter *adapter)
+{
+	struct e1000_hw *hw = &adapter->hw;
+
+	wr32(E1000_TXPBS, I210_TXPBSIZE_DEFAULT);
+	wr32(E1000_DTXMXPKT, E1000_DTXMXPKTSZ_DEFAULT);
+	wr32(E1000_TQAVCTRL, 0);
+}
+
+static int igb_change_mode(struct igb_adapter *adapter, int request_mode)
+{
+	struct net_device *netdev;
+	int err = 0;
+	int current_mode;
+
+	if (!adapter) {
+		dev_err(&adapter->pdev->dev, "map to unbound device!\n");
+		return -ENOENT;
+	}
+
+	current_mode = adapter->qav_mode;
+
+	if (request_mode == current_mode)
+		return 0;
+
+	netdev = adapter->netdev;
+
+	rtnl_lock();
+
+	if (netif_running(netdev))
+		igb_close(netdev);
+	else
+		igb_reset(adapter);
+
+	igb_clear_interrupt_scheme(adapter);
+
+	adapter->qav_mode = request_mode;
+
+	igb_init_queue_configuration(adapter);
+
+	if (igb_init_interrupt_scheme(adapter, true)) {
+		dev_err(&adapter->pdev->dev,
+			"Unable to allocate memory for queues\n");
+		err = -ENOMEM;
+		goto err_out;
+	}
+
+	if (netif_running(netdev))
+		igb_open(netdev);
+
+	rtnl_unlock();
+
+	return err;
+err_out:
+	rtnl_unlock();
+	return err;
+}
+
+static ssize_t igb_get_qav_mode(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct net_device *netdev = to_net_dev(dev);
+	struct igb_adapter *adapter = netdev_priv(netdev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", adapter->qav_mode);
+}
+
+static ssize_t igb_set_qav_mode(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t len)
+{
+	struct net_device *netdev = to_net_dev(dev);
+	struct igb_adapter *adapter = netdev_priv(netdev);
+	int request_mode, err;
+
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
+	if (kstrtoint(buf, 0, &request_mode) < 0)
+		return -EINVAL;
+
+	if (request_mode != 0 && request_mode != 1)
+		return -EINVAL;
+
+	err = igb_change_mode(adapter, request_mode);
+	if (err)
+		return err;
+
+	return len;
 }
 
 /* igb_main.c */
