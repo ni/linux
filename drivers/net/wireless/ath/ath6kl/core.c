@@ -99,9 +99,13 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	if (!ret)
 		return -ENODEV;
 
+	ath6kl_info("Using region: %c%c\n",
+		    region[0],
+		    region[1]);
+
 	/* region code should be US or world */
 	if ((region[0] != 'U' && region[1] != 'S') &&
-	    (region[0] != 0 && region[1] != 0))
+	    (region[0] != '0' && region[1] != '0'))
 		return -EINVAL;
 #endif
 
@@ -238,10 +242,12 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	}
 
 #ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-	/* set region from DMI */
-	ret = ath6kl_wmi_set_regdomain_cmd(ar->wmi, region);
-	if (ret)
-		goto err_rxbuf_cleanup;
+	/* set region from DMI if not international */
+	if (!(region[0] == '0' && region[1] == '0')) {
+		ret = ath6kl_wmi_set_regdomain_cmd(ar->wmi, region);
+		if (ret)
+			goto err_rxbuf_cleanup;
+	}
 #endif
 
 	/* give our connected endpoints some buffers */
