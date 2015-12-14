@@ -1653,24 +1653,6 @@ static int macb_open(struct net_device *dev)
 	if (!bp->phy_dev)
 		return -EAGAIN;
 
-#ifdef CONFIG_MACB_DEVICE_POLL
-	err = device_poll_request_irq(&bp->device_poll);
-	if (!err) {
-		netdev_info(bp->dev, "polling mode is enabled\n");
-		goto done_irq;
-	} else
-		netdev_info(bp->dev, "polling mode is disabled, using interrupts\n");
-#endif
-
-	err = devm_request_irq(&bp->pdev->dev, dev->irq, macb_interrupt, 0,
-			dev->name, dev);
-	if (err) {
-		netdev_err(bp->dev, "Unable to request IRQ %d (error %d)\n",
-			dev->irq, err);
-		return err;
-	}
-
-done_irq:
 	/* RX buffers initialization */
 	macb_init_rx_buffer_size(bp, bufsz);
 
@@ -1684,6 +1666,25 @@ done_irq:
 	napi_enable(&bp->napi);
 
 	bp->macbgem_ops.mog_init_rings(bp);
+
+#ifdef CONFIG_MACB_DEVICE_POLL
+	err = device_poll_request_irq(&bp->device_poll);
+	if (!err) {
+		netdev_info(bp->dev, "polling mode is enabled\n");
+		goto done_irq;
+	} else
+		netdev_info(bp->dev, "polling mode is disabled, using interrupts\n");
+#endif
+
+	err = devm_request_irq(&bp->pdev->dev, dev->irq, macb_interrupt, 0,
+			       dev->name, dev);
+	if (err) {
+		netdev_err(bp->dev, "Unable to request IRQ %d (error %d)\n",
+			dev->irq, err);
+		return err;
+	}
+
+done_irq:
 	macb_init_hw(bp);
 
 	/* schedule a link state check */
