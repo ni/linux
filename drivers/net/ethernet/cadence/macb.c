@@ -1903,6 +1903,20 @@ static int macb_open(struct net_device *dev)
 	if (!bp->phy_dev)
 		return -EAGAIN;
 
+	/* RX buffers initialization */
+	macb_init_rx_buffer_size(bp, bufsz);
+
+	err = macb_alloc_consistent(bp);
+	if (err) {
+		netdev_err(dev, "Unable to allocate DMA memory (error %d)\n",
+			   err);
+		return err;
+	}
+
+	napi_enable(&bp->napi);
+
+	bp->macbgem_ops.mog_init_rings(bp);
+
 #ifdef CONFIG_MACB_DEVICE_POLL
 	err = device_poll_request_irq(&bp->device_poll);
 	if (!err) {
@@ -1923,19 +1937,6 @@ static int macb_open(struct net_device *dev)
 	}
 
 done_irq:
-	/* RX buffers initialization */
-	macb_init_rx_buffer_size(bp, bufsz);
-
-	err = macb_alloc_consistent(bp);
-	if (err) {
-		netdev_err(dev, "Unable to allocate DMA memory (error %d)\n",
-			   err);
-		return err;
-	}
-
-	napi_enable(&bp->napi);
-
-	bp->macbgem_ops.mog_init_rings(bp);
 	macb_init_hw(bp);
 
 	/* schedule a link state check */
