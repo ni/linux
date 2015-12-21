@@ -49,6 +49,7 @@ EXPORT_SYMBOL(phy_device_free);
 
 static void phy_device_release(struct device *dev)
 {
+	phy_led_triggers_unregister(to_phy_device(dev));
 	kfree(to_phy_device(dev));
 }
 
