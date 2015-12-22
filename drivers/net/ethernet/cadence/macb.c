@@ -408,32 +408,39 @@ static int macb_mii_probe(struct net_device *dev)
 	int ret;
 
 	if (bp->phy_node)
-		phydev = of_phy_find_device(bp->phy_node);
-	else
+		phydev = of_phy_connect(dev,
+					bp->phy_node,
+					&macb_handle_link_change,
+					0,
+					bp->phy_interface);
+	else {
 		/* No PHY node specified. Find the first PHY instead. */
 		phydev = phy_find_first(bp->mii_bus);
+
+		pdata = dev_get_platdata(&bp->pdev->dev);
+		if (pdata && gpio_is_valid(pdata->phy_irq_pin)) {
+			ret = devm_gpio_request(&bp->pdev->dev,
+						pdata->phy_irq_pin, "phy int");
+			if (!ret) {
+				phy_irq = gpio_to_irq(pdata->phy_irq_pin);
+				phydev->irq =
+					(phy_irq < 0) ? PHY_POLL : phy_irq;
+			}
+		}
+
+		/* attach the mac to the phy */
+		ret = phy_connect_direct(dev, phydev, &macb_handle_link_change,
+					 bp->phy_interface);
+		if (ret) {
+			netdev_err(dev, "Could not attach to PHY\n");
+			return ret;
+		}
+
+	}
 
 	if (!phydev) {
 		netdev_err(dev, "no PHY found\n");
 		return -ENXIO;
-	}
-
-	pdata = dev_get_platdata(&bp->pdev->dev);
-	if (pdata && gpio_is_valid(pdata->phy_irq_pin)) {
-		ret = devm_gpio_request(&bp->pdev->dev, pdata->phy_irq_pin,
-					"phy int");
-		if (!ret) {
-			phy_irq = gpio_to_irq(pdata->phy_irq_pin);
-			phydev->irq = (phy_irq < 0) ? PHY_POLL : phy_irq;
-		}
-	}
-
-	/* attach the mac to the phy */
-	ret = phy_connect_direct(dev, phydev, &macb_handle_link_change,
-				 bp->phy_interface);
-	if (ret) {
-		netdev_err(dev, "Could not attach to PHY\n");
-		return ret;
 	}
 
 	/* mask with MAC supported features */
