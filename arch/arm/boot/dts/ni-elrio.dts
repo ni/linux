@@ -1,10 +1,10 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 762F */
+/* NIDEVCODE 7885 */
 
 / {
-	model = "NI myRIO";
+	model = "NI ELVIS RIO CM";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba@0 {
@@ -21,20 +21,10 @@
 			 *                              "edge-both".
 			 */
 
-			/* GPIO15 (MIO15) */
-			gpio15-label     = "wake_interrupt";
-			gpio15-direction = "input";
-			gpio15-settings  = "level-low";
-
 			/* GPIO24 (MIO24) */
 			gpio24-label     = "wdt_interrupt";
 			gpio24-direction = "input";
 			gpio24-settings  = "edge-falling";
-
-			/* GPIO25 (MIO25) */
-			gpio25-label     = "wifi_btn_interrupt";
-			gpio25-direction = "input";
-			gpio25-settings  = "edge-falling";
 		};
 
 		i2c0: i2c@e0004000 {
@@ -46,52 +36,13 @@
 					};
 				};
 
-				switches {
-					wifi-switch {
-						interrupt-parent = <&gpio>;
-						interrupts = <25 0>;
-					};
-				};
-
 				leds {
 					status-1 {
 						label = "nilrt:status:yellow";
 						max-brightness = <0xFFFF>;
 					};
-					wifi-0 {
-						label = "nilrt:wifi:primary";
-					};
-					wifi-1 {
-						label = "nilrt:wifi:secondary";
-					};
 				};
 			};
-		};
-	};
-};
-
-&sdhci0 {
-	status = "okay";
-
-	/* We must force the SDHCI into test mode, so that it
-	 * always pretends to have a card present. This is to
-	 * work-around a hardware bug where TiWi WiFi does not
-	 * have its CD line connected correctly. */
-	force-sd-cd-test-mode = <1>;
-
-	non-removable = <1>;
-
-	wl12xx: wl12xx@0 {
-		compatible = "ti,wilink6";
-		interrupt-parent = <&gpio>;
-		interrupts = <15 0x4>;
-		clocks = <&refclock>;
-		clock-names = "refclock";
-
-		refclock: refclock {
-			compatible = "ti,wilink-clock";
-			#clock-cells = <0>;
-			clock-frequency = <38400000>;
 		};
 	};
 };
