@@ -90,8 +90,11 @@ struct e1000_info;
 #define LINK_TIMEOUT		100
 
 /* Time to wait after writing large amount of data to registers */
-#define E1000_WR_DELAY()		usleep_range(100, 150)
-#define E1000_WR_DELAY_RNG(val)		usleep_range(val*2, val*4)
+#ifdef CONFIG_E1000_DELAY
+#define E1000_WR_DELAY()		usleep_range(50,100)
+#else
+#define E1000_WR_DELAY()
+#endif
 
 /* Count for polling __E1000_RESET condition every 10-20msec.
  * Experimentation has shown the reset can take approximately 210msec.

@@ -224,7 +224,11 @@ struct e1000_rx_ring {
 #define E1000_CONTEXT_DESC(R, i)	E1000_GET_DESC(R, i, e1000_context_desc)
 
 /* Time to wait after writing large amount of data to registers */
-#define E1000_WR_DELAY_RNG(val)         usleep_range(val*2, val*4)
+#ifdef CONFIG_E1000_DELAY
+#define E1000_WR_DELAY()                usleep_range(50,100)
+#else
+#define E1000_WR_DELAY()
+#endif
 
 /* board specific private data structure */
 
