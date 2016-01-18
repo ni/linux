@@ -1113,11 +1113,14 @@ static int gic_init_bases(struct gic_chip_data *gic, int irq_start,
 		gic_irqs = 1020;
 	gic->gic_irqs = gic_irqs;
 
+#ifndef CONFIG_GIC_LEGACY_IRQDOMAIN
 	if (handle) {		/* DT/ACPI */
 		gic->domain = irq_domain_create_linear(handle, gic_irqs,
 						       &gic_irq_domain_hierarchy_ops,
 						       gic);
-	} else {		/* Legacy support */
+	} else		/* Legacy support */
+#endif
+	{
 		/*
 		 * For primary GICs, skip over SGIs.
 		 * For secondary GICs, skip over PPIs, too.

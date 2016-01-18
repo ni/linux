@@ -28,6 +28,14 @@ config ARM_GIC_V2M
 config GIC_NON_BANKED
 	bool
 
+config GIC_LEGACY_IRQDOMAIN
+	bool "GIC legacy irqdomains"
+	default n
+	help
+	  Use a legacy irqdomain rather than a linear one.  This
+	  fixes the virtual IRQ number to hardware number mapping,
+	  for drivers that depend on fixed IRQ numbers.
+
 config ARM_GIC_V3
 	bool
 	select IRQ_DOMAIN
