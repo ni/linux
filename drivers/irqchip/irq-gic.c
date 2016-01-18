@@ -945,11 +945,14 @@ void __init gic_init_bases(unsigned int gic_nr, int irq_start,
 		gic_irqs = 1020;
 	gic->gic_irqs = gic_irqs;
 
+#ifndef CONFIG_GIC_LEGACY_IRQDOMAIN
 	if (node) {		/* DT case */
 		gic->domain = irq_domain_add_linear(node, gic_irqs,
 						    &gic_irq_domain_hierarchy_ops,
 						    gic);
-	} else {		/* Non-DT case */
+	} else		/* Non-DT case */
+#endif
+	{
 		/*
 		 * For primary GICs, skip over SGIs.
 		 * For secondary GICs, skip over PPIs, too.
