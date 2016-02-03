@@ -150,8 +150,6 @@ out:
 
 static void __init zynq_timer_init(void)
 {
-	zynq_early_slcr_init();
-
 	zynq_clock_init();
 	of_clk_init(NULL);
 	clocksource_of_init();
@@ -187,6 +185,7 @@ static void __init zynq_map_io(void)
 static void __init zynq_irq_init(void)
 {
 	gic_set_irqchip_flags(IRQCHIP_SKIP_SET_WAKE | IRQCHIP_MASK_ON_SUSPEND);
+	zynq_early_slcr_init();
 	irqchip_init();
 }
 
