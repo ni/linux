@@ -160,6 +160,13 @@ static struct map_desc zynq_cortex_a9_scu_map __initdata = {
 	.type	= MT_DEVICE,
 };
 
+static struct map_desc pl353_space __initdata = {
+	.length		= SZ_16M,
+	.type		= MT_DEVICE,
+	.pfn		= __phys_to_pfn(0xE1000000),
+	.virtual	= 0xE1000000,
+};
+
 static void __init zynq_scu_map_io(void)
 {
 	unsigned long base;
@@ -171,6 +178,8 @@ static void __init zynq_scu_map_io(void)
 	iotable_init(&zynq_cortex_a9_scu_map, 1);
 	zynq_scu_base = (void __iomem *)base;
 	BUG_ON(!zynq_scu_base);
+
+	iotable_init(&pl353_space, 1);
 }
 
 /**
