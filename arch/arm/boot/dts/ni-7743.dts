@@ -1,8 +1,6 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 7743 */
-
 / {
 	model = "NI Sol";
 	compatible = "ni,zynq", "xlnx,zynq-7000";

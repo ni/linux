@@ -1,8 +1,6 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 77D4 */
-
 / {
 	model = "NI sbRIO-9637";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
