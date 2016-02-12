@@ -1,0 +1,8 @@
+/dts-v1/;
+/include/ "ni-793x.dtsi"
+
+/* NIDEVCODE 77B1 */
+
+/ {
+	model = "NI-7931";
+};
