@@ -1,8 +1,6 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 7885 */
-
 / {
 	model = "NI ELVIS RIO CM";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
