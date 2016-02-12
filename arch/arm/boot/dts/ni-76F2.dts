@@ -1,8 +1,6 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 76F2 */
-
 / {
 	model = "NI roboRIO";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
