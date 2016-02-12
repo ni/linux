@@ -906,17 +906,20 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	ni-7931.dtb \
 	ni-7932.dtb \
 	ni-7935.dtb \
-	ni-dosequis.dtb \
-	ni-elvisriocm.dtb \
-	ni-myrio.dtb \
-	ni-roborio.dtb \
-	ni-sbrio-9607.dtb \
-	ni-sbrio-9627.dtb \
-	ni-sbrio-9637.dtb \
-	ni-solbetter.dtb \
-	ni-solenetexp.dtb \
-	ni-solgood.dtb \
-	ni-tecate.dtb
+	ni-762F.dtb \
+	ni-76D6.dtb \
+	ni-76F2.dtb \
+	ni-7743.dtb \
+	ni-7744.dtb \
+	ni-774E.dtb \
+	ni-775E.dtb \
+	ni-77AC.dtb \
+	ni-77B1.dtb \
+	ni-77B2.dtb \
+	ni-77D4.dtb \
+	ni-77D5.dtb \
+	ni-77D6.dtb \
+	ni-7885.dtb
 dtb-$(CONFIG_MACH_ARMADA_370) += \
 	armada-370-db.dtb \
 	armada-370-dlink-dns327l.dtb \
