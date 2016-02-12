@@ -903,7 +903,9 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	zynq-zc706.dtb \
 	zynq-zed.dtb \
 	zynq-zybo.dtb \
-	ni-793x.dtb \
+	ni-7931.dtb \
+	ni-7932.dtb \
+	ni-7935.dtb \
 	ni-dosequis.dtb \
 	ni-elvisriocm.dtb \
 	ni-myrio.dtb \
