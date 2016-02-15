@@ -1,0 +1,6 @@
+/dts-v1/;
+/include/ "ni-solbetter.dtsi"
+
+/ {
+	model = "NI cRIO-9064";
+};
