@@ -1,0 +1,6 @@
+/dts-v1/;
+/include/ "ni-solenetexp.dtsi"
+
+/ {
+	model = "NI 9147";
+};
