@@ -909,6 +909,7 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	ni-762F.dtb \
 	ni-76D6.dtb \
 	ni-76F2.dtb \
+	ni-7740.dtb \
 	ni-7743.dtb \
 	ni-7744.dtb \
 	ni-774E.dtb \
