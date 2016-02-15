@@ -2,5 +2,5 @@
 /include/ "ni-793x.dtsi"
 
 / {
-	model = "NI-7931";
+	model = "NI 7931R";
 };
