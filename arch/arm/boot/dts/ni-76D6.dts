@@ -2,7 +2,7 @@
 /include/ "ni-zynq.dtsi"
 
 / {
-	model = "NI Dos Equis";
+	model = "NI cRIO-9068";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba@0 {
