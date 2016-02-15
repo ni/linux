@@ -1,0 +1,6 @@
+/dts-v1/;
+/include/ "ni-myrio.dtsi"
+
+/ {
+	model = "NI myRIO-1950";
+};
