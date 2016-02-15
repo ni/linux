@@ -2,7 +2,7 @@
 /include/ "ni-zynq.dtsi"
 
 / {
-	model = "NI Tecate";
+	model = "NI sbRIO-9651";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba@0 {
