@@ -12,6 +12,21 @@
 		spi1 = &spi1;
 	};
 
+	leds {
+		compatible = "gpio-leds";
+		wlan1 {
+			/* green */
+			label = "nilrt:wifi:primary";
+			gpios = <&gpio 55 0>;
+		};
+
+		wlan2 {
+			/* red */
+			label = "nilrt:wifi:secondary";
+			gpios = <&gpio 56 0>;
+		};
+	};
+
 	amba@0 {
 		adc: adc@f8007100 {
 			xlnx,channels {
