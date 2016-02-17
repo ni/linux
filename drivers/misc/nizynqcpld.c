@@ -981,7 +981,7 @@ static int nizynqcpld_watchdog_misc_open(struct inode *inode,
 	cpld->irq = irq_of_parse_and_map(boot_watchdog_node, 0);
 
 	return request_threaded_irq(cpld->irq, NULL, nizynqcpld_watchdog_irq,
-				    0, NIWATCHDOG_NAME, cpld);
+				    IRQF_ONESHOT, NIWATCHDOG_NAME, cpld);
 }
 
 static int nizynqcpld_watchdog_misc_release(struct inode *inode,
@@ -1385,8 +1385,8 @@ static int wifi_sw_open(struct input_dev *dev)
 	struct nizynqcpld *cpld =
 		container_of(wifi_sw, struct nizynqcpld, wifi_sw);
 
-	err = request_threaded_irq(wifi_sw->irq,
-				   NULL, wifi_sw_hnd, 0, "wifi_sw", wifi_sw);
+	err = request_threaded_irq(wifi_sw->irq, NULL, wifi_sw_hnd,
+				   IRQF_ONESHOT, "wifi_sw", wifi_sw);
 	if (err) {
 		dev_err(&cpld->client->dev,
 			"error %d registering irq handle for wifi_sw\n", err);
