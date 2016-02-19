@@ -300,8 +300,8 @@ static int niwatchdog_misc_open(struct inode *inode, struct file *file)
 		return -EBUSY;
 	}
 
-	return request_irq(niwatchdog->irq, niwatchdog_irq, 0,
-			   NIWATCHDOG_NAME, niwatchdog);
+	return request_threaded_irq(niwatchdog->irq, NULL, niwatchdog_irq,
+				    IRQF_ONESHOT, NIWATCHDOG_NAME, niwatchdog);
 }
 
 static int niwatchdog_misc_release(struct inode *inode, struct file *file)
