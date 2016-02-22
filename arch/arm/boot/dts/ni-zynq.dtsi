@@ -272,4 +272,6 @@
 &L2 {
 	prefetch-data = <1>;
 	prefetch-instr = <1>;
+	arm,dynamic-clock-gating = <0>;
+	arm,standby-mode = <0>;
 };
