@@ -169,6 +169,7 @@
 		reg = <0x0>;
 		/* Interrupt pin is connected from PL pin to FPGA IRQ 3 */
 		interrupts = <0 32 4>;
+		smsc,disable-energy-detect;
 	};
 };
 
