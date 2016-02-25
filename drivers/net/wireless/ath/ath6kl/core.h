@@ -67,6 +67,9 @@
 /* includes also the null byte */
 #define ATH6KL_FIRMWARE_MAGIC               "QCA-ATH6KL"
 
+/* Number of attempts at booting before giving up */
+#define ATH6KL_BOOT_ATTEMPT_MAX           3
+
 enum ath6kl_fw_ie_type {
 	ATH6KL_FW_IE_FW_VERSION = 0,
 	ATH6KL_FW_IE_TIMESTAMP = 1,
@@ -871,6 +874,9 @@ struct ath6kl {
 		u8 disc_timeout;
 	} debug;
 #endif /* CONFIG_ATH6KL_DEBUG */
+
+	/* Number of times we have attempted to boot the radio */
+	unsigned int boot_attempts;
 };
 
 static inline struct ath6kl *ath6kl_priv(struct net_device *dev)
