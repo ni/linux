@@ -23,6 +23,7 @@
 #include <linux/mmc/sdio_ids.h>
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/sd.h>
+#include <linux/pm_runtime.h>
 #include "hif.h"
 #include "hif-ops.h"
 #include "target.h"
@@ -504,12 +505,26 @@ static int ath6kl_sdio_power_on(struct ath6kl *ar)
 {
 	struct ath6kl_sdio *ar_sdio = ath6kl_sdio_priv(ar);
 	struct sdio_func *func = ar_sdio->func;
+	struct mmc_card *card = func->card;
 	int ret = 0;
 
 	if (!ar_sdio->is_disabled)
 		return 0;
 
 	ath6kl_dbg(ATH6KL_DBG_BOOT, "sdio power on\n");
+
+	ret = pm_runtime_get_sync(&func->dev);
+	if (ret) {
+		/* Runtime PM might be temporarily disabled, or the device
+		 * might have a positive reference counter. Make sure it is
+		 * really powered on.
+		 */
+		ret = mmc_power_restore_host(card->host);
+		if (ret < 0) {
+			pm_runtime_put_sync(&func->dev);
+			goto out;
+		}
+	}
 
 	sdio_claim_host(func);
 
@@ -543,6 +558,7 @@ out:
 static int ath6kl_sdio_power_off(struct ath6kl *ar)
 {
 	struct ath6kl_sdio *ar_sdio = ath6kl_sdio_priv(ar);
+	struct mmc_card *card = ar_sdio->func->card;
 	int ret;
 
 	if (ar_sdio->is_disabled)
@@ -558,8 +574,17 @@ static int ath6kl_sdio_power_off(struct ath6kl *ar)
 	if (ret)
 		return ret;
 
+	/* Power off the card manually in case it wasn't powered off above */
+	ret = mmc_power_save_host(card->host);
+	if (ret < 0)
+		goto out;
+
+	/* Let runtime PM know the card is powered off */
+	pm_runtime_put_sync(&ar_sdio->func->dev);
+
 	ar_sdio->is_disabled = true;
 
+out:
 	return ret;
 }
 
@@ -1391,6 +1416,8 @@ err_hif:
 static void ath6kl_sdio_remove(struct sdio_func *func)
 {
 	struct ath6kl_sdio *ar_sdio;
+	struct mmc_card *card = func->card;
+	int ret;
 
 	ath6kl_dbg(ATH6KL_DBG_BOOT,
 		   "sdio removed func %d vendor 0x%x device 0x%x\n",
@@ -1403,6 +1430,17 @@ static void ath6kl_sdio_remove(struct sdio_func *func)
 
 	ath6kl_core_cleanup(ar_sdio->ar);
 	ath6kl_core_destroy(ar_sdio->ar);
+
+	ret = pm_runtime_get_sync(&func->dev);
+	if (ret) {
+		/* Runtime PM might be disabled, or the device
+		 * might have a positive reference counter. Make sure it is
+		 * really powered on.
+		 */
+		ret = mmc_power_restore_host(card->host);
+		if (ret < 0)
+			ath6kl_err("Unable to restore power\n");
+	}
 
 	kfree(ar_sdio->dma_buffer);
 	kfree(ar_sdio);
