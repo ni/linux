@@ -875,6 +875,9 @@ struct ath6kl {
 		u8 disc_timeout;
 	} debug;
 #endif /* CONFIG_ATH6KL_DEBUG */
+
+	/* Number of times we have attempted to boot the radio */
+	unsigned int boot_attempts;
 };
 
 static inline struct ath6kl *ath6kl_priv(struct net_device *dev)
