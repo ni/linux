@@ -37,6 +37,7 @@ static unsigned int ath6kl_p2p;
 static unsigned int testmode;
 static unsigned int recovery_enable;
 static unsigned int heart_beat_poll;
+static unsigned int boot_attempts;
 
 module_param(debug_mask, uint, 0644);
 module_param(suspend_mode, uint, 0644);
@@ -46,9 +47,11 @@ module_param(ath6kl_p2p, uint, 0644);
 module_param(testmode, uint, 0644);
 module_param(recovery_enable, uint, 0644);
 module_param(heart_beat_poll, uint, 0644);
+module_param(boot_attempts, uint, 0644);
 MODULE_PARM_DESC(recovery_enable, "Enable recovery from firmware error");
 MODULE_PARM_DESC(heart_beat_poll,
 		 "Enable fw error detection periodic polling in msecs - Also set recovery_enable for this to be effective");
+MODULE_PARM_DESC(boot_attempts, "Number of times to retry booting the firmware");
 
 
 #define WLAN_REGION_ID 161
@@ -108,6 +111,8 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 		    region[0],
 		    region[1]);
 #endif
+
+	ar->boot_attempts = boot_attempts;
 
 	switch (htc_type) {
 	case ATH6KL_HTC_TYPE_MBOX:
@@ -250,10 +255,17 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	ath6kl_debug_init(ar);
 
 	ret = ath6kl_init_hw_start(ar);
-	if (ret) {
-		ath6kl_err("Failed to start hardware: %d\n", ret);
-		goto err_rxbuf_cleanup;
+	while (ret && ar->boot_attempts) {
+		ath6kl_err("Failed to start hardware: %d (retry %d)\n",
+			   ret,
+			   ar->boot_attempts);
+		ar->boot_attempts--;
+		ret = ath6kl_init_hw_start(ar);
 	}
+
+	if (ret)
+		/* Did not boot after several attempts */
+		goto err_rxbuf_cleanup;
 
 #ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
 	/* set region from DMI if it is US */
