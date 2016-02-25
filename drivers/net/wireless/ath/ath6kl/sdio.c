@@ -582,6 +582,19 @@ static int ath6kl_sdio_power_off(struct ath6kl *ar)
 	/* Let runtime PM know the card is powered off */
 	pm_runtime_put_sync(&ar_sdio->func->dev);
 
+	ath6kl_info("Resetting radio via CPLD\n");
+
+	/* WiFi Reset Enable */
+	outb(0x03, 0x232);
+	/* WiFi into Reset */
+	outb(0x01, 0x232);
+	/* Silex specs say to assert reset for 5 us, make it 10 to be sure */
+	usleep_range(10, 1000);
+	/* WiFi out of Reset */
+	outb(0x03, 0x232);
+	/* WiFi Reset Disable */
+	outb(0x02, 0x232);
+
 	ar_sdio->is_disabled = true;
 
 out:
