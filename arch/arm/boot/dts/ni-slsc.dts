@@ -9,7 +9,7 @@
 
 	aliases {
 		spi1  = &spiController1;
-		/*spi2  = &spiController2;*/ /*confilct irq, disabled temproarily*/
+		spi2  = &spiController2;
 		spi3  = &spiController3;
 		spi4  = &spiController4;
 		spi5  = &spiController5;
@@ -31,7 +31,7 @@
 			 *  gpioN-direction  "input" or "output".
 			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
 			 *							  or "low".
-			 *				   "input"  - specifies GPIO interrupt settings as
+			 *					 "input"  - specifies GPIO interrupt settings as
 			 *							  "none", "level-low", "level-high",
 			 *							  "edge-falling", "edge-rising", or
 			 *							  "edge-both".
@@ -105,7 +105,7 @@
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
 			reg = <0x80001000 0x1000>;
-			interrupts = <0 29 4>;
+			interrupts = <0 31 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
 			#address-cells = <1>;
@@ -121,7 +121,7 @@
 
 				partition@0 {
 					label = "slsc_slot1";
-					reg = <0x0 0x1000000>;
+					reg = <0x0 0x100000>;
 				};
 			};
 
@@ -133,76 +133,11 @@
 			};
 		};
 
-		/*confilct irq @0x80002000, disabled temproarily*/
-		/*
+
 		spiController2: spi@0x80002000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
 			reg = <0x80002000 0x1000>;
-			interrupts = <0 30 4>;
-			clock-names = "ref_clk", "pclk";
-			clocks = <&clkc 25>, <&clkc 34>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
-				reg = <0>;
-				spi-max-frequency = <5000000>;
-
-				partition@0 {
-					label = "slsc_slot2";
-					reg = <0x0 0x1000000>;
-				};
-			};
-
-
-			spidev@1 {
-				compatible = "rohm,dh2228fv";
-				spi-max-frequency = <1000000>;
-				reg = <1>;
-			};
-		};
-		*/
-
-		spiController3: spi@0x80003000 {
-			compatible = "cdns,spi-r1p6";
-			status = "okay";
-			reg = <0x80003000 0x1000>;
-			interrupts = <0 31 4>;
-			clock-names = "ref_clk", "pclk";
-			clocks = <&clkc 25>, <&clkc 34>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
-				reg = <0>;
-				spi-max-frequency = <5000000>;
-
-				partition@0 {
-					label = "slsc_slot3";
-					reg = <0x0 0x1000000>;
-				};
-			};
-
-
-			spidev@1 {
-				compatible = "rohm,dh2228fv";
-				spi-max-frequency = <1000000>;
-				reg = <1>;
-			};
-		};
-
-
-		spiController4: spi@0x80004000 {
-			compatible = "cdns,spi-r1p6";
-			status = "okay";
-			reg = <0x80004000 0x1000>;
 			interrupts = <0 32 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
@@ -217,24 +152,24 @@
 				spi-max-frequency = <5000000>;
 
 				partition@0 {
-					label = "slsc_slot4";
-					reg = <0x0 0x1000000>;
+					label = "slsc_slot2";
+					reg = <0x0 0x100000>;
 				};
 			};
 
 
 			spidev@1 {
-				compatible = "spidev";
+				compatible = "rohm,dh2228fv";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 			};
 		};
 
 
-		spiController5: spi@0x80005000 {
+		spiController3: spi@0x80003000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
-			reg = <0x80005000 0x1000>;
+			reg = <0x80003000 0x1000>;
 			interrupts = <0 33 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
@@ -249,23 +184,26 @@
 				spi-max-frequency = <5000000>;
 
 				partition@0 {
-					label = "slsc_slot5";
-					reg = <0x0 0x1000000>;
+					label = "slsc_slot3";
+					reg = <0x0 0x100000>;
 				};
 			};
 
 
 			spidev@1 {
-				compatible = "spidev";
+				
+				
+				
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 			};
 		};
 
-		spiController6: spi@0x80006000 {
+
+		spiController4: spi@0x80004000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
-			reg = <0x80006000 0x1000>;
+			reg = <0x80004000 0x1000>;
 			interrupts = <0 34 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
@@ -280,23 +218,24 @@
 				spi-max-frequency = <5000000>;
 
 				partition@0 {
-					label = "slsc_slot6";
-					reg = <0x0 0x1000000>;
+					label = "slsc_slot4";
+					reg = <0x0 0x100000>;
 				};
 			};
 
 
 			spidev@1 {
-				compatible = "spidev";
+				compatible = "rohm,dh2228fv";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 			};
 		};
 
-		spiController7: spi@0x80007000 {
+
+		spiController5: spi@0x80005000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
-			reg = <0x80007000 0x1000>;
+			reg = <0x80005000 0x1000>;
 			interrupts = <0 35 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
@@ -311,23 +250,23 @@
 				spi-max-frequency = <5000000>;
 
 				partition@0 {
-					label = "slsc_slot7";
-					reg = <0x0 0x1000000>;
+					label = "slsc_slot5";
+					reg = <0x0 0x100000>;
 				};
 			};
 
 
 			spidev@1 {
-				compatible = "spidev";
+				compatible = "rohm,dh2228fv";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 			};
 		};
 
-		spiController8: spi@0x80008000 {
+		spiController6: spi@0x80006000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
-			reg = <0x80008000 0x1000>;
+			reg = <0x80006000 0x1000>;
 			interrupts = <0 36 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
@@ -342,14 +281,76 @@
 				spi-max-frequency = <5000000>;
 
 				partition@0 {
-					label = "slsc_slot8";
-					reg = <0x0 0x1000000>;
+					label = "slsc_slot6";
+					reg = <0x0 0x100000>;
 				};
 			};
 
 
 			spidev@1 {
-				compatible = "spidev";
+				compatible = "rohm,dh2228fv";
+				spi-max-frequency = <1000000>;
+				reg = <1>;
+			};
+		};
+
+		spiController7: spi@0x80007000 {
+			compatible = "cdns,spi-r1p6";
+			status = "okay";
+			reg = <0x80007000 0x1000>;
+			interrupts = <0 37 4>;
+			clock-names = "ref_clk", "pclk";
+			clocks = <&clkc 25>, <&clkc 34>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			m25p80@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "m25p80","jedec,spi-nor";
+				reg = <0>;
+				spi-max-frequency = <5000000>;
+
+				partition@0 {
+					label = "slsc_slot7";
+					reg = <0x0 0x100000>;
+				};
+			};
+
+
+			spidev@1 {
+				compatible = "rohm,dh2228fv";
+				spi-max-frequency = <1000000>;
+				reg = <1>;
+			};
+		};
+
+		spiController8: spi@0x80008000 {
+			compatible = "cdns,spi-r1p6";
+			status = "okay";
+			reg = <0x80008000 0x1000>;
+			interrupts = <0 38 4>;
+			clock-names = "ref_clk", "pclk";
+			clocks = <&clkc 25>, <&clkc 34>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			m25p80@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "m25p80","jedec,spi-nor";
+				reg = <0>;
+				spi-max-frequency = <5000000>;
+
+				partition@0 {
+					label = "slsc_slot8";
+					reg = <0x0 0x100000>;
+				};
+			};
+
+
+			spidev@1 {
+				compatible = "rohm,dh2228fv";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 			};
@@ -359,69 +360,6 @@
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
 			reg = <0x80009000 0x1000>;
-			interrupts = <0 52 4>;
-			clock-names = "ref_clk", "pclk";
-			clocks = <&clkc 25>, <&clkc 34>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
-				reg = <0>;
-				spi-max-frequency = <5000000>;
-
-				partition@0 {
-					label = "slsc_slot9";
-					reg = <0x0 0x1000000>;
-				};
-			};
-
-
-			spidev@1 {
-				compatible = "spidev";
-				spi-max-frequency = <1000000>;
-				reg = <1>;
-			};
-		};
-
-		spiController10: spi@0x8000A000 {
-			compatible = "cdns,spi-r1p6";
-			status = "okay";
-			reg = <0x8000A000 0x1000>;
-			interrupts = <0 53 4>;
-			clock-names = "ref_clk", "pclk";
-			clocks = <&clkc 25>, <&clkc 34>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
-				reg = <0>;
-				spi-max-frequency = <5000000>;
-
-				partition@0 {
-					label = "slsc_slot10";
-					reg = <0x0 0x1000000>;
-				};
-			};
-
-
-			spidev@1 {
-				compatible = "spidev";
-				spi-max-frequency = <1000000>;
-				reg = <1>;
-			};
-		};
-
-
-		spiController11: spi@0x8000B000 {
-			compatible = "cdns,spi-r1p6";
-			status = "okay";
-			reg = <0x8000B000 0x1000>;
 			interrupts = <0 54 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
@@ -436,24 +374,23 @@
 				spi-max-frequency = <5000000>;
 
 				partition@0 {
-					label = "slsc_slot11";
-					reg = <0x0 0x1000000>;
+					label = "slsc_slot9";
+					reg = <0x0 0x100000>;
 				};
 			};
 
 
 			spidev@1 {
-				compatible = "spidev";
+				compatible = "rohm,dh2228fv";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 			};
 		};
 
-
-		spiController12: spi@0x8000C000 {
+		spiController10: spi@0x8000A000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
-			reg = <0x8000C000 0x1000>;
+			reg = <0x8000A000 0x1000>;
 			interrupts = <0 55 4>;
 			clock-names = "ref_clk", "pclk";
 			clocks = <&clkc 25>, <&clkc 34>;
@@ -468,14 +405,78 @@
 				spi-max-frequency = <5000000>;
 
 				partition@0 {
-					label = "slsc_slot12";
-					reg = <0x0 0x1000000>;
+					label = "slsc_slot10";
+					reg = <0x0 0x100000>;
 				};
 			};
 
 
 			spidev@1 {
-				compatible = "spidev";
+				compatible = "rohm,dh2228fv";
+				spi-max-frequency = <1000000>;
+				reg = <1>;
+			};
+		};
+
+
+		spiController11: spi@0x8000B000 {
+			compatible = "cdns,spi-r1p6";
+			status = "okay";
+			reg = <0x8000B000 0x1000>;
+			interrupts = <0 56 4>;
+			clock-names = "ref_clk", "pclk";
+			clocks = <&clkc 25>, <&clkc 34>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			m25p80@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "m25p80","jedec,spi-nor";
+				reg = <0>;
+				spi-max-frequency = <5000000>;
+
+				partition@0 {
+					label = "slsc_slot11";
+					reg = <0x0 0x100000>;
+				};
+			};
+
+
+			spidev@1 {
+				compatible = "rohm,dh2228fv";
+				spi-max-frequency = <1000000>;
+				reg = <1>;
+			};
+		};
+
+
+		spiController12: spi@0x8000C000 {
+			compatible = "cdns,spi-r1p6";
+			status = "okay";
+			reg = <0x8000C000 0x1000>;
+			interrupts = <0 57 4>;
+			clock-names = "ref_clk", "pclk";
+			clocks = <&clkc 25>, <&clkc 34>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			m25p80@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "m25p80","jedec,spi-nor";
+				reg = <0>;
+				spi-max-frequency = <5000000>;
+
+				partition@0 {
+					label = "slsc_slot12";
+					reg = <0x0 0x100000>;
+				};
+			};
+
+
+			spidev@1 {
+				compatible = "rohm,dh2228fv";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 			};
