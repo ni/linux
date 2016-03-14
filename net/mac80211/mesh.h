@@ -51,10 +51,6 @@ enum mesh_path_flags {
  *
  *
  * @MESH_WORK_HOUSEKEEPING: run the periodic mesh housekeeping tasks
- * @MESH_WORK_GROW_MPATH_TABLE: the mesh path table is full and needs
- * to grow.
- * @MESH_WORK_GROW_MPP_TABLE: the mesh portals table is full and needs to
- * grow
  * @MESH_WORK_ROOT: the mesh root station needs to send a frame
  * @MESH_WORK_DRIFT_ADJUST: time to compensate for clock drift relative to other
  * mesh nodes
@@ -62,8 +58,6 @@ enum mesh_path_flags {
  */
 enum mesh_deferred_task_flags {
 	MESH_WORK_HOUSEKEEPING,
-	MESH_WORK_GROW_MPATH_TABLE,
-	MESH_WORK_GROW_MPP_TABLE,
 	MESH_WORK_ROOT,
 	MESH_WORK_DRIFT_ADJUST,
 	MESH_WORK_MBSS_CHANGED,
@@ -105,6 +99,8 @@ enum mesh_deferred_task_flags {
 struct mesh_path {
 	u8 dst[ETH_ALEN];
 	u8 mpp[ETH_ALEN];	/* used for MPP or MAP */
+	struct rhash_head rhash;
+	struct hlist_node gate_list;
 	struct ieee80211_sub_if_data *sdata;
 	struct sta_info __rcu *next_hop;
 	struct timer_list timer;
@@ -128,34 +124,17 @@ struct mesh_path {
 /**
  * struct mesh_table
  *
- * @hash_buckets: array of hash buckets of the table
- * @hashwlock: array of locks to protect write operations, one per bucket
- * @hash_mask: 2^size_order - 1, used to compute hash idx
- * @hash_rnd: random value used for hash computations
  * @entries: number of entries in the table
- * @free_node: function to free nodes of the table
- * @copy_node: function to copy nodes of the table
- * @size_order: determines size of the table, there will be 2^size_order hash
- *	buckets
  * @known_gates: list of known mesh gates and their mpaths by the station. The
  * gate's mpath may or may not be resolved and active.
- *
- * rcu_head: RCU head to free the table
+ * @rhash: the rhashtable containing struct mesh_paths, keyed by dest addr
  */
 struct mesh_table {
-	/* Number of buckets will be 2^N */
-	struct hlist_head *hash_buckets;
-	spinlock_t *hashwlock;		/* One per bucket, for add/del */
-	unsigned int hash_mask;		/* (2^size_order) - 1 */
-	__u32 hash_rnd;			/* Used for hash generation */
 	atomic_t entries;		/* Up to MAX_MESH_NEIGHBOURS */
-	void (*free_node) (struct hlist_node *p, bool free_leafs);
-	int (*copy_node) (struct hlist_node *p, struct mesh_table *newtbl);
-	int size_order;
 	struct hlist_head *known_gates;
 	spinlock_t gates_lock;
 
-	struct rcu_head rcu_head;
+	struct rhashtable rhead;
 };
 
 /* Recent multicast cache */
@@ -299,9 +278,6 @@ void mesh_rx_plink_frame(struct ieee80211_sub_if_data *sdata,
 void mesh_sta_cleanup(struct sta_info *sta);
 
 /* Private interfaces */
-/* Mesh tables */
-void mesh_mpath_table_grow(void);
-void mesh_mpp_table_grow(void);
 /* Mesh paths */
 int mesh_path_error_tx(struct ieee80211_sub_if_data *sdata,
 		       u8 ttl, const u8 *target, u32 target_sn,
@@ -309,8 +285,8 @@ int mesh_path_error_tx(struct ieee80211_sub_if_data *sdata,
 void mesh_path_assign_nexthop(struct mesh_path *mpath, struct sta_info *sta);
 void mesh_path_flush_pending(struct mesh_path *mpath);
 void mesh_path_tx_pending(struct mesh_path *mpath);
-int mesh_pathtbl_init(void);
-void mesh_pathtbl_unregister(void);
+int mesh_pathtbl_init(struct ieee80211_sub_if_data *sdata);
+void mesh_pathtbl_unregister(struct ieee80211_sub_if_data *sdata);
 int mesh_path_del(struct ieee80211_sub_if_data *sdata, const u8 *addr);
 void mesh_path_timer(unsigned long data);
 void mesh_path_flush_by_nexthop(struct sta_info *sta);
@@ -319,8 +295,6 @@ void mesh_path_discard_frame(struct ieee80211_sub_if_data *sdata,
 void mesh_path_tx_root_frame(struct ieee80211_sub_if_data *sdata);
 
 bool mesh_action_is_path_sel(struct ieee80211_mgmt *mgmt);
-extern int mesh_paths_generation;
-extern int mpp_paths_generation;
 
 #ifdef CONFIG_MAC80211_MESH
 static inline
