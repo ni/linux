@@ -32,7 +32,7 @@
 				watchdogs {
 					boot-watchdog {
 						interrupt-parent = <&gpio>;
-						interrupts = <24 0>;
+						interrupts = <24 2 /* IRQ_TYPE_EDGE_FALLING */>;
 					};
 				};
 
