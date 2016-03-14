@@ -13,6 +13,7 @@
 #include <net/netns/generic.h>
 #include <net/rtnetlink.h>
 #include <net/lwtunnel.h>
+#include <net/dst_cache.h>
 
 #if IS_ENABLED(CONFIG_IPV6)
 #include <net/ipv6.h>
@@ -57,6 +58,9 @@ struct ip_tunnel_key {
 
 struct ip_tunnel_info {
 	struct ip_tunnel_key	key;
+#ifdef CONFIG_DST_CACHE
+	struct dst_cache	dst_cache;
+#endif
 	u8			options_len;
 	u8			mode;
 };
@@ -85,11 +89,6 @@ struct ip_tunnel_prl_entry {
 	struct rcu_head			rcu_head;
 };
 
-struct ip_tunnel_dst {
-	struct dst_entry __rcu 		*dst;
-	__be32				 saddr;
-};
-
 struct metadata_dst;
 
 struct ip_tunnel {
@@ -108,7 +107,7 @@ struct ip_tunnel {
 	int		tun_hlen;	/* Precalculated header length */
 	int		mlink;
 
-	struct ip_tunnel_dst __percpu *dst_cache;
+	struct dst_cache dst_cache;
 
 	struct ip_tunnel_parm parms;
 
@@ -248,7 +247,6 @@ int ip_tunnel_changelink(struct net_device *dev, struct nlattr *tb[],
 int ip_tunnel_newlink(struct net_device *dev, struct nlattr *tb[],
 		      struct ip_tunnel_parm *p);
 void ip_tunnel_setup(struct net_device *dev, int net_id);
-void ip_tunnel_dst_reset_all(struct ip_tunnel *t);
 int ip_tunnel_encap_setup(struct ip_tunnel *t,
 			  struct ip_tunnel_encap *ipencap);
 
@@ -273,15 +271,15 @@ static inline u8 ip_tunnel_ecn_encap(u8 tos, const struct iphdr *iph,
 	return INET_ECN_encapsulate(tos, inner);
 }
 
-int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
+int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto,
+			 bool xnet);
 void iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 		   __be32 src, __be32 dst, u8 proto,
 		   u8 tos, u8 ttl, __be16 df, bool xnet);
 struct metadata_dst *iptunnel_metadata_reply(struct metadata_dst *md,
 					     gfp_t flags);
 
-struct sk_buff *iptunnel_handle_offloads(struct sk_buff *skb, bool gre_csum,
-					 int gso_type_mask);
+struct sk_buff *iptunnel_handle_offloads(struct sk_buff *skb, int gso_type_mask);
 
 static inline void iptunnel_xmit_stats(struct net_device *dev, int pkt_len)
 {
