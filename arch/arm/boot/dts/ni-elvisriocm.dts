@@ -8,25 +8,6 @@
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
 	amba@0 {
-		gpio: gpio@e000a000 {
-			/* You can specify GPIO settings here:
-			 *
-			 *  gpioN-label      String label.
-			 *  gpioN-direction  "input" or "output".
-			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
-			 *                              or "low".
-			 *                   "input"  - specifies GPIO interrupt settings as
-			 *                              "none", "level-low", "level-high",
-			 *                              "edge-falling", "edge-rising", or
-			 *                              "edge-both".
-			 */
-
-			/* GPIO24 (MIO24) */
-			gpio24-label     = "wdt_interrupt";
-			gpio24-direction = "input";
-			gpio24-settings  = "edge-falling";
-		};
-
 		i2c0: i2c@e0004000 {
 			nicpld@40 {
 				watchdogs {
