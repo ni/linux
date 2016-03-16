@@ -94,6 +94,7 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	int ret = 0, i;
 
 #ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+	char *region_board_file = NULL;
 	/* get region code from DMI */
 	dmi_walk(find_region_type, &ret);
 	if (!ret)
@@ -159,6 +160,18 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 
 	ar->testmode = testmode;
 
+#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+	/*
+	 * ath6kl_init_hw_params() will set the board file name, but we want
+	 * to override it with a region specific board file here.
+	 */
+	region_board_file = devm_kzalloc(ar->dev, 64, GFP_KERNEL);
+
+	snprintf(region_board_file, 64, AR6004_HW_3_0_FW_DIR "/bdata%c%c.bin",
+		 region[0], region[1]);
+
+	ar->hw.fw_board = region_board_file;
+#endif
 	ret = ath6kl_init_fetch_firmwares(ar);
 	if (ret)
 		goto err_htc_cleanup;
