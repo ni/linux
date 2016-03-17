@@ -22,6 +22,7 @@
 #include <linux/export.h>
 #include <linux/vmalloc.h>
 #include <linux/dmi.h>
+#include <linux/ctype.h>
 
 #include "debug.h"
 #include "hif-ops.h"
@@ -100,14 +101,12 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	if (!ret)
 		return -ENODEV;
 
+	if(!isascii(region[0]) || !isascii(region[1]))
+		return -EINVAL;
+
 	ath6kl_info("Using region: %c%c\n",
 		    region[0],
 		    region[1]);
-
-	/* region code should be US or world */
-	if ((region[0] != 'U' && region[1] != 'S') &&
-	    (region[0] != '0' && region[1] != '0'))
-		return -EINVAL;
 #endif
 
 	switch (htc_type) {
@@ -255,8 +254,8 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	}
 
 #ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-	/* set region from DMI if not international */
-	if (!(region[0] == '0' && region[1] == '0')) {
+	/* set region from DMI if it is US */
+	if (region[0] == 'U' && region[1] == 'S') {
 		ret = ath6kl_wmi_set_regdomain_cmd(ar->wmi, region);
 		if (ret)
 			goto err_rxbuf_cleanup;
