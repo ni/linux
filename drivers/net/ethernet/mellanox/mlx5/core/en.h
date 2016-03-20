@@ -280,7 +280,6 @@ struct mlx5e_sq_stats {
 	u64 tso_inner_packets;
 	u64 tso_inner_bytes;
 	u64 csum_offload_inner;
-	u64 nop;
 	/* less likely accessed in data path */
 	u64 csum_offload_none;
 	u64 stopped;
