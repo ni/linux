@@ -1461,6 +1461,14 @@ struct htt_tx_mode_switch_ind {
 	struct htt_tx_mode_switch_record records[0];
 } __packed;
 
+struct htt_channel_change {
+	u8 pad[3];
+	__le32 freq;
+	__le32 center_freq1;
+	__le32 center_freq2;
+	__le32 phymode;
+} __packed;
+
 union htt_rx_pn_t {
 	/* WEP: 24-bit PN */
 	u32 pn24;
@@ -1511,6 +1519,7 @@ struct htt_resp {
 		struct htt_tx_fetch_ind tx_fetch_ind;
 		struct htt_tx_fetch_confirm tx_fetch_confirm;
 		struct htt_tx_mode_switch_ind tx_mode_switch_ind;
+		struct htt_channel_change chan_change;
 	};
 } __packed;
 
@@ -1652,6 +1661,7 @@ struct ath10k_htt {
 	struct sk_buff_head tx_compl_q;
 	struct sk_buff_head rx_compl_q;
 	struct sk_buff_head rx_in_ord_compl_q;
+	struct sk_buff_head tx_fetch_ind_q;
 
 	/* rx_status template */
 	struct ieee80211_rx_status rx_status;
@@ -1667,10 +1677,13 @@ struct ath10k_htt {
 	} txbuf;
 
 	struct {
+		bool enabled;
 		struct htt_q_state *vaddr;
 		dma_addr_t paddr;
+		u16 num_push_allowed;
 		u16 num_peers;
 		u16 num_tids;
+		enum htt_tx_mode_switch_mode mode;
 		enum htt_q_depth_type type;
 	} tx_q_state;
 };
@@ -1752,8 +1765,23 @@ int ath10k_htt_h2t_aggr_cfg_msg(struct ath10k_htt *htt,
 				u8 max_subfrms_ampdu,
 				u8 max_subfrms_amsdu);
 void ath10k_htt_hif_tx_complete(struct ath10k *ar, struct sk_buff *skb);
+int ath10k_htt_tx_fetch_resp(struct ath10k *ar,
+			     __le32 token,
+			     __le16 fetch_seq_num,
+			     struct htt_tx_fetch_record *records,
+			     size_t num_records);
 
-void __ath10k_htt_tx_dec_pending(struct ath10k_htt *htt, bool limit_mgmt_desc);
+void ath10k_htt_tx_txq_update(struct ieee80211_hw *hw,
+			      struct ieee80211_txq *txq);
+void ath10k_htt_tx_txq_recalc(struct ieee80211_hw *hw,
+			      struct ieee80211_txq *txq);
+void ath10k_htt_tx_txq_sync(struct ath10k *ar);
+void ath10k_htt_tx_dec_pending(struct ath10k_htt *htt);
+int ath10k_htt_tx_inc_pending(struct ath10k_htt *htt);
+void ath10k_htt_tx_mgmt_dec_pending(struct ath10k_htt *htt);
+int ath10k_htt_tx_mgmt_inc_pending(struct ath10k_htt *htt, bool is_mgmt,
+				   bool is_presp);
+
 int ath10k_htt_tx_alloc_msdu_id(struct ath10k_htt *htt, struct sk_buff *skb);
 void ath10k_htt_tx_free_msdu_id(struct ath10k_htt *htt, u16 msdu_id);
 int ath10k_htt_mgmt_tx(struct ath10k_htt *htt, struct sk_buff *);
