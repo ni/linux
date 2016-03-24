@@ -6,7 +6,7 @@
 # Options selectable by arch Kconfig
 
 # Watchdog function for clocksources to detect instabilities
-config CLOCKSOURCE_WATCHDOG
+config HAVE_CLOCKSOURCE_WATCHDOG
 	bool
 
 # Architecture has extra clocksource data
@@ -208,6 +208,16 @@ config CLOCKSOURCE_WATCHDOG_MAX_SKEW_US
 	  interval and NTP's maximum frequency drift of 500 parts
 	  per million.	If the clocksource is good enough for NTP,
 	  it is good enough for the clocksource watchdog!
+
+config CLOCKSOURCE_WATCHDOG
+	bool "Clocksource watchdog"
+	depends on HAVE_CLOCKSOURCE_WATCHDOG
+	default y
+	help
+	  This option enables the watchdog function for clocksources. It is
+	  used to detect instabilities in the currently selected clocksource.
+
+	  Say Y if you are unsure.
 
 endmenu
 endif
