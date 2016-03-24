@@ -6,7 +6,7 @@
 # Options selectable by arch Kconfig
 
 # Watchdog function for clocksources to detect instabilities
-config CLOCKSOURCE_WATCHDOG
+config HAVE_CLOCKSOURCE_WATCHDOG
 	bool
 
 # Architecture has extra clocksource data
@@ -220,5 +220,15 @@ config POSIX_AUX_CLOCKS
 	  provide e.g. lockless time accessors to independent PTP clocks
 	  and other clock domains, which are not correlated to the TAI/NTP
 	  notion of time.
+
+config CLOCKSOURCE_WATCHDOG
+	bool "Clocksource watchdog"
+	depends on HAVE_CLOCKSOURCE_WATCHDOG
+	default y
+	help
+	  This option enables the watchdog function for clocksources. It is
+	  used to detect instabilities in the currently selected clocksource.
+
+	  Say Y if you are unsure.
 
 endmenu
