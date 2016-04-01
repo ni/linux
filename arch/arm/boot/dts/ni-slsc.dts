@@ -296,7 +296,7 @@
             compatible = "cdns,spi-r1p6";
             status = "okay";
             reg = <0x80007000 0x1000>;
-            interrupts = <0 37 4>;
+            interrupts = <0 52 4>;
             clock-names = "ref_clk", "pclk";
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
@@ -327,7 +327,7 @@
             compatible = "cdns,spi-r1p6";
             status = "okay";
             reg = <0x80008000 0x1000>;
-            interrupts = <0 38 4>;
+            interrupts = <0 53 4>;
             clock-names = "ref_clk", "pclk";
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
