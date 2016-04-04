@@ -194,6 +194,8 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 			  ar->fw_capabilities);
 		__set_bit(ATH6KL_FW_CAPABILITY_RATETABLE_MCS15,
 			  ar->fw_capabilities);
+		__set_bit(ATH6KL_FW_CAPABILITY_SET_RSN_CAP,
+			  ar->fw_capabilities);
 #endif
 
 		if (ar->hw.id == AR6004_HW_1_3_VERSION)
