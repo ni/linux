@@ -646,6 +646,8 @@ enum wmi_cmd_id {
 
 /* Silex has this command at a different ID */
 #define WMI_SET_REGDOMAIN_SILEX_CMDID 0xf0b0
+#define WMI_SET_APPIE_SILEX_CMDID 0x3f
+#define WMI_SET_RSN_CAP_SILEX_CMDID 0xf082
 
 enum wmi_mgmt_frame_type {
 	WMI_FRAME_BEACON = 0,
