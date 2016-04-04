@@ -1623,6 +1623,7 @@ static const struct fw_capa_str_map {
 	{ ATH6KL_FW_CAPABILITY_MAP_LP_ENDPOINT, "map-lp-endpoint" },
 	{ ATH6KL_FW_CAPABILITY_RATETABLE_MCS15, "ratetable-mcs15" },
 	{ ATH6KL_FW_CAPABILITY_NO_IP_CHECKSUM, "no-ip-checksum" },
+	{ ATH6KL_FW_CAPABILITY_SET_RSN_CAP, "set-rsn-cap" },
 };
 
 static const char *ath6kl_init_get_fw_capa_name(unsigned int id)
