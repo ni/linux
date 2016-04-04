@@ -151,6 +151,9 @@ enum ath6kl_fw_capability {
 	/* firmare doesn't support IP checksumming */
 	ATH6KL_FW_CAPABILITY_NO_IP_CHECKSUM,
 
+	/* firmware supports setting RSN CAP directly */
+	ATH6KL_FW_CAPABILITY_SET_RSN_CAP,
+
 	/* this needs to be last */
 	ATH6KL_FW_CAPABILITY_MAX,
 };
