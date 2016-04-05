@@ -31,12 +31,6 @@
 						label = "nilrt:status:yellow";
 						max-brightness = <0xFFFF>;
 					};
-					wifi-0 {
-						label = "nilrt:wifi:primary";
-					};
-					wifi-1 {
-						label = "nilrt:wifi:secondary";
-					};
 					eth0-0 {
 						label = "nilrt:eth0:green";
 						linux,default-trigger =
