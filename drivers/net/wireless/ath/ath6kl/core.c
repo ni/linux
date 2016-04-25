@@ -142,6 +142,15 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	 * seconds.
 	 */
 	ret = ath6kl_hif_power_on(ar);
+	while (ret && ar->boot_attempts) {
+		ath6kl_err("Failed to turn on hardware: %d (retry %d)\n",
+			   ret,
+			   ar->boot_attempts);
+		ar->boot_attempts--;
+		ret = ath6kl_hif_power_off(ar);
+		ret = ath6kl_hif_power_on(ar);
+	}
+
 	if (ret)
 		goto err_bmi_cleanup;
 
