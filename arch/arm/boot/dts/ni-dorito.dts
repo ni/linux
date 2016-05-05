@@ -1,0 +1,79 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/* NIDEVCODE 78BA */
+/* NIDEVCODE 78BB */
+/* NIDEVCODE 78BC */
+/* NIDEVCODE 78BD */
+/* NIDEVCODE 78BE */
+/* NIDEVCODE 78BF */
+/* NIDEVCODE 78C0 */
+/* NIDEVCODE 78C1 */
+/* NIDEVCODE 78C2 */
+/* NIDEVCODE 78C3 */
+/* NIDEVCODE 78C4 */
+/* NIDEVCODE 78C5 */
+
+/ {
+	model = "NI Dorito";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* Reset switch is on GPIO47 */
+		reset_sw@0 {
+			label = "reset_sw";
+			gpios = <&gpio 47 1 /* GPIO_ACTIVE_LOW */>;
+			linux,code = <408>; /* KEY_RESTART */
+			gpio-key,wakeup;
+		};
+	};
+};
+
+&gem0 {
+	status = "okay";
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	phy0: phy0@0 {
+		compatible = "marvell,88e1512";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt on GPIO1 */
+		interrupts = <1 8 /* IRQ_TYPE_LEVEL LOW */>;
+		interrupt-parent = <&gpio>;
+		/* Page 3, Reg 16, LED[2:0] Function Control */
+		leds = <0x1881>;
+	};
+};
+
+/* Dorito devices do not have anything connected via I2C */
+&i2c0 {
+	status = "disabled";
+};
+
+/* Umber UART connects to Zynq UART0 */
+&uart0 {
+	status = "okay";
+};
+
+/* Zynq UART connects to debug header */
+&uart1 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&watchdog0 {
+	status = "okay";
+	reset-on-timeout;
+};
