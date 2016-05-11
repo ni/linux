@@ -16,7 +16,6 @@
 #include <linux/sched.h>
 #include <linux/interrupt.h>
 #include <linux/spinlock.h>
-#include <linux/rwlock_types.h>
 #include <linux/types.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
