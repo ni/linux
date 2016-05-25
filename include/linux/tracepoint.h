@@ -33,6 +33,19 @@ struct trace_enum_map {
 
 #define TRACEPOINT_DEFAULT_PRIO	10
 
+/*
+ * The preempt count recorded in trace_event_raw_event_# are off by one due to
+ * rcu_read_lock_sched_notrace() in __DO_TRACE. This is corrected here.
+ */
+static inline int event_preempt_count(void)
+{
+#ifdef CONFIG_PREEMPT
+	return preempt_count() - 1;
+#else
+	return 0;
+#endif
+}
+
 extern int
 tracepoint_probe_register(struct tracepoint *tp, void *probe, void *data);
 extern int

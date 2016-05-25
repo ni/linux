@@ -245,7 +245,7 @@ void *trace_event_buffer_reserve(struct trace_event_buffer *fbuffer,
 		return NULL;
 
 	local_save_flags(fbuffer->flags);
-	fbuffer->pc = preempt_count();
+	fbuffer->pc = event_preempt_count();
 	fbuffer->trace_file = trace_file;
 
 	fbuffer->event =
