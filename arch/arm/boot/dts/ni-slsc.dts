@@ -19,7 +19,7 @@
         spi9  = &spiController9;
         spi10 = &spiController10;
         spi11 = &spiController11;
-        spi12 = &spiController12;       
+        spi12 = &spiController12;
     };
 
     amba@0 {
@@ -99,7 +99,7 @@
                 status = "okay";
             };
         };
-           
+
         spiController1: spi@0x80001000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -110,7 +110,7 @@
             #address-cells = <1>;
             #size-cells = <0>;
 
-               
+
             m25p80@0 {
                 #address-cells = <1>;
                 #size-cells = <1>;
@@ -124,14 +124,14 @@
                 };
             };
 
-            
+
             spidev@1 {
                 compatible ="rohm,dh2228fv"; /*spidev cannot be used directly*/
                 spi-max-frequency = <1000000>;
                 reg = <1>;
             };
         };
-        
+
 
         spiController2: spi@0x80002000 {
             compatible = "cdns,spi-r1p6";
@@ -142,7 +142,7 @@
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
             #size-cells = <0>;
-            
+
             m25p80@0 {
                 #address-cells = <1>;
                 #size-cells = <1>;
@@ -163,8 +163,8 @@
                 reg = <1>;
             };
         };
-        
- 
+
+
         spiController3: spi@0x80003000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -196,7 +196,7 @@
             };
         };
 
-              
+
         spiController4: spi@0x80004000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -228,7 +228,7 @@
             };
         };
 
-              
+
         spiController5: spi@0x80005000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -259,7 +259,7 @@
                 reg = <1>;
             };
         };
-                
+
         spiController6: spi@0x80006000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -331,7 +331,7 @@
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
             #size-cells = <0>;
-                           
+
             m25p80@0 {
                 #address-cells = <1>;
                 #size-cells = <1>;
@@ -344,7 +344,7 @@
                     reg = <0x0 0x100000>;
                 };
             };
-                        
+
 
             spidev@1 {
                 compatible = "rohm,dh2228fv";
@@ -352,7 +352,7 @@
                 reg = <1>;
             };
         };
-                 
+
         spiController9: spi@0x80009000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -362,7 +362,7 @@
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
             #size-cells = <0>;
-                           
+
             m25p80@0 {
                 #address-cells = <1>;
                 #size-cells = <1>;
@@ -375,7 +375,7 @@
                     reg = <0x0 0x100000>;
                 };
             };
-                        
+
 
             spidev@1 {
                 compatible = "rohm,dh2228fv";
@@ -383,7 +383,7 @@
                 reg = <1>;
             };
         };
-                
+
         spiController10: spi@0x8000A000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -393,7 +393,7 @@
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
             #size-cells = <0>;
-                           
+
             m25p80@0 {
                 #address-cells = <1>;
                 #size-cells = <1>;
@@ -406,7 +406,7 @@
                     reg = <0x0 0x100000>;
                 };
             };
-                        
+
 
             spidev@1 {
                 compatible = "rohm,dh2228fv";
@@ -414,8 +414,8 @@
                 reg = <1>;
             };
         };
-                
-                 
+
+
         spiController11: spi@0x8000B000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -425,7 +425,7 @@
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
             #size-cells = <0>;
-                           
+
             m25p80@0 {
                 #address-cells = <1>;
                 #size-cells = <1>;
@@ -438,7 +438,7 @@
                     reg = <0x0 0x100000>;
                 };
             };
-                        
+
 
             spidev@1 {
                 compatible = "rohm,dh2228fv";
@@ -447,7 +447,7 @@
             };
         };
 
-                    
+
         spiController12: spi@0x8000C000 {
             compatible = "cdns,spi-r1p6";
             status = "okay";
@@ -457,7 +457,7 @@
             clocks = <&clkc 25>, <&clkc 34>;
             #address-cells = <1>;
             #size-cells = <0>;
-                           
+
             m25p80@0 {
                 #address-cells = <1>;
                 #size-cells = <1>;
@@ -470,7 +470,7 @@
                     reg = <0x0 0x100000>;
                 };
             };
-                        
+
 
             spidev@1 {
                 compatible = "rohm,dh2228fv";
