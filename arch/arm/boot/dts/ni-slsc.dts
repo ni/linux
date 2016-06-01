@@ -1,10 +1,10 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 775E */
+/* NIDEVCODE 0x78AA */
 
 / {
-    model = "NI SLSC";
+    model = "NI SLSC-12001";
     compatible = "ni,zynq", "xlnx,zynq-7000";
 
     aliases {
