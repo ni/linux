@@ -1,7 +1,7 @@
 /dts-v1/;
 /include/ "ni-zynq.dtsi"
 
-/* NIDEVCODE 0x78AA */
+/* NIDEVCODE 78AA */
 
 / {
 	model = "NI SLSC-12001";
@@ -27,43 +27,43 @@
 		gpio: gpio@e000a000 {
 			/* You can specify GPIO settings here:
 			 *
-			 *  gpioN-label	  String label.
+			 *  gpioN-label      String label.
 			 *  gpioN-direction  "input" or "output".
 			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
-			 *							  or "low".
-			 *				   "input"  - specifies GPIO interrupt settings as
-			 *							  "none", "level-low", "level-high",
-			 *							  "edge-falling", "edge-rising", or
-			 *							  "edge-both".
+			 *                              or "low".
+			 *                   "input"  - specifies GPIO interrupt settings as
+			 *                              "none", "level-low", "level-high",
+			 *                              "edge-falling", "edge-rising", or
+			 *                              "edge-both".
 			 */
 
 			/* GPIO1 (MIO1) */
-			gpio1-label	 = "eth0_phy_interrupt";
+			gpio1-label     = "eth0_phy_interrupt";
 			gpio1-direction = "input";
 			gpio1-settings  = "level-low";
 
 			/* GPIO15 (MIO15) */
-			gpio15-label	 = "wdt_interrupt";
+			gpio15-label     = "wdt_interrupt";
 			gpio15-direction = "input";
 			gpio15-settings  = "edge-falling";
 
 			/* GPIO54 (EMIO0) */
-			gpio54-label	 = "eth0_link_speed";
+			gpio54-label     = "eth0_link_speed";
 			gpio54-direction = "output";
 			gpio54-settings  = "low";
 
 			/* GPIO55 (EMIO1) */
-			gpio55-label	 = "eth1_link_speed_1000";
+			gpio55-label     = "eth1_link_speed_1000";
 			gpio55-direction = "output";
 			gpio55-settings  = "low";
 
 			/* GPIO56 (EMIO2) */
-			gpio56-label	 = "eth1_link_speed_100";
+			gpio56-label     = "eth1_link_speed_100";
 			gpio56-direction = "output";
 			gpio56-settings  = "low";
 
 			/* GPIO57 (EMIO3) */
-			gpio57-label	 = "eth1_phy_interrupt";
+			gpio57-label     = "eth1_phy_interrupt";
 			gpio57-direction = "input";
 			gpio57-settings  = "level-low";
 		};
