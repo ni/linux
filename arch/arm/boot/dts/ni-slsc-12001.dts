@@ -480,7 +480,7 @@
 		};
 
 		slscfpga@80000000 {
-		   compatible = "generic-uio";
+		   compatible = "ni,slscfpga";
 		   reg = <0x80000000 0x30000>;
 		   interrupts = <0 29 0>;
 		};
