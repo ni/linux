@@ -359,7 +359,22 @@ static int macb_mii_probe(struct net_device *dev)
 					&macb_handle_link_change,
 					0,
 					bp->phy_interface);
-	else {
+	else if(of_phy_is_fixed_link(bp->pdev->dev.of_node)) {
+		ret = of_phy_register_fixed_link(bp->pdev->dev.of_node);
+
+		if (ret) {
+			netdev_err(dev, "Could not init fixed link\n");
+			return ret;
+		}
+
+		bp->phy_node = of_node_get(bp->pdev->dev.of_node);
+
+		phydev = of_phy_connect(dev,
+                                        bp->phy_node,
+                                        &macb_handle_link_change,
+                                        0,
+                                        bp->phy_interface);
+	} else {
 		/* No PHY node specified. Find the first PHY instead. */
 		phydev = phy_find_first(bp->mii_bus);
 
@@ -447,7 +462,7 @@ static int macb_mii_init(struct macb *bp)
 
 		/* fallback to standard phy registration if no phy were
 		   found during dt phy registration */
-		if (!err && !phy_find_first(bp->mii_bus)) {
+		if (!err && !of_phy_is_fixed_link(np) && !phy_find_first(bp->mii_bus)) {
 			for (i = 0; i < PHY_MAX_ADDR; i++) {
 				struct phy_device *phydev;
 
@@ -3001,7 +3016,7 @@ static int macb_probe(struct platform_device *pdev)
 		macb_get_hwaddr(bp);
 
 	bp->phy_node = of_parse_phandle(np, "phy-handle", 0);
-	if (!bp->phy_node) {
+	if (!bp->phy_node && !of_phy_is_fixed_link(np)) {
 		netdev_info(dev, "No phy-handle\n");
 		bp->phy_node = NULL;
 	}
