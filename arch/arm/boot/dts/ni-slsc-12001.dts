@@ -100,6 +100,16 @@
 			};
 		};
 
+		i2c1: i2c@e0005000 {
+			status = "okay";
+
+			ad7291_adc@2c {
+				compatible = "ad7291";
+				status = "okay";
+				reg = <0x2C>;
+			};
+		} ;
+
 		spiController1: spi@0x80001000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
