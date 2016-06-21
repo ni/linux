@@ -106,7 +106,6 @@ struct pl353_nand_command_format {
  */
 struct pl353_nand_info {
 	struct nand_chip chip;
-	struct mtd_info mtd;
 	struct mtd_partition *parts;
 	void __iomem *nand_base;
 	unsigned long end_cmd_pending;
@@ -719,7 +718,7 @@ static void pl353_nand_select_chip(struct mtd_info *mtd, int chip)
 		struct nand_chip *nand_chip;
 		unsigned long data_phase_addr;
 
-		nand_chip = (struct nand_chip *)mtd->priv;
+		nand_chip = mtd_to_nand(mtd);
 		data_phase_addr = (unsigned long __force)nand_chip->IO_ADDR_R;
 		data_phase_addr |= PL353_NAND_CLEAR_CS;
 		nand_chip->IO_ADDR_R = (void __iomem *__force)data_phase_addr;
@@ -739,10 +738,10 @@ static void pl353_nand_select_chip(struct mtd_info *mtd, int chip)
 static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 				 int column, int page_addr)
 {
-	struct nand_chip *chip = mtd->priv;
+	struct nand_chip *chip = mtd_to_nand(mtd);
 	const struct pl353_nand_command_format *curr_cmd = NULL;
 	struct pl353_nand_info *xnand =
-		container_of(mtd, struct pl353_nand_info, mtd);
+		container_of(mtd_to_nand(mtd), struct pl353_nand_info, chip);
 	void __iomem *cmd_addr;
 	unsigned long cmd_data = 0, end_cmd_valid = 0;
 	unsigned long cmd_phase_addr, data_phase_addr, end_cmd, i;
@@ -920,7 +919,7 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 static void pl353_nand_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
 {
 	int i;
-	struct nand_chip *chip = mtd->priv;
+	struct nand_chip *chip = mtd_to_nand(mtd);
 	unsigned long *ptr = (unsigned long *)buf;
 
 	len >>= 2;
@@ -938,7 +937,7 @@ static void pl353_nand_write_buf(struct mtd_info *mtd, const uint8_t *buf,
 				int len)
 {
 	int i;
-	struct nand_chip *chip = mtd->priv;
+	struct nand_chip *chip = mtd_to_nand(mtd);
 	unsigned long *ptr = (unsigned long *)buf;
 
 	len >>= 2;
@@ -972,7 +971,7 @@ static int pl353_nand_device_ready(struct mtd_info *mtd)
  */
 static int pl353_nand_detect_ondie_ecc(struct mtd_info *mtd)
 {
-	struct nand_chip *nand_chip = mtd->priv;
+	struct nand_chip *nand_chip = mtd_to_nand(mtd);
 	u8 maf_id, dev_id, i, get_feature;
 	u8 set_feature[4] = { 0x08, 0x00, 0x00, 0x00 };
 
@@ -1031,7 +1030,7 @@ static int pl353_nand_detect_ondie_ecc(struct mtd_info *mtd)
  */
 static void pl353_nand_ecc_init(struct mtd_info *mtd, int ondie_ecc_state)
 {
-	struct nand_chip *nand_chip = mtd->priv;
+	struct nand_chip *nand_chip = mtd_to_nand(mtd);
 
 	nand_chip->ecc.mode = NAND_ECC_HW;
 	nand_chip->ecc.read_oob = pl353_nand_read_oob;
@@ -1135,11 +1134,10 @@ static int pl353_nand_probe(struct platform_device *pdev)
 		return PTR_ERR(xnand->nand_base);
 
 	/* Link the private data with the MTD structure */
-	mtd = &xnand->mtd;
 	nand_chip = &xnand->chip;
+	mtd = &xnand->chip.mtd;
 
 	nand_chip->priv = xnand;
-	mtd->priv = nand_chip;
 	mtd->owner = THIS_MODULE;
 	mtd->name = PL353_NAND_DRIVER_NAME;
 
@@ -1224,7 +1222,7 @@ static int pl353_nand_probe(struct platform_device *pdev)
 		return -ENXIO;
 	}
 
-	mtd_device_parse_register(&xnand->mtd, NULL, NULL, NULL, 0);
+	mtd_device_parse_register(&xnand->chip.mtd, NULL, NULL, NULL, 0);
 
 	return 0;
 }
@@ -1243,7 +1241,7 @@ static int pl353_nand_remove(struct platform_device *pdev)
 	struct pl353_nand_info *xnand = platform_get_drvdata(pdev);
 
 	/* Release resources, unregister device */
-	nand_release(&xnand->mtd);
+	nand_release(&xnand->chip.mtd);
 	/* kfree(NULL) is safe */
 	kfree(xnand->parts);
 
