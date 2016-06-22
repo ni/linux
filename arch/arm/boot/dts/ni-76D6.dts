@@ -67,7 +67,7 @@
 	#size-cells = <0x0>;
 
 	phy0: phy@0 {
-		compatible = "marvell,88e1512";
+		compatible = "marvell,88e1512","ethernet-phy-ieee802.3-c22";
 		device_type = "ethernet-phy";
 		reg = <0x0>;
 		/* Interrupt on GPIO1, shared with phy1. */
@@ -79,7 +79,7 @@
 	};
 
 	phy1: phy@1 {
-		compatible = "marvell,88e1512";
+		compatible = "marvell,88e1512","ethernet-phy-ieee802.3-c22";
 		device_type = "ethernet-phy";
 		reg = <0x1>;
 		/* Interrupt on GPIO1, shared with phy0. */

@@ -162,7 +162,7 @@
 	#size-cells = <0x0>;
 
 	phy0: phy@0 {
-		compatible = "smsc,lan8720";
+		compatible = "smsc,lan8720","ethernet-phy-ieee802.3-c22";
 		device_type = "ethernet-phy";
 		reg = <0x0>;
 		/* Interrupt pin is connected from PL pin to FPGA IRQ 3 */
