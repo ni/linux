@@ -755,7 +755,7 @@ static void uv_heartbeat(unsigned long ignored)
 	uv_set_scir_bits(bits);
 
 	/* enable next timer period */
-	mod_timer_pinned(timer, jiffies + SCIR_CPU_HB_INTERVAL);
+	mod_timer(timer, jiffies + SCIR_CPU_HB_INTERVAL);
 }
 
 static void uv_heartbeat_enable(int cpu)
@@ -764,7 +764,7 @@ static void uv_heartbeat_enable(int cpu)
 		struct timer_list *timer = &uv_cpu_hub_info(cpu)->scir.timer;
 
 		uv_set_cpu_scir_bits(cpu, SCIR_CPU_HEARTBEAT|SCIR_CPU_ACTIVITY);
-		setup_timer(timer, uv_heartbeat, cpu);
+		setup_pinned_timer(timer, uv_heartbeat, cpu);
 		timer->expires = jiffies + SCIR_CPU_HB_INTERVAL;
 		add_timer_on(timer, cpu);
 		uv_cpu_hub_info(cpu)->scir.enabled = 1;
