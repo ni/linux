@@ -1494,7 +1494,11 @@ static int marvell_probe(struct phy_device *phydev)
 static int m88e151x_probe(struct phy_device *phydev)
 {
 	u32 led_timer_control;
-	int err;
+	int err, old_page;
+
+	old_page = phy_read(phydev, MII_MARVELL_PHY_PAGE);
+	if (old_page < 0)
+		return old_page;
 
 	/* Enable the interrupt output. This is just a pin configuration,
 	 * we're not actually enabling any interrupts here. But the default
@@ -1513,7 +1517,7 @@ static int m88e151x_probe(struct phy_device *phydev)
 	if (err < 0)
 		return err;
 
-	err = phy_write(phydev, MII_MARVELL_PHY_PAGE, 0);
+	err = phy_write(phydev, MII_MARVELL_PHY_PAGE, old_page);
 	if (err < 0)
 		return err;
 
