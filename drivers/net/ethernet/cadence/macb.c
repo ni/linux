@@ -70,6 +70,9 @@
  */
 #define MACB_HALT_TIMEOUT	1230
 
+#define MARVELL_DSA_ETYPE	0x9100
+#define PTP_ETYPE		0x88f7
+
 /* Ring buffer accessors */
 static unsigned int macb_tx_ring_wrap(unsigned int index)
 {
@@ -804,6 +807,32 @@ static void discard_partial_frame(struct macb *bp, unsigned int begin,
 	 */
 }
 
+#ifdef CONFIG_MACB_MARVELL_DEMUX
+/*
+ * This function is for using macb with a Marvell DSA switch
+ * such as the 88E6341. These switches prepend a DSA tag to all inbound PTP
+ * frames, and will set the etype of the inbound frame to the DSA tag type.
+ * To get traffic to the correct place, set the etype of tagged PTP frames to
+ * the PTP etype but leave the tag since usermode will take care of that.
+ */
+static void macb_marvell_demux(struct sk_buff *skb)
+{
+	unsigned short *inner_prot, *outer_prot;
+
+	if(skb->data_len != 0 || skb->len < 22)
+		return;
+
+	outer_prot = (unsigned short*)(skb->data + 12);
+	inner_prot = (unsigned short*)(skb->data + 20);
+
+	if(*outer_prot == __constant_htons(MARVELL_DSA_ETYPE) &&
+	   *inner_prot == __constant_htons(PTP_ETYPE))
+	{
+		*outer_prot = __constant_htons(PTP_ETYPE);
+	}
+}
+#endif
+
 static int gem_rx(struct macb *bp, int budget)
 {
 	unsigned int		len;
@@ -853,6 +882,10 @@ static int gem_rx(struct macb *bp, int budget)
 		addr = MACB_BF(RX_WADDR, MACB_BFEXT(RX_WADDR, addr));
 		dma_unmap_single(&bp->pdev->dev, addr,
 				 bp->rx_buffer_size, DMA_FROM_DEVICE);
+
+#ifdef CONFIG_MACB_MARVELL_DEMUX
+		macb_marvell_demux(skb);
+#endif
 
 		skb->protocol = eth_type_trans(skb, bp->dev);
 		skb_checksum_none_assert(skb);

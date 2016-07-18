@@ -44,4 +44,16 @@ config MACB_DEVICE_POLL
 
 		If unsure, say N.
 
+config MACB_MARVELL_DEMUX
+	bool "Cadence MACB Marvell switch PTP demux support"
+	default n
+	depends on MACB
+	---help---
+	  Say y if you have a Marvell switch using DSA tags attached to the
+	  macb hardware, and would like PTP to work.  The driver will demux DSA
+	  tagged PTP frames and send them to the network stack with the PTP
+	  ethertype and DSA header intact.
+
+	  If unsure, say N.
+
 endif # NET_CADENCE
