@@ -1524,6 +1524,11 @@ static int m88e151x_probe(struct phy_device *phydev)
 	return marvell_probe(phydev);
 }
 
+static int m88e151x_soft_reset(struct phy_device *phydev)
+{
+	return 0;
+}
+
 static struct phy_driver marvell_drivers[] = {
 	{
 		.phy_id = MARVELL_PHY_ID_88E1101,
@@ -1610,6 +1615,7 @@ static struct phy_driver marvell_drivers[] = {
 		.ack_interrupt = &marvell_ack_interrupt,
 		.config_intr = &marvell_config_intr,
 		.did_interrupt = &m88e1121_did_interrupt,
+		.soft_reset = &m88e151x_soft_reset,
 		.resume = &genphy_resume,
 		.suspend = &genphy_suspend,
 		.get_sset_count = marvell_get_sset_count,
