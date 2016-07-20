@@ -1970,6 +1970,7 @@ static int macb_open(struct net_device *dev)
 {
 	struct macb *bp = netdev_priv(dev);
 	struct macb_queue *queue;
+	struct phy_device *phydev = bp->phy_dev;
 	unsigned int q;
 	size_t bufsz = dev->mtu + ETH_HLEN + ETH_FCS_LEN + NET_IP_ALIGN;
 	int err;
@@ -1989,7 +1990,7 @@ static int macb_open(struct net_device *dev)
 	netif_carrier_off(dev);
 
 	/* if the phy is not yet register, retry later*/
-	if (!bp->phy_dev)
+	if (!phydev)
 		return -EAGAIN;
 
 	/* RX buffers initialization */
@@ -2029,7 +2030,9 @@ done_irq:
 	macb_init_hw(bp);
 
 	/* schedule a link state check */
-	phy_start(bp->phy_dev);
+	phy_start(phydev);
+	cancel_delayed_work_sync(&phydev->state_queue);
+	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,0);
 
 	netif_tx_start_all_queues(dev);
 
