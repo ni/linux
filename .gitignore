@@ -62,6 +62,11 @@ Module.symvers
 /tar-install/
 
 #
+# ni specific install directory
+#
+/ni-install/
+
+#
 # git files that we don't want to ignore even it they are dot-files
 #
 !.gitignore
