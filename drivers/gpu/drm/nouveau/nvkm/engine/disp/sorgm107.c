@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Advanced Micro Devices, Inc.
+ * Copyright 2016 Red Hat Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -19,11 +19,35 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  *
+ * Authors: Ben Skeggs <bskeggs@redhat.com>
  */
+#include "nv50.h"
+#include "outpdp.h"
 
-extern bool acpi_atcs_functions_supported(void *device,
-							uint32_t index);
-extern int acpi_pcie_perf_request(void *device,
-						uint8_t perf_req,
-						bool advertise);
-extern bool acpi_atcs_notify_pcie_device_ready(void *device);
+int
+gm107_sor_dp_pattern(struct nvkm_output_dp *outp, int pattern)
+{
+	struct nvkm_device *device = outp->base.disp->engine.subdev.device;
+	const u32 soff = outp->base.or * 0x800;
+	const u32 data = 0x01010101 * pattern;
+	if (outp->base.info.sorconf.link & 1)
+		nvkm_mask(device, 0x61c110 + soff, 0x0f0f0f0f, data);
+	else
+		nvkm_mask(device, 0x61c12c + soff, 0x0f0f0f0f, data);
+	return 0;
+}
+
+static const struct nvkm_output_dp_func
+gm107_sor_dp_func = {
+	.pattern = gm107_sor_dp_pattern,
+	.lnk_pwr = g94_sor_dp_lnk_pwr,
+	.lnk_ctl = gf119_sor_dp_lnk_ctl,
+	.drv_ctl = gf119_sor_dp_drv_ctl,
+};
+
+int
+gm107_sor_dp_new(struct nvkm_disp *disp, int index,
+		 struct dcb_output *dcbE, struct nvkm_output **poutp)
+{
+	return nvkm_output_dp_new_(&gm107_sor_dp_func, disp, index, dcbE, poutp);
+}
