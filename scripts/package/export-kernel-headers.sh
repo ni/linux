@@ -8,6 +8,10 @@ mkdir -p "$3"
 OUTDIR=`cd $3; pwd`
 ARCH=$4
 
+if [ "$ARCH" = "x86_64" ]; then
+	ARCH="x86"
+fi
+
 [ -d "$SOURCEDIR" -a -d "$OBJDIR" ] || fail "Usage $0 <kernel source dir> <kernel obj dir> <header export dir>"
 
 [ -e "$SOURCEDIR"/Makefile -a -e "$SOURCEDIR"/Kconfig ] || fail "Must run from within kernel tree."
