@@ -15,6 +15,7 @@ set -e
 tmpdir="${objtree}/ni-install/${ARCH}"
 hdrdir="${tmpdir}/headers/kernel"
 bootdir="${tmpdir}/boot"
+hdrsquash="module-versioning-image.squashfs"
 
 CROSS_PREFIX=$(basename "${CROSS_COMPILE}")
 
@@ -43,8 +44,8 @@ if [ -n "${CROSS_PREFIX}" ]; then
 	done
 fi
 
-mksquashfs "$(dirname "${hdrdir}")" "${tmpdir}/headers.squashfs"
-mv "${tmpdir}/headers.squashfs" "$(dirname "${hdrdir}")"
+mksquashfs "$(dirname "${hdrdir}")" "${tmpdir}/${hdrsquash}"
+mv "${tmpdir}/${hdrsquash}" "$(dirname "${hdrdir}")"
 
 rm -rf "${hdrdir}"
 
