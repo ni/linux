@@ -18,6 +18,8 @@
 #include <linux/input.h>
 #include <linux/delay.h>
 #include <acpi/acpi.h>
+#include <linux/regulator/driver.h>
+#include <linux/regulator/machine.h>
 
 #define MODULE_NAME "nirtfeatures"
 
@@ -36,6 +38,7 @@
 #define NIRTF_STATUS_LED_SHIFT1	0x21
 #define NIRTF_STATUS_LED_SHIFT0	0x22
 #define NIRTF_RT_LEDS		0x23
+#define NIRTF_WLAN_CONTROLREG	0x32
 
 #define NIRTF_IO_SIZE	0x40
 
@@ -58,6 +61,9 @@
 #define NIRTF_SYSTEM_LEDS_STATUS_YELLOW	0x04
 #define NIRTF_SYSTEM_LEDS_POWER_GREEN	0x02
 #define NIRTF_SYSTEM_LEDS_POWER_YELLOW	0x01
+
+#define NIRTF_WLAN_RESET_N     0x02
+#define NIRTF_WLAN_RESETENABLE 0x01
 
 /*=====================================================================
  * ACPI NI physical interface element support
@@ -112,6 +118,8 @@ struct nirtfeatures {
 	spinlock_t lock;
 	u8 revision[5];
 	const char *bpstring;
+	bool has_wifi;
+	struct regulator_dev *reg_dev;
 };
 
 struct nirtfeatures_led {
@@ -733,6 +741,7 @@ static int nirtfeatures_parse_led_pie(
 	struct nirtfeatures_pie_descriptor_led_color led_descriptor;
 	struct nirtfeatures_led                     *led_dev;
 	int                                          err;
+	int                                          is_wifi, is_user;
 
 	if (NULL == nirtfeatures || NULL == pie ||
 	   NULL == acpi_buffer)
@@ -764,8 +773,10 @@ static int nirtfeatures_parse_led_pie(
 		/* for compatibility with existing LVRT support, PIEs beginning
 		 * with 'user' or 'wifi' should not affix the uservisible
 		 * attribute to their name */
-		if (strncasecmp(pie->name, "user", strlen("user")) != 0 &&
-		    strncasecmp(pie->name, "wifi", strlen("wifi")) != 0) {
+		is_user = strncasecmp(pie->name, "user", strlen("user"));
+		is_wifi = strncasecmp(pie->name, "wifi", strlen("wifi"));
+		if (is_user != 0 &&
+		    is_wifi != 0) {
 			snprintf(led_dev->name_string, MAX_NODELEN,
 			   "%s:%s:%s:uservisible=%d",
 			   CONFIG_NI_LED_PREFIX,
@@ -777,6 +788,10 @@ static int nirtfeatures_parse_led_pie(
 			   CONFIG_NI_LED_PREFIX,
 			   pie->name, led_descriptor.name);
 		}
+
+		/* The presence of any WiFi LED means this target has wifi */
+		if (is_wifi == 0)
+			nirtfeatures->has_wifi = true;
 
 		led_dev->cdev.name = led_dev->name_string;
 		led_dev->cdev.brightness =
@@ -1239,6 +1254,9 @@ static int nirtfeatures_acpi_remove(struct acpi_device *device)
 	sysfs_remove_files(&nirtfeatures->acpi_device->dev.kobj,
 			   nirtfeatures_attrs);
 
+	if (nirtfeatures->reg_dev)
+		regulator_unregister(nirtfeatures->reg_dev);
+
 	if ((nirtfeatures->io_base != 0) &&
 	    (nirtfeatures->io_size == NIRTF_IO_SIZE))
 		release_region(nirtfeatures->io_base, nirtfeatures->io_size);
@@ -1247,6 +1265,102 @@ static int nirtfeatures_acpi_remove(struct acpi_device *device)
 
 	kfree(nirtfeatures);
 
+	return 0;
+}
+
+static int nirtfeatures_wifi_regulator_list_voltage(struct regulator_dev *dev,
+						    unsigned selector)
+{
+	return 3300000;
+}
+
+static int nirtfeatures_wifi_regulator_enable(struct regulator_dev *dev)
+{
+	struct nirtfeatures *nirtfeatures;
+
+	nirtfeatures = rdev_get_drvdata(dev);
+
+	/* WiFi out of Reset */
+	outb(NIRTF_WLAN_RESET_N | NIRTF_WLAN_RESETENABLE,
+	     nirtfeatures->io_base + NIRTF_WLAN_CONTROLREG);
+	/* WiFi Reset Disable */
+	outb(NIRTF_WLAN_RESET_N,
+	     nirtfeatures->io_base + NIRTF_WLAN_CONTROLREG);
+
+	return 0;
+}
+
+static int nirtfeatures_wifi_regulator_disable(struct regulator_dev *dev)
+{
+	struct nirtfeatures *nirtfeatures;
+
+	nirtfeatures = rdev_get_drvdata(dev);
+
+	/* WiFi Reset Enable */
+	outb(NIRTF_WLAN_RESET_N | NIRTF_WLAN_RESETENABLE,
+	     nirtfeatures->io_base + NIRTF_WLAN_CONTROLREG);
+	/* WiFi into Reset */
+	outb(NIRTF_WLAN_RESETENABLE,
+	     nirtfeatures->io_base + NIRTF_WLAN_CONTROLREG);
+
+	/* Silex specs say to assert reset for 5 us, make it 10 to be sure */
+	usleep_range(10, 1000);
+
+	return 0;
+}
+
+static int nirtfeatures_wifi_regulator_is_enabled(struct regulator_dev *dev)
+{
+	struct nirtfeatures *nirtfeatures;
+	u8 data;
+
+	nirtfeatures = rdev_get_drvdata(dev);
+
+	data = inb(nirtfeatures->io_base + NIRTF_WLAN_CONTROLREG);
+
+	return !!(data & NIRTF_WLAN_RESET_N);
+}
+
+static struct regulator_ops nirtfeatures_wifi_regulator_voltage_ops = {
+	.list_voltage = nirtfeatures_wifi_regulator_list_voltage,
+	.enable = nirtfeatures_wifi_regulator_enable,
+	.disable = nirtfeatures_wifi_regulator_disable,
+	.is_enabled = nirtfeatures_wifi_regulator_is_enabled
+};
+
+static const struct regulator_desc nirtfeatures_wifi_regulator_desc = {
+	.name = "vmmc",
+	.id = -1,
+	.n_voltages = 1,
+	.ops = &nirtfeatures_wifi_regulator_voltage_ops,
+	.type = REGULATOR_VOLTAGE,
+	.owner = THIS_MODULE
+};
+
+static const struct regulator_init_data wifi_reset_init_data = {
+	.constraints = {
+		.min_uV = 3300000,
+		.max_uV = 3300000,
+		.valid_ops_mask = REGULATOR_CHANGE_STATUS,
+	}
+};
+
+static int nirtfeatures_wifi_regulator_init(struct device *dev,
+					    struct nirtfeatures *nirtfeatures)
+{
+	struct regulator_config cfg = { };
+	struct regulator_dev *reg_dev;
+
+	cfg.dev = dev;
+	cfg.init_data = &wifi_reset_init_data;
+	cfg.driver_data = nirtfeatures;
+	reg_dev = regulator_register(&nirtfeatures_wifi_regulator_desc,
+				     &cfg);
+	if (IS_ERR(reg_dev)) {
+		pr_err("Failed to register vmmc regulator for wifi\n");
+		return -ENODEV;
+	}
+	nirtfeatures->reg_dev = reg_dev;
 	return 0;
 }
 
@@ -1335,6 +1449,15 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 		 "IO range 0x%04X-0x%04X\n",
 		 nirtfeatures->io_base,
 		 nirtfeatures->io_base + nirtfeatures->io_size - 1);
+
+	if (nirtfeatures->has_wifi) {
+		err = nirtfeatures_wifi_regulator_init(&device->dev,
+						       nirtfeatures);
+		if (0 != err) {
+			nirtfeatures_acpi_remove(device);
+			return err;
+		}
+	}
 
 	return 0;
 }
