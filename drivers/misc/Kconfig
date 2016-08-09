@@ -450,6 +450,7 @@ config HISI_HIKEY_USB
 config NI_RT_FEATURES
 	bool "NI 903x/913x support"
 	depends on X86 && ACPI
+	select REGULATOR
 	help
 	  This driver exposes LEDs and other features of NI 903x/913x Real-Time
 	  controllers.
