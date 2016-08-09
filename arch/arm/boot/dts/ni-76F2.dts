@@ -33,52 +33,42 @@
 				/* Channel 0 maps to VPVN */
 				channel@0 {
 					reg = <0>;
-					xlnx,extend-name = "vin_v";
 				};
 				/* Channel 1 maps to VAUX0 */
 				channel@1 {
 					reg = <1>;
-					xlnx,extend-name = "vin_c";
 				};
 				/* Channel 2 maps to VAUX1 */
 				channel@2 {
 					reg = <2>;
-					xlnx,extend-name = "user5v_v";
 				};
 				/* Channel 3 maps to VAUX2 */
 				channel@3 {
 					reg = <3>;
-					xlnx,extend-name = "user5v_c";
 				};
 				/* Channel 4 maps to VAUX3 */
 				channel@4 {
 					reg = <4>;
-					xlnx,extend-name = "user3v3_v";
 				};
 				/* Channel 5 maps to VAUX4 */
 				channel@5 {
 					reg = <5>;
-					xlnx,extend-name = "user3v3_c";
 				};
 				/* Channel 9 maps to VAUX8 */
 				channel@9 {
 					reg = <9>;
-					xlnx,extend-name = "user6v_c";
 				};
 				/* Channel 10 maps to VAUX9 */
 				channel@10 {
 					reg = <10>;
-					xlnx,extend-name = "bist_ao_v";
 				};
 				/* Channel 11 maps to VAUX10 */
 				channel@11 {
 					reg = <11>;
-					xlnx,extend-name = "bist_dio_v";
 				};
 				/* Channel 12 maps to VAUX11 */
 				channel@12 {
 					reg = <12>;
-					xlnx,extend-name = "user6v_v";
 				};
 			};
 		};
