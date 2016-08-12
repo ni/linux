@@ -61,6 +61,7 @@
 #define PORT_SWITCH_ID_6176	0x1760
 #define PORT_SWITCH_ID_6182	0x1a60
 #define PORT_SWITCH_ID_6185	0x1a70
+#define PORT_SWITCH_ID_6341	0x3410
 #define PORT_SWITCH_ID_6352	0x3520
 #define PORT_SWITCH_ID_6352_A0	0x3521
 #define PORT_SWITCH_ID_6352_A1	0x3522
@@ -240,6 +241,7 @@ struct mv88e6xxx_priv_state {
 
 	int		id; /* switch product id */
 	int		num_ports;	/* number of switch ports */
+	int             mdio_offset;    /* MDIO address of port 0 */
 
 	/* hw bridging */
 

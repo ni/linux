@@ -558,7 +558,7 @@ static bool have_sw_in_discards(struct dsa_switch *ds)
 	case PORT_SWITCH_ID_6165: case PORT_SWITCH_ID_6171:
 	case PORT_SWITCH_ID_6172: case PORT_SWITCH_ID_6176:
 	case PORT_SWITCH_ID_6182: case PORT_SWITCH_ID_6185:
-	case PORT_SWITCH_ID_6352:
+	case PORT_SWITCH_ID_6341: case PORT_SWITCH_ID_6352:
 		return true;
 	default:
 		return false;
@@ -1377,7 +1377,7 @@ static int mv88e6xxx_port_to_phy_addr(struct dsa_switch *ds, int port)
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 
 	if (port >= 0 && port < ps->num_ports)
-		return port;
+		return port + ps->mdio_offset;
 	return -EINVAL;
 }
 

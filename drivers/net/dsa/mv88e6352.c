@@ -40,6 +40,8 @@ static char *mv88e6352_probe(struct device *host_dev, int sw_addr)
 			return "Marvell 88E6352 (A1)";
 		if ((ret & 0xfff0) == PORT_SWITCH_ID_6352)
 			return "Marvell 88E6352";
+		if ((ret & 0xfff0) == PORT_SWITCH_ID_6341)
+			return "Marvell 88E6341";
 	}
 
 	return NULL;
@@ -298,7 +300,14 @@ static int mv88e6352_setup(struct dsa_switch *ds)
 	if (ret < 0)
 		return ret;
 
-	ps->num_ports = 7;
+	switch (ps->id) {
+	case PORT_SWITCH_ID_6341:
+		ps->num_ports = 6;
+		ps->mdio_offset = 0x10; /* Port 0 starts at MDIO 0x10 */
+		break;
+	default:
+		ps->num_ports = 7;
+	}
 
 	mutex_init(&ps->eeprom_mutex);
 
