@@ -1180,6 +1180,21 @@ static struct phy_driver marvell_drivers[] = {
 		.suspend = &genphy_suspend,
 		.driver = { .owner = THIS_MODULE },
 	},
+	{
+		.phy_id = MARVELL_PHY_ID_GENERIC,
+		.phy_id_mask = MARVELL_PHY_ID_GENERIC_MASK,
+		.name = "Unknown Marvell",
+		.features = PHY_GBIT_FEATURES,
+		.flags = PHY_HAS_INTERRUPT,
+		.config_aneg = &genphy_config_aneg,
+		.aneg_done = &marvell_aneg_done,
+		.read_status = &marvell_read_status,
+		.ack_interrupt = &marvell_ack_interrupt,
+		.config_intr = &marvell_config_intr,
+		.resume = &genphy_resume,
+		.suspend = &genphy_suspend,
+		.driver = { .owner = THIS_MODULE },
+	},
 };
 
 module_phy_driver(marvell_drivers);
@@ -1197,6 +1212,7 @@ static struct mdio_device_id __maybe_unused marvell_tbl[] = {
 	{ MARVELL_PHY_ID_88E1116R, MARVELL_PHY_ID_MASK },
 	{ MARVELL_PHY_ID_88E1510, MARVELL_PHY_ID_MASK },
 	{ MARVELL_PHY_ID_88E3016, MARVELL_PHY_ID_MASK },
+	{ MARVELL_PHY_ID_GENERIC, MARVELL_PHY_ID_GENERIC_MASK },
 	{ }
 };
 
