@@ -500,6 +500,10 @@
 
 };
 
+&watchdog0 {
+		reset-on-timeout;
+};
+
 &gem0 {
 		status = "okay";
 
