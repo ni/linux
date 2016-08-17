@@ -447,6 +447,17 @@ static bool mv88e6xxx_6352_family(struct dsa_switch *ds)
 	return false;
 }
 
+static bool mv88e6xxx_6341_family(struct dsa_switch *ds)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+
+	switch (ps->id) {
+	case PORT_SWITCH_ID_6341:
+		return true;
+	}
+	return false;
+}
+
 static int mv88e6xxx_stats_wait(struct dsa_switch *ds)
 {
 	int ret;
@@ -464,14 +475,23 @@ static int mv88e6xxx_stats_wait(struct dsa_switch *ds)
 static int mv88e6xxx_stats_snapshot(struct dsa_switch *ds, int port)
 {
 	int ret;
+	int cmd;
 
-	if (mv88e6xxx_6352_family(ds))
+	if (mv88e6xxx_6352_family(ds) || mv88e6xxx_6341_family(ds))
 		port = (port + 1) << 5;
 
+	cmd = GLOBAL_STATS_OP_CAPTURE_PORT | port;
+
+	if (mv88e6xxx_6341_family(ds)) {
+		REG_WRITE(REG_GLOBAL, GLOBAL_CONTROL_2,
+			  GLOBAL_CONTROL_2_RMU_DISABLED |
+			  GLOBAL_CONTROL_2_HIST_RX_TX | port);
+	} else {
+		cmd |= GLOBAL_STATS_OP_HIST_RX_TX;
+	}
+
 	/* Snapshot the hardware statistics counters for this port. */
-	REG_WRITE(REG_GLOBAL, GLOBAL_STATS_OP,
-		  GLOBAL_STATS_OP_CAPTURE_PORT |
-		  GLOBAL_STATS_OP_HIST_RX_TX | port);
+	REG_WRITE(REG_GLOBAL, GLOBAL_STATS_OP, cmd);
 
 	/* Wait for the snapshotting to complete. */
 	ret = mv88e6xxx_stats_wait(ds);
@@ -481,34 +501,33 @@ static int mv88e6xxx_stats_snapshot(struct dsa_switch *ds, int port)
 	return 0;
 }
 
-static void mv88e6xxx_stats_read(struct dsa_switch *ds, int stat, u32 *val)
+static int mv88e6xxx_stats_read(struct dsa_switch *ds, int stat, u32 *val)
 {
 	u32 _val;
 	int ret;
+	int cmd;
 
 	*val = 0;
 
-	ret = mv88e6xxx_reg_write(ds, REG_GLOBAL, GLOBAL_STATS_OP,
-				  GLOBAL_STATS_OP_READ_CAPTURED |
-				  GLOBAL_STATS_OP_HIST_RX_TX | stat);
-	if (ret < 0)
-		return;
+	cmd = GLOBAL_STATS_OP_READ_CAPTURED | stat;
+
+	/* 6352 family has the histogram configuration in Global Control 2 */
+	if (!mv88e6xxx_6341_family(ds))
+		cmd |= GLOBAL_STATS_OP_HIST_RX_TX;
+
+	REG_WRITE(REG_GLOBAL, GLOBAL_STATS_OP, cmd);
 
 	ret = mv88e6xxx_stats_wait(ds);
-	if (ret < 0)
-		return;
 
-	ret = mv88e6xxx_reg_read(ds, REG_GLOBAL, GLOBAL_STATS_COUNTER_32);
-	if (ret < 0)
-		return;
+	ret = REG_READ(REG_GLOBAL, GLOBAL_STATS_COUNTER_32);
 
 	_val = ret << 16;
 
-	ret = mv88e6xxx_reg_read(ds, REG_GLOBAL, GLOBAL_STATS_COUNTER_01);
-	if (ret < 0)
-		return;
+	ret = REG_READ(REG_GLOBAL, GLOBAL_STATS_COUNTER_01);
 
 	*val = _val | ret;
+
+	return 0;
 }
 
 static struct mv88e6xxx_hw_stat mv88e6xxx_hw_stats[] = {
@@ -617,9 +636,14 @@ static void _mv88e6xxx_get_ethtool_stats(struct dsa_switch *ds,
 			data[i] = (((u64)high) << 16) | low;
 			continue;
 		}
-		mv88e6xxx_stats_read(ds, s->reg, &low);
-		if (s->sizeof_stat == 8)
-			mv88e6xxx_stats_read(ds, s->reg + 1, &high);
+		ret = mv88e6xxx_stats_read(ds, s->reg, &low);
+		if (ret < 0)
+			goto error;
+		if (s->sizeof_stat == 8) {
+			ret = mv88e6xxx_stats_read(ds, s->reg + 1, &high);
+			if (ret < 0)
+				goto error;
+		}
 
 		data[i] = (((u64)high) << 32) | low;
 	}
