@@ -447,7 +447,7 @@ static bool mv88e6xxx_6352_family(struct dsa_switch *ds)
 	return false;
 }
 
-static bool mv88e6xxx_6341_family(struct dsa_switch *ds)
+static bool mv88e6xxx_6320_family(struct dsa_switch *ds)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 
@@ -458,13 +458,13 @@ static bool mv88e6xxx_6341_family(struct dsa_switch *ds)
 	return false;
 }
 
-static int mv88e6xxx_stats_wait(struct dsa_switch *ds)
+static int _mv88e6xxx_stats_wait(struct dsa_switch *ds)
 {
 	int ret;
 	int i;
 
 	for (i = 0; i < 10; i++) {
-		ret = REG_READ(REG_GLOBAL, GLOBAL_STATS_OP);
+		ret = _mv88e6xxx_reg_read(ds, REG_GLOBAL, GLOBAL_STATS_OP);
 		if ((ret & GLOBAL_STATS_OP_BUSY) == 0)
 			return 0;
 	}
@@ -472,36 +472,40 @@ static int mv88e6xxx_stats_wait(struct dsa_switch *ds)
 	return -ETIMEDOUT;
 }
 
-static int mv88e6xxx_stats_snapshot(struct dsa_switch *ds, int port)
+static int _mv88e6xxx_stats_snapshot(struct dsa_switch *ds, int port)
 {
 	int ret;
 	int cmd;
 
-	if (mv88e6xxx_6352_family(ds) || mv88e6xxx_6341_family(ds))
+	if (mv88e6xxx_6320_family(ds) || mv88e6xxx_6352_family(ds))
 		port = (port + 1) << 5;
 
 	cmd = GLOBAL_STATS_OP_CAPTURE_PORT | port;
 
-	if (mv88e6xxx_6341_family(ds)) {
-		REG_WRITE(REG_GLOBAL, GLOBAL_CONTROL_2,
-			  GLOBAL_CONTROL_2_RMU_DISABLED |
-			  GLOBAL_CONTROL_2_HIST_RX_TX | port);
+	if (mv88e6xxx_6320_family(ds)) {
+		ret = _mv88e6xxx_reg_write(ds, REG_GLOBAL, GLOBAL_CONTROL_2,
+					   GLOBAL_CONTROL_2_RMU_DISABLED |
+					   GLOBAL_CONTROL_2_HIST_RX_TX | port);
+		if (ret < 0)
+			return ret;
 	} else {
 		cmd |= GLOBAL_STATS_OP_HIST_RX_TX;
 	}
 
 	/* Snapshot the hardware statistics counters for this port. */
-	REG_WRITE(REG_GLOBAL, GLOBAL_STATS_OP, cmd);
+	ret = _mv88e6xxx_reg_write(ds, REG_GLOBAL, GLOBAL_STATS_OP, cmd);
+	if (ret < 0)
+		return ret;
 
 	/* Wait for the snapshotting to complete. */
-	ret = mv88e6xxx_stats_wait(ds);
+	ret = _mv88e6xxx_stats_wait(ds);
 	if (ret < 0)
 		return ret;
 
 	return 0;
 }
 
-static int mv88e6xxx_stats_read(struct dsa_switch *ds, int stat, u32 *val)
+static void _mv88e6xxx_stats_read(struct dsa_switch *ds, int stat, u32 *val)
 {
 	u32 _val;
 	int ret;
@@ -512,176 +516,193 @@ static int mv88e6xxx_stats_read(struct dsa_switch *ds, int stat, u32 *val)
 	cmd = GLOBAL_STATS_OP_READ_CAPTURED | stat;
 
 	/* 6352 family has the histogram configuration in Global Control 2 */
-	if (!mv88e6xxx_6341_family(ds))
+	if (!mv88e6xxx_6320_family(ds))
 		cmd |= GLOBAL_STATS_OP_HIST_RX_TX;
 
-	REG_WRITE(REG_GLOBAL, GLOBAL_STATS_OP, cmd);
+	ret = _mv88e6xxx_reg_write(ds, REG_GLOBAL, GLOBAL_STATS_OP, cmd);
+	if (ret < 0)
+		return;
 
-	ret = mv88e6xxx_stats_wait(ds);
+	ret = _mv88e6xxx_stats_wait(ds);
+	if (ret < 0)
+		return;
 
-	ret = REG_READ(REG_GLOBAL, GLOBAL_STATS_COUNTER_32);
+	ret = _mv88e6xxx_reg_read(ds, REG_GLOBAL, GLOBAL_STATS_COUNTER_32);
+	if (ret < 0)
+		return;
 
 	_val = ret << 16;
 
-	ret = REG_READ(REG_GLOBAL, GLOBAL_STATS_COUNTER_01);
+	ret = _mv88e6xxx_reg_read(ds, REG_GLOBAL, GLOBAL_STATS_COUNTER_01);
+	if (ret < 0)
+		return;
 
 	*val = _val | ret;
-
-	return 0;
 }
 
 static struct mv88e6xxx_hw_stat mv88e6xxx_hw_stats[] = {
-	{ "in_good_octets", 8, 0x00, },
-	{ "in_bad_octets", 4, 0x02, },
-	{ "in_unicast", 4, 0x04, },
-	{ "in_broadcasts", 4, 0x06, },
-	{ "in_multicasts", 4, 0x07, },
-	{ "in_pause", 4, 0x16, },
-	{ "in_undersize", 4, 0x18, },
-	{ "in_fragments", 4, 0x19, },
-	{ "in_oversize", 4, 0x1a, },
-	{ "in_jabber", 4, 0x1b, },
-	{ "in_rx_error", 4, 0x1c, },
-	{ "in_fcs_error", 4, 0x1d, },
-	{ "out_octets", 8, 0x0e, },
-	{ "out_unicast", 4, 0x10, },
-	{ "out_broadcasts", 4, 0x13, },
-	{ "out_multicasts", 4, 0x12, },
-	{ "out_pause", 4, 0x15, },
-	{ "excessive", 4, 0x11, },
-	{ "collisions", 4, 0x1e, },
-	{ "deferred", 4, 0x05, },
-	{ "single", 4, 0x14, },
-	{ "multiple", 4, 0x17, },
-	{ "out_fcs_error", 4, 0x03, },
-	{ "late", 4, 0x1f, },
-	{ "hist_64bytes", 4, 0x08, },
-	{ "hist_65_127bytes", 4, 0x09, },
-	{ "hist_128_255bytes", 4, 0x0a, },
-	{ "hist_256_511bytes", 4, 0x0b, },
-	{ "hist_512_1023bytes", 4, 0x0c, },
-	{ "hist_1024_max_bytes", 4, 0x0d, },
-	/* Not all devices have the following counters */
-	{ "sw_in_discards", 4, 0x110, },
-	{ "sw_in_filtered", 2, 0x112, },
-	{ "sw_out_filtered", 2, 0x113, },
-
+	{ "in_good_octets",	8, 0x00, BANK0, },
+	{ "in_bad_octets",	4, 0x02, BANK0, },
+	{ "in_unicast",		4, 0x04, BANK0, },
+	{ "in_broadcasts",	4, 0x06, BANK0, },
+	{ "in_multicasts",	4, 0x07, BANK0, },
+	{ "in_pause",		4, 0x16, BANK0, },
+	{ "in_undersize",	4, 0x18, BANK0, },
+	{ "in_fragments",	4, 0x19, BANK0, },
+	{ "in_oversize",	4, 0x1a, BANK0, },
+	{ "in_jabber",		4, 0x1b, BANK0, },
+	{ "in_rx_error",	4, 0x1c, BANK0, },
+	{ "in_fcs_error",	4, 0x1d, BANK0, },
+	{ "out_octets",		8, 0x0e, BANK0, },
+	{ "out_unicast",	4, 0x10, BANK0, },
+	{ "out_broadcasts",	4, 0x13, BANK0, },
+	{ "out_multicasts",	4, 0x12, BANK0, },
+	{ "out_pause",		4, 0x15, BANK0, },
+	{ "excessive",		4, 0x11, BANK0, },
+	{ "collisions",		4, 0x1e, BANK0, },
+	{ "deferred",		4, 0x05, BANK0, },
+	{ "single",		4, 0x14, BANK0, },
+	{ "multiple",		4, 0x17, BANK0, },
+	{ "out_fcs_error",	4, 0x03, BANK0, },
+	{ "late",		4, 0x1f, BANK0, },
+	{ "hist_64bytes",	4, 0x08, BANK0, },
+	{ "hist_65_127bytes",	4, 0x09, BANK0, },
+	{ "hist_128_255bytes",	4, 0x0a, BANK0, },
+	{ "hist_256_511bytes",	4, 0x0b, BANK0, },
+	{ "hist_512_1023bytes", 4, 0x0c, BANK0, },
+	{ "hist_1024_max_bytes", 4, 0x0d, BANK0, },
+	{ "sw_in_discards",	4, 0x10, PORT, },
+	{ "sw_in_filtered",	2, 0x12, PORT, },
+	{ "sw_out_filtered",	2, 0x13, PORT, },
+	{ "in_discards",	4, 0x00 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_filtered",	4, 0x01 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_accepted",	4, 0x02 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_bad_accepted",	4, 0x03 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_good_avb_class_a", 4, 0x04 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_good_avb_class_b", 4, 0x05 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_bad_avb_class_a", 4, 0x06 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_bad_avb_class_b", 4, 0x07 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "tcam_counter_0",	4, 0x08 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "tcam_counter_1",	4, 0x09 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "tcam_counter_2",	4, 0x0a | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "tcam_counter_3",	4, 0x0b | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_da_unknown",	4, 0x0e | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "in_management",	4, 0x0f | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_0",	4, 0x10 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_1",	4, 0x11 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_2",	4, 0x12 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_3",	4, 0x13 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_4",	4, 0x14 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_5",	4, 0x15 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_6",	4, 0x16 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_queue_7",	4, 0x17 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_cut_through",	4, 0x18 | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_octets_a",	4, 0x1a | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_octets_b",	4, 0x1b | GLOBAL_STATS_OP_BANK_1, BANK1, },
+	{ "out_management",	4, 0x1f | GLOBAL_STATS_OP_BANK_1, BANK1, },
 };
 
-static bool have_sw_in_discards(struct dsa_switch *ds)
+static bool mv88e6xxx_has_stat(struct dsa_switch *ds,
+			       struct mv88e6xxx_hw_stat *stat)
 {
-	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
-
-	switch (ps->id) {
-	case PORT_SWITCH_ID_6095: case PORT_SWITCH_ID_6161:
-	case PORT_SWITCH_ID_6165: case PORT_SWITCH_ID_6171:
-	case PORT_SWITCH_ID_6172: case PORT_SWITCH_ID_6176:
-	case PORT_SWITCH_ID_6182: case PORT_SWITCH_ID_6185:
-	case PORT_SWITCH_ID_6341: case PORT_SWITCH_ID_6352:
+	switch (stat->type) {
+	case BANK0:
 		return true;
-	default:
-		return false;
+	case BANK1:
+		return mv88e6xxx_6320_family(ds);
+	case PORT:
+		return mv88e6xxx_6352_family(ds);
 	}
+	return false;
 }
 
-static void _mv88e6xxx_get_strings(struct dsa_switch *ds,
-				   int nr_stats,
-				   struct mv88e6xxx_hw_stat *stats,
-				   int port, uint8_t *data)
+static uint64_t _mv88e6xxx_get_ethtool_stat(struct dsa_switch *ds,
+					    struct mv88e6xxx_hw_stat *s,
+					    int port)
 {
-	int i;
-
-	for (i = 0; i < nr_stats; i++) {
-		memcpy(data + i * ETH_GSTRING_LEN,
-		       stats[i].string, ETH_GSTRING_LEN);
-	}
-}
-
-static void _mv88e6xxx_get_ethtool_stats(struct dsa_switch *ds,
-					 int nr_stats,
-					 struct mv88e6xxx_hw_stat *stats,
-					 int port, uint64_t *data)
-{
-	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	u32 low;
+	u32 high = 0;
 	int ret;
-	int i;
+	u64 value;
 
-	mutex_lock(&ps->stats_mutex);
-
-	ret = mv88e6xxx_stats_snapshot(ds, port);
-	if (ret < 0) {
-		mutex_unlock(&ps->stats_mutex);
-		return;
-	}
-
-	/* Read each of the counters. */
-	for (i = 0; i < nr_stats; i++) {
-		struct mv88e6xxx_hw_stat *s = stats + i;
-		u32 low;
-		u32 high = 0;
-
-		if (s->reg >= 0x100) {
-			ret = mv88e6xxx_reg_read(ds, REG_PORT(port),
-						 s->reg - 0x100);
-			if (ret < 0)
-				goto error;
-			low = ret;
-			if (s->sizeof_stat == 4) {
-				ret = mv88e6xxx_reg_read(ds, REG_PORT(port),
-							 s->reg - 0x100 + 1);
-				if (ret < 0)
-					goto error;
-				high = ret;
-			}
-			data[i] = (((u64)high) << 16) | low;
-			continue;
-		}
-		ret = mv88e6xxx_stats_read(ds, s->reg, &low);
+	switch (s->type) {
+	case PORT:
+		ret = _mv88e6xxx_reg_read(ds, REG_PORT(port), s->reg);
 		if (ret < 0)
-			goto error;
-		if (s->sizeof_stat == 8) {
-			ret = mv88e6xxx_stats_read(ds, s->reg + 1, &high);
-			if (ret < 0)
-				goto error;
-		}
+			return UINT64_MAX;
 
-		data[i] = (((u64)high) << 32) | low;
+		low = ret;
+		if (s->sizeof_stat == 4) {
+			ret = _mv88e6xxx_reg_read(ds, REG_PORT(port),
+						  s->reg + 1);
+			if (ret < 0)
+				return UINT64_MAX;
+			high = ret;
+		}
+		break;
+	case BANK0:
+	case BANK1:
+		_mv88e6xxx_stats_read(ds, s->reg, &low);
+		if (s->sizeof_stat == 8)
+			_mv88e6xxx_stats_read(ds, s->reg + 1, &high);
 	}
-error:
-	mutex_unlock(&ps->stats_mutex);
+	value = (((u64)high) << 16) | low;
+	return value;
 }
 
-/* All the statistics in the table */
-void
-mv88e6xxx_get_strings(struct dsa_switch *ds, int port, uint8_t *data)
+void mv88e6xxx_get_strings(struct dsa_switch *ds, int port,
+			   uint8_t *data)
 {
-	if (have_sw_in_discards(ds))
-		_mv88e6xxx_get_strings(ds, ARRAY_SIZE(mv88e6xxx_hw_stats),
-				       mv88e6xxx_hw_stats, port, data);
-	else
-		_mv88e6xxx_get_strings(ds, ARRAY_SIZE(mv88e6xxx_hw_stats) - 3,
-				       mv88e6xxx_hw_stats, port, data);
+	struct mv88e6xxx_hw_stat *stat;
+	int i, j;
+
+	for (i = 0, j = 0; i < ARRAY_SIZE(mv88e6xxx_hw_stats); i++) {
+		stat = &mv88e6xxx_hw_stats[i];
+		if (mv88e6xxx_has_stat(ds, stat)) {
+			memcpy(data + j * ETH_GSTRING_LEN, stat->string,
+			       ETH_GSTRING_LEN);
+			j++;
+		}
+	}
 }
 
 int mv88e6xxx_get_sset_count(struct dsa_switch *ds)
 {
-	if (have_sw_in_discards(ds))
-		return ARRAY_SIZE(mv88e6xxx_hw_stats);
-	return ARRAY_SIZE(mv88e6xxx_hw_stats) - 3;
+	struct mv88e6xxx_hw_stat *stat;
+	int i, j;
+
+	for (i = 0, j = 0; i < ARRAY_SIZE(mv88e6xxx_hw_stats); i++) {
+		stat = &mv88e6xxx_hw_stats[i];
+		if (mv88e6xxx_has_stat(ds, stat))
+			j++;
+	}
+	return j;
 }
 
-void
-mv88e6xxx_get_ethtool_stats(struct dsa_switch *ds,
-			    int port, uint64_t *data)
+void mv88e6xxx_get_ethtool_stats(struct dsa_switch *ds, int port,
+				 uint64_t *data)
 {
-	if (have_sw_in_discards(ds))
-		_mv88e6xxx_get_ethtool_stats(
-			ds, ARRAY_SIZE(mv88e6xxx_hw_stats),
-			mv88e6xxx_hw_stats, port, data);
-	else
-		_mv88e6xxx_get_ethtool_stats(
-			ds, ARRAY_SIZE(mv88e6xxx_hw_stats) - 3,
-			mv88e6xxx_hw_stats, port, data);
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	struct mv88e6xxx_hw_stat *stat;
+	int ret;
+	int i, j;
+
+	mutex_lock(&ps->smi_mutex);
+
+	ret = _mv88e6xxx_stats_snapshot(ds, port);
+	if (ret < 0) {
+		mutex_unlock(&ps->smi_mutex);
+		return;
+	}
+	for (i = 0, j = 0; i < ARRAY_SIZE(mv88e6xxx_hw_stats); i++) {
+		stat = &mv88e6xxx_hw_stats[i];
+		if (mv88e6xxx_has_stat(ds, stat)) {
+			data[j] = _mv88e6xxx_get_ethtool_stat(ds, stat, port);
+			j++;
+		}
+	}
+
+	mutex_unlock(&ps->smi_mutex);
 }
 
 int mv88e6xxx_get_regs_len(struct dsa_switch *ds, int port)

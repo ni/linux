@@ -11,6 +11,10 @@
 #ifndef __MV88E6XXX_H
 #define __MV88E6XXX_H
 
+#ifndef UINT64_MAX
+#define UINT64_MAX		(u64)(~((u64)0))
+#endif
+
 #define SMI_CMD			0x00
 #define SMI_CMD_BUSY		BIT(15)
 #define SMI_CMD_CLAUSE_22	BIT(12)
@@ -152,6 +156,7 @@
 #define GLOBAL_IEEE_PRI		0x18
 #define GLOBAL_CORE_TAG_TYPE	0x19
 #define GLOBAL_MONITOR_CONTROL	0x1a
+
 #define GLOBAL_CONTROL_2	0x1c
 #define GLOBAL_CONTROL_2_RMU_PORT_0	(0 << 8)
 #define GLOBAL_CONTROL_2_RMU_PORT_1	(1 << 8)
@@ -161,6 +166,7 @@
 #define GLOBAL_CONTROL_2_HIST_RX	(1 << 6)
 #define GLOBAL_CONTROL_2_HIST_TX	(2 << 6)
 #define GLOBAL_CONTROL_2_HIST_RX_TX	(3 << 6)
+
 #define GLOBAL_STATS_OP		0x1d
 #define GLOBAL_STATS_OP_BUSY	BIT(15)
 #define GLOBAL_STATS_OP_NOP		(0 << 12)
@@ -171,6 +177,7 @@
 #define GLOBAL_STATS_OP_HIST_RX		((1 << 10) | GLOBAL_STATS_OP_BUSY)
 #define GLOBAL_STATS_OP_HIST_TX		((2 << 10) | GLOBAL_STATS_OP_BUSY)
 #define GLOBAL_STATS_OP_HIST_RX_TX	((3 << 10) | GLOBAL_STATS_OP_BUSY)
+#define GLOBAL_STATS_OP_BANK_1	BIT(9)
 #define GLOBAL_STATS_COUNTER_32	0x1e
 #define GLOBAL_STATS_COUNTER_01	0x1f
 
@@ -263,10 +270,17 @@ struct mv88e6xxx_priv_state {
 	struct work_struct bridge_work;
 };
 
+enum stat_type {
+	BANK0,
+	BANK1,
+	PORT,
+};
+
 struct mv88e6xxx_hw_stat {
 	char string[ETH_GSTRING_LEN];
 	int sizeof_stat;
 	int reg;
+	enum stat_type type;
 };
 
 int mv88e6xxx_switch_reset(struct dsa_switch *ds, bool ppu_active);
