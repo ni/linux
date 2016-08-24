@@ -147,10 +147,18 @@ static int mv88e6352_setup_port(struct dsa_switch *ds, int p)
 	 */
 	if (dsa_is_cpu_port(ds, p) || ds->dsa_port_mask & (1 << p))
 	{
+#if 0
 		REG_WRITE(addr, PORT_PCS_CTRL,
 			  PORT_PCS_LINK_VAL | PORT_PCS_FORCE_LINK |
 			  PORT_PCS_DPX_FULL | PORT_PCS_FORCE_DPX |
 			  PORT_PCS_SPD_1000);
+#else
+		/* Bluefin-specific HACK: U-Boot sets 0xC002. */
+		REG_WRITE(addr, PORT_PCS_CTRL,
+			  PORT_PCS_RX_DELAY | PORT_PCS_TX_DELAY |
+			  PORT_PCS_FORCE_SPD | PORT_PCS_FORCE_DPX |
+			  PORT_PCS_DPX_FULL | PORT_PCS_SPD_1000);
+#endif
 	}
 	else
 	{
