@@ -678,7 +678,7 @@ static int spi_transfer_one_message(struct spi_master *master,
 	struct spi_transfer *xfer;
 	bool keep_cs = false;
 	int ret = 0;
-	unsigned long ms = 1;
+	unsigned long long ms = 1;
 
 	spi_set_cs(msg->spi, true);
 
@@ -697,11 +697,16 @@ static int spi_transfer_one_message(struct spi_master *master,
 
 			if (ret > 0) {
 				ret = 0;
-				ms = xfer->len * 8 * 1000 / xfer->speed_hz;
+
+				ms = 8LL * 1000LL * xfer->len;
+				do_div(ms, xfer->speed_hz);
 				ms += ms + 100; /* some tolerance */
 
+				if (ms > UINT_MAX)
+					ms = UINT_MAX;
+
 				ms = wait_for_completion_timeout(&master->xfer_completion,
-								 msecs_to_jiffies(ms));
+							msecs_to_jiffies(ms));
 			}
 
 			if (ms == 0) {
