@@ -234,7 +234,24 @@
 #define GLOBAL2_EEPROM_DATA	0x15
 
 #define GLOBAL2_PTP_AVB_OP	0x16
+#define GLOBAL2_PTP_AVB_OP_BUSY	BIT(15)
+#define GLOBAL2_PTP_AVB_OP_READ		((0 << 13) | GLOBAL2_PTP_AVB_OP_BUSY)
+#define GLOBAL2_PTP_AVB_OP_READ_INCR	((2 << 13) | GLOBAL2_PTP_AVB_OP_BUSY)
+#define GLOBAL2_PTP_AVB_OP_WRITE	((3 << 13) | GLOBAL2_PTP_AVB_OP_BUSY)
+#define GLOBAL2_PTP_AVB_OP_PORT(p)		(((p) & 0x1f) << 8)
+#define GLOBAL2_PTP_AVB_OP_PORT_PTP_GLOBAL	0x1f
+#define GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL	0x1e
+#define GLOBAL2_PTP_AVB_OP_PORT_AVB_GLOBAL	0x1f
+#define GLOBAL2_PTP_AVB_OP_PORT_QAV_GLOBAL	0x1f
+#define GLOBAL2_PTP_AVB_OP_PORT_QBV_GLOBAL	0x1f
+#define GLOBAL2_PTP_AVB_OP_BLOCK(b)		(((b) & 0x07) << 5)
+#define GLOBAL2_PTP_AVB_OP_BLOCK_PTP	0
+#define GLOBAL2_PTP_AVB_OP_BLOCK_AVB	1
+#define GLOBAL2_PTP_AVB_OP_BLOCK_QAV	2
+#define GLOBAL2_PTP_AVB_OP_BLOCK_QBV	3
+#define GLOBAL2_PTP_AVB_OP_ADDR(a)		(((a) & 0x1f) << 0)
 #define GLOBAL2_PTP_AVB_DATA	0x17
+
 #define GLOBAL2_SMI_OP		0x18
 #define GLOBAL2_SMI_OP_BUSY		BIT(15)
 #define GLOBAL2_SMI_OP_CLAUSE_22	BIT(12)
@@ -283,6 +300,11 @@ struct mv88e6xxx_priv_state {
 	 * eeprom support.
 	 */
 	struct mutex eeprom_mutex;
+
+	/* This mutex serializes PTP/AVB access for chips with
+	 * PTP/AVB support.
+	 */
+	struct mutex ptp_mutex;
 
 	int		id; /* switch product id */
 	int		num_ports;	/* number of switch ports */

@@ -811,6 +811,109 @@ int mv88e6xxx_eeprom_busy_wait(struct dsa_switch *ds)
 			      GLOBAL2_EEPROM_OP_BUSY);
 }
 
+int mv88e6xxx_ptp_busy_wait(struct dsa_switch *ds)
+{
+	return mv88e6xxx_wait(ds, REG_GLOBAL2, GLOBAL2_PTP_AVB_OP,
+			      GLOBAL2_PTP_AVB_OP_BUSY);
+}
+
+/* Read a single 16-bit word in the PTP space starting at addr */
+int mv88e6xxx_read_ptp_word(struct dsa_switch *ds, int port, int block,
+			    int addr)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	int ret;
+
+	mutex_lock(&ps->ptp_mutex);
+
+	ret = mv88e6xxx_reg_write(ds, REG_GLOBAL2, GLOBAL2_PTP_AVB_OP,
+				  GLOBAL2_PTP_AVB_OP_READ |
+				  GLOBAL2_PTP_AVB_OP_PORT(port) |
+				  GLOBAL2_PTP_AVB_OP_BLOCK(block) |
+				  GLOBAL2_PTP_AVB_OP_ADDR(addr));
+	if (ret < 0)
+		goto error;
+
+	ret = mv88e6xxx_ptp_busy_wait(ds);
+	if (ret < 0)
+		goto error;
+
+	ret = mv88e6xxx_reg_read(ds, REG_GLOBAL2, GLOBAL2_PTP_AVB_DATA);
+
+	dev_dbg(ds->master_dev, "<-PTP- port: 0x%.2x block: 0x%.2x addr: 0x%.2x val: 0x%.4x\n",
+		port, block, addr, ret);
+
+error:
+	mutex_unlock(&ps->ptp_mutex);
+	return ret;
+}
+
+/* Read four coherent u16s in the PTP space starting at addr */
+int mv88e6xxx_read_ptp_block(struct dsa_switch *ds, int port, int block,
+			     int addr, u16 *data)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	int ret;
+	int i;
+
+	mutex_lock(&ps->ptp_mutex);
+
+	ret = mv88e6xxx_reg_write(ds, REG_GLOBAL2, GLOBAL2_PTP_AVB_OP,
+				  GLOBAL2_PTP_AVB_OP_READ_INCR |
+				  GLOBAL2_PTP_AVB_OP_PORT(port) |
+				  GLOBAL2_PTP_AVB_OP_BLOCK(block) |
+				  GLOBAL2_PTP_AVB_OP_ADDR(addr));
+	if (ret < 0)
+		goto error;
+
+	ret = mv88e6xxx_ptp_busy_wait(ds);
+	if (ret < 0)
+		goto error;
+
+	for (i = 0; i < 4; i++) {
+		ret = mv88e6xxx_reg_read(ds, REG_GLOBAL2, GLOBAL2_PTP_AVB_DATA);
+		if (ret < 0)
+			goto error;
+		data[i] = (u16)ret;
+	}
+
+	mutex_unlock(&ps->ptp_mutex);
+	return 0;
+
+error:
+	mutex_unlock(&ps->ptp_mutex);
+	return ret;
+}
+
+int mv88e6xxx_write_ptp_word(struct dsa_switch *ds, int port, int block,
+			     int addr, u16 data)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	int ret;
+
+	mutex_lock(&ps->ptp_mutex);
+
+	ret = mv88e6xxx_reg_write(ds, REG_GLOBAL2, GLOBAL2_PTP_AVB_DATA, data);
+	if (ret < 0)
+		goto error;
+
+	ret = mv88e6xxx_reg_write(ds, REG_GLOBAL2, GLOBAL2_PTP_AVB_OP,
+				  GLOBAL2_PTP_AVB_OP_WRITE |
+				  GLOBAL2_PTP_AVB_OP_PORT(port) |
+				  GLOBAL2_PTP_AVB_OP_BLOCK(block) |
+				  GLOBAL2_PTP_AVB_OP_ADDR(addr));
+	if (ret < 0)
+		goto error;
+
+	ret = mv88e6xxx_ptp_busy_wait(ds);
+
+	dev_dbg(ds->master_dev, "-PTP-> port: 0x%.2x block: 0x%.2x addr: 0x%.2x val: 0x%.4x\n",
+		port, block, addr, data);
+error:
+	mutex_unlock(&ps->ptp_mutex);
+	return ret;
+}
+
 /* Must be called with SMI lock held */
 static int _mv88e6xxx_wait(struct dsa_switch *ds, int reg, int offset, u16 mask)
 {
