@@ -301,11 +301,29 @@ static int dsa_slave_fdb_dump(struct sk_buff *skb, struct netlink_callback *cb,
 static int dsa_slave_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_switch *ds = p->parent;
 
-	if (p->phy != NULL)
-		return phy_mii_ioctl(p->phy, ifr, cmd);
-
-	return -EOPNOTSUPP;
+	switch (cmd) {
+	case SIOCGMIIPHY:
+	case SIOCGMIIREG:
+	case SIOCSMIIREG:
+		if (p->phy)
+			return phy_mii_ioctl(p->phy, ifr, cmd);
+		else
+			return -EOPNOTSUPP;
+	case SIOCGHWTSTAMP:
+		if (ds->drv->port_get_ts_config)
+			return ds->drv->port_get_ts_config(ds, p->port, ifr);
+		else
+			return -EOPNOTSUPP;
+	case SIOCSHWTSTAMP:
+		if (ds->drv->port_set_ts_config)
+			return ds->drv->port_set_ts_config(ds, p->port, ifr);
+		else
+			return -EOPNOTSUPP;
+	default:
+		return -EOPNOTSUPP;
+	}
 }
 
 /* Return a bitmask of all ports being currently bridged within a given bridge

@@ -302,6 +302,14 @@ struct dsa_switch_driver {
 			   const unsigned char *addr, u16 vid);
 	int	(*fdb_getnext)(struct dsa_switch *ds, int port,
 			       unsigned char *addr, bool *is_static);
+
+	/*
+	 * PTP functionality
+	 */
+	int (*port_get_ts_config)(struct dsa_switch *ds, int port,
+				  struct ifreq *ifr);
+	int (*port_set_ts_config)(struct dsa_switch *ds, int port,
+				  struct ifreq *ifr);
 };
 
 void register_switch_driver(struct dsa_switch_driver *type);
