@@ -44,7 +44,7 @@
 
 #include "macb.h"
 
-#define MACB_RX_BUFFER_SIZE	1536
+#define MACB_RX_BUFFER_SIZE	128
 #define RX_BUFFER_MULTIPLE	64  /* bytes */
 #define RX_RING_SIZE		512 /* must be power of 2 */
 #define RX_RING_BYTES		(sizeof(struct macb_dma_desc) * RX_RING_SIZE)
