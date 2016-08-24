@@ -268,6 +268,41 @@
 #define GLOBAL2_QOS_WEIGHT	0x1c
 #define GLOBAL2_MISC		0x1d
 
+/* Global PTP registers. Use with PTP_AVB_OP_BLOCK_PTP and
+ * GLOBAL2_PTP_AVB_OP_PORT_PTP_GLOBAL */
+#define PTP_GLOBAL_ETHERTYPE	0x00
+#define PTP_GLOBAL_MSG_TYPE	0x01
+#define PTP_GLOBAL_TS_ARRIVAL_PTR	0x02
+#define PTP_GLOBAL_IRQ_STATUS	0x08
+
+/* Per-port PTP registers. Use with PTP_AVB_OP_BLOCK_PTP */
+#define PTP_PORT_CONFIG_0	0x00
+#define PTP_PORT_CONFIG_0_TRANS_1588		(0 << 12)
+#define PTP_PORT_CONFIG_0_TRANS_8021AS		(1 << 12)
+#define PTP_PORT_CONFIG_0_ENABLE_OVERWRITE	(0 << 1)
+#define PTP_PORT_CONFIG_0_DISABLE_OVERWRITE	(1 << 1)
+#define PTP_PORT_CONFIG_0_ENABLE_TS		(0 << 0)
+#define PTP_PORT_CONFIG_0_DISABLE_TS		(1 << 0)
+#define PTP_PORT_CONFIG_1	0x01
+#define PTP_PORT_CONFIG_2	0x02
+#define PTP_PORT_CONFIG_2_EMBED_ARRIVAL_0	(0x10 << 8)
+#define PTP_PORT_CONFIG_2_DEPARTURE_IRQ_EN	(1 << 1)
+#define PTP_PORT_CONFIG_2_ARRIVAL_IRQ_EN	(1 << 0)
+
+#define PTP_PORT_LED_CONFIG	0x03
+#define PTP_PORT_ARRIVAL_0_STATUS	0x08
+#define PTP_PORT_ARRIVAL_0_TIME_LO	0x09
+#define PTP_PORT_ARRIVAL_0_TIME_HI	0x0a
+#define PTP_PORT_ARRIVAL_0_SEQUENCE	0x0b
+#define PTP_PORT_ARRIVAL_1_STATUS	0x0c
+#define PTP_PORT_ARRIVAL_1_TIME_LO	0x0d
+#define PTP_PORT_ARRIVAL_1_TIME_HI	0x0e
+#define PTP_PORT_ARRIVAL_1_SEQUENCE	0x0f
+#define PTP_PORT_DEPARTURE_STATUS	0x10
+#define PTP_PORT_DEPARTURE_TIME_LO	0x11
+#define PTP_PORT_DEPARTURE_TIME_HI	0x12
+#define PTP_PORT_DEPARTURE_SEQUENCE	0x13
+
 struct mv88e6xxx_priv_state {
 	/* When using multi-chip addressing, this mutex protects
 	 * access to the indirect access registers.  (In single-chip
