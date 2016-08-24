@@ -126,7 +126,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot1";
@@ -158,7 +158,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot2";
@@ -190,7 +190,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot3";
@@ -222,7 +222,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot4";
@@ -254,7 +254,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot5";
@@ -285,7 +285,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot6";
@@ -316,7 +316,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot7";
@@ -347,7 +347,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot8";
@@ -378,7 +378,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot9";
@@ -409,7 +409,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot10";
@@ -441,7 +441,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot11";
@@ -473,7 +473,7 @@
 				#size-cells = <1>;
 				compatible = "m25p80","jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <1000000>;
 
 				partition@0 {
 					label = "slsc_slot12";
