@@ -22,6 +22,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_net.h>
 #include <linux/sysfs.h>
+#include <linux/ptp_classify.h>
 #include "dsa_priv.h"
 
 char dsa_driver_version[] = "0.1";
@@ -831,6 +832,36 @@ static int dsa_remove(struct platform_device *pdev)
 
 static void dsa_shutdown(struct platform_device *pdev)
 {
+}
+
+/* Returns true if we should defer delivery of skb until we have a rx timestamp.
+ *
+ * Called from the tag-specific code called from dsa_switch_rcv. For now, this
+ * will only work if tagging is enabled on the switch. Normally the MAC driver
+ * would retrieve the hardware timestamp when it reads the packet out of the
+ * hardware. However in a DSA switch, the DSA driver owning the interface to
+ * which the packet is delivered is never notified unless we do so here.
+ */
+bool dsa_skb_defer_rx_timestamp(struct dsa_switch *ds, int port,
+				struct sk_buff *skb)
+{
+	unsigned int type;
+
+	if (skb_headroom(skb) < ETH_HLEN)
+		return false;
+	__skb_push(skb, ETH_HLEN);
+
+	type = ptp_classify_raw(skb);
+
+	__skb_pull(skb, ETH_HLEN);
+
+	if (type == PTP_CLASS_NONE)
+		return false;
+
+	if (likely(ds->drv->port_rxtstamp))
+		return ds->drv->port_rxtstamp(ds, port, skb, type);
+
+	return false;
 }
 
 static int dsa_switch_rcv(struct sk_buff *skb, struct net_device *dev,

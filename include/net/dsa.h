@@ -310,11 +310,18 @@ struct dsa_switch_driver {
 				  struct ifreq *ifr);
 	int (*port_set_ts_config)(struct dsa_switch *ds, int port,
 				  struct ifreq *ifr);
+
+	int (*port_txtstamp)(struct dsa_switch *ds, int port,
+			     struct sk_buff *clone, unsigned int type);
+	int (*port_rxtstamp)(struct dsa_switch *ds, int port,
+			     struct sk_buff *skb, unsigned int type);
 };
 
 void register_switch_driver(struct dsa_switch_driver *type);
 void unregister_switch_driver(struct dsa_switch_driver *type);
 struct mii_bus *dsa_host_dev_to_mii_bus(struct device *dev);
+bool dsa_skb_defer_rx_timestamp(struct dsa_switch *ds, int port,
+				struct sk_buff *skb);
 
 static inline void *ds_to_priv(struct dsa_switch *ds)
 {

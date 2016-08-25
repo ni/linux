@@ -18,6 +18,7 @@
 #include <net/rtnetlink.h>
 #include <net/switchdev.h>
 #include <linux/if_bridge.h>
+#include <linux/ptp_classify.h>
 #include "dsa_priv.h"
 
 /* slave mii_bus handling ***************************************************/
@@ -415,6 +416,18 @@ static int dsa_slave_parent_id_get(struct net_device *dev,
 static netdev_tx_t dsa_slave_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_switch *ds = p->parent;
+
+	unsigned int type;
+
+	type = ptp_classify_raw(skb);
+
+	if (type != PTP_CLASS_NONE && likely(ds->drv->port_txtstamp)) {
+		struct sk_buff *clone = skb_clone_sk(skb);
+
+		if (clone)
+			ds->drv->port_txtstamp(ds, p->port, clone, type);
+	}
 
 	return p->xmit(skb, dev);
 }

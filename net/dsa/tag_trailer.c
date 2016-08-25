@@ -101,6 +101,9 @@ static int trailer_rcv(struct sk_buff *skb, struct net_device *dev,
 	skb->dev->stats.rx_packets++;
 	skb->dev->stats.rx_bytes += skb->len;
 
+	if (dsa_skb_defer_rx_timestamp(ds, source_port, skb))
+		return 0;
+
 	netif_receive_skb(skb);
 
 	return 0;
