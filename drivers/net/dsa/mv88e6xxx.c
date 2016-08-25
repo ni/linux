@@ -11,12 +11,14 @@
 #include <linux/delay.h>
 #include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
+#include <linux/if_vlan.h>
 #include <linux/jiffies.h>
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/net_tstamp.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
+#include <linux/ptp_classify.h>
 #include <net/dsa.h>
 #include "mv88e6xxx.h"
 
@@ -1092,6 +1094,107 @@ int mv88e6xxx_port_get_ts_config(struct dsa_switch *ds, int port,
 
 	return copy_to_user(ifr->ifr_data, config, sizeof(*config)) ?
 		-EFAULT : 0;
+}
+
+static u8 *_get_ptp_header(struct sk_buff *skb, unsigned int type)
+{
+	unsigned int offset = 0;
+	u8 *data = skb_mac_header(skb);
+
+	if (type & PTP_CLASS_VLAN)
+		offset += VLAN_HLEN;
+
+	switch (type & PTP_CLASS_PMASK) {
+	case PTP_CLASS_IPV4:
+		offset += ETH_HLEN + IPV4_HLEN(data + offset) + UDP_HLEN;
+		break;
+	case PTP_CLASS_IPV6:
+		offset += ETH_HLEN + IP6_HLEN + UDP_HLEN;
+		break;
+	case PTP_CLASS_L2:
+		offset += ETH_HLEN;
+		break;
+	default:
+		return ERR_PTR(-EINVAL);
+	}
+
+	/* Ensure that entire header is present in this packet */
+	if (skb->len + ETH_HLEN < offset + 34)
+		return ERR_PTR(-EINVAL);
+
+	return data + offset;
+}
+
+static int mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
+				      struct sk_buff *skb, unsigned int type)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
+
+	u8 *msgtype, *ptp_hdr;
+	u16 msg_mask;
+	int ret;
+
+	ptp_hdr = _get_ptp_header(skb, type);
+	if (IS_ERR(ptp_hdr))
+		return 0;
+
+	if (unlikely(type & PTP_CLASS_V1))
+		msgtype = ptp_hdr + OFF_PTP_CONTROL;
+	else
+		msgtype = ptp_hdr;
+
+	msg_mask = 1 << (*msgtype & 0xf);
+
+	mutex_lock(&pps->ptp_mutex);
+	ret = pps->ts_enable && (pps->ts_msg_types & msg_mask);
+	mutex_unlock(&pps->ptp_mutex);
+
+	return ret;
+}
+
+int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
+			    struct sk_buff *skb, unsigned int type)
+{
+	__le32 *ptp_rx_ts;
+	struct skb_shared_hwtstamps *shhwtstamps;
+
+	if (!mv88e6xxx_should_timestamp(ds, port, skb, type))
+		return 0;
+
+	/* RX timestamps are written into the PTP header itself */
+	ptp_rx_ts = (__le32 *)(_get_ptp_header(skb, type) + 16);
+	shhwtstamps = skb_hwtstamps(skb);
+	memset(shhwtstamps, 0, sizeof(*shhwtstamps));
+	shhwtstamps->hwtstamp = ns_to_ktime(__le32_to_cpu(*ptp_rx_ts) * 8);
+
+	netdev_dbg(ds->ports[port], "rxtstamp %lld\n",
+		   ktime_to_ns(shhwtstamps->hwtstamp));
+
+	/* Clear valid bit so the next timestamp can arrive */
+	mv88e6xxx_write_ptp_word(ds, port, GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				 PTP_PORT_ARRIVAL_0_STATUS, 0);
+
+	netif_receive_skb(skb);
+	return 1;
+}
+
+void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
+			     struct sk_buff *clone, unsigned int type)
+{
+	struct skb_shared_hwtstamps shhwtstamps;
+
+	if (mv88e6xxx_should_timestamp(ds, port, clone, type)) {
+		/* TODO: queue work to poll egress timestamp
+		 * For now we just fake it to get all the socket funcs working
+		 */
+		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
+		shhwtstamps.hwtstamp = ns_to_ktime(0x12345678);
+		skb_complete_tx_timestamp(clone, &shhwtstamps);
+
+		netdev_dbg(ds->ports[port], "txtstamp %llx\n",
+			   ktime_to_ns(shhwtstamps.hwtstamp));
+	}
 }
 
 /* Must be called with SMI lock held */

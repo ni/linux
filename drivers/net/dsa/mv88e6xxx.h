@@ -445,6 +445,10 @@ int mv88e6xxx_port_set_ts_config(struct dsa_switch *ds, int port,
 				 struct ifreq *ifr);
 int mv88e6xxx_port_get_ts_config(struct dsa_switch *ds, int port,
 				 struct ifreq *ifr);
+int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
+			    struct sk_buff *skb, unsigned int type);
+void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
+			     struct sk_buff *clone, unsigned int type);
 
 extern struct dsa_switch_driver mv88e6131_switch_driver;
 extern struct dsa_switch_driver mv88e6123_61_65_switch_driver;

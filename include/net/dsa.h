@@ -311,8 +311,8 @@ struct dsa_switch_driver {
 	int (*port_set_ts_config)(struct dsa_switch *ds, int port,
 				  struct ifreq *ifr);
 
-	int (*port_txtstamp)(struct dsa_switch *ds, int port,
-			     struct sk_buff *clone, unsigned int type);
+	void (*port_txtstamp)(struct dsa_switch *ds, int port,
+			      struct sk_buff *clone, unsigned int type);
 	int (*port_rxtstamp)(struct dsa_switch *ds, int port,
 			     struct sk_buff *skb, unsigned int type);
 };
