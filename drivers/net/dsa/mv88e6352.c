@@ -16,6 +16,7 @@
 #include <linux/jiffies.h>
 #include <linux/list.h>
 #include <linux/module.h>
+#include <linux/net_tstamp.h>
 #include <linux/netdevice.h>
 #include <linux/platform_device.h>
 #include <linux/phy.h>
@@ -573,6 +574,8 @@ struct dsa_switch_driver mv88e6352_switch_driver = {
 	.fdb_add		= mv88e6xxx_port_fdb_add,
 	.fdb_del		= mv88e6xxx_port_fdb_del,
 	.fdb_getnext		= mv88e6xxx_port_fdb_getnext,
+	.port_set_ts_config	= mv88e6xxx_port_set_ts_config,
+	.port_get_ts_config	= mv88e6xxx_port_get_ts_config,
 };
 
 MODULE_ALIAS("platform:mv88e6352");
