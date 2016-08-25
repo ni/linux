@@ -14,6 +14,7 @@
 #include <linux/jiffies.h>
 #include <linux/list.h>
 #include <linux/module.h>
+#include <linux/net_tstamp.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
 #include <net/dsa.h>
@@ -914,6 +915,185 @@ error:
 	return ret;
 }
 
+/* Set global and per-port timestamping */
+int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
+				 struct hwtstamp_config *config)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
+	u16 val;
+	int ret;
+
+	mutex_lock(&pps->ptp_mutex);
+
+	pps->ts_enable = true;
+	pps->check_trans_spec = true;
+	pps->ts_ver = 1;
+	pps->ts_msg_types = 0;
+
+	/* reserved for future extensions */
+	if (config->flags) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	switch (config->tx_type) {
+	case HWTSTAMP_TX_OFF:
+		pps->ts_enable = false;
+		break;
+	case HWTSTAMP_TX_ON:
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	/* The switch does not support timestamping both L2 and L4 */
+	switch (config->rx_filter) {
+	case HWTSTAMP_FILTER_NONE:
+		pps->ts_enable = false;
+		break;
+	case HWTSTAMP_FILTER_PTP_V1_L4_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
+		pps->ts_ver = 0;
+		pps->ts_msg_types = (1 << 0);
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
+		pps->ts_ver = 1;
+		pps->ts_msg_types = (1 << 0);
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_SYNC:
+		pps->check_trans_spec = false;
+		pps->ts_msg_types = (1 << 0);
+		break;
+	case HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ:
+	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
+		pps->ts_ver = 0;
+		pps->ts_msg_types = (1 << 1);
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
+		pps->ts_ver = 1;
+		pps->ts_msg_types = (1 << 1);
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
+		pps->check_trans_spec = false;
+		pps->ts_msg_types = (1 << 1);
+		break;
+	case HWTSTAMP_FILTER_PTP_V1_L4_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
+		pps->ts_ver = 0;
+		pps->ts_msg_types = 0xffff;
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
+		pps->ts_ver = 1;
+		pps->ts_msg_types = 0xffff;
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_EVENT:
+	case HWTSTAMP_FILTER_ALL:
+		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
+		pps->check_trans_spec = false;
+		pps->ts_msg_types = 0xffff;
+		break;
+	default:
+		config->rx_filter = HWTSTAMP_FILTER_NONE;
+		return -ERANGE;
+	}
+
+	/* Disable timestamping during configuration */
+	ret = mv88e6xxx_write_ptp_word(ds, port,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       PTP_PORT_CONFIG_0,
+				       PTP_PORT_CONFIG_0_DISABLE_TS);
+	if (ret < 0)
+		goto out;
+
+	if (!pps->ts_enable) {
+		/* We're done here */
+		ret = 0;
+		goto out;
+	}
+
+	/* Configure PTP message types to be timestamped */
+	ret = mv88e6xxx_write_ptp_word(ds, GLOBAL2_PTP_AVB_OP_PORT_PTP_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       PTP_GLOBAL_MSG_TYPE, pps->ts_msg_types);
+	if (ret < 0)
+		goto out;
+
+	/* Capture all arrival timestamps in ARRIVAL0 */
+	ret = mv88e6xxx_write_ptp_word(ds, GLOBAL2_PTP_AVB_OP_PORT_PTP_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       PTP_GLOBAL_TS_ARRIVAL_PTR, 0);
+	if (ret < 0)
+		goto out;
+
+	/* Embed arrival timestamp in packet and disable interrupts */
+	val = PTP_PORT_CONFIG_2_EMBED_ARRIVAL_0;
+	ret = mv88e6xxx_write_ptp_word(ds, port,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       PTP_PORT_CONFIG_2, val);
+	if (ret < 0)
+		goto out;
+
+	/* Final port configuration and enable timestamping */
+	val = PTP_PORT_CONFIG_0_DISABLE_OVERWRITE;
+	val |= pps->check_trans_spec ?
+			PTP_PORT_CONFIG_0_ENABLE_TRANS_CHECK :
+			PTP_PORT_CONFIG_0_DISABLE_TRANS_CHECK;
+	val |= pps->ts_ver > 0 ?
+			PTP_PORT_CONFIG_0_TRANS_8021AS :
+			PTP_PORT_CONFIG_0_TRANS_1588;
+	val |= pps->ts_enable ?
+			PTP_PORT_CONFIG_0_ENABLE_TS :
+			PTP_PORT_CONFIG_0_DISABLE_TS;
+	ret = mv88e6xxx_write_ptp_word(ds, port,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       PTP_PORT_CONFIG_0, val);
+	if (ret < 0)
+		goto out;
+
+	netdev_dbg(ds->ports[port], "HWTStamp %s ver %d msg types %x\n",
+		   pps->ts_enable ? "enabled" : "disabled",
+		   pps->ts_ver, pps->ts_msg_types);
+
+out:
+	mutex_unlock(&pps->ptp_mutex);
+
+	return ret;
+}
+
+int mv88e6xxx_port_set_ts_config(struct dsa_switch *ds, int port,
+				 struct ifreq *ifr)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+
+	struct hwtstamp_config config;
+	int err;
+
+	if (copy_from_user(&config, ifr->ifr_data, sizeof(config)))
+		return -EFAULT;
+
+	err = mv88e6xxx_set_timestamp_mode(ds, port, &config);
+	if (err)
+		return err;
+
+	/* save these settings for future reference */
+	memcpy(&ps->port_priv[port].tstamp_config, &config,
+	       sizeof(config));
+
+	return copy_to_user(ifr->ifr_data, &config, sizeof(config)) ?
+		-EFAULT : 0;
+}
+
+int mv88e6xxx_port_get_ts_config(struct dsa_switch *ds, int port,
+				 struct ifreq *ifr)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	struct hwtstamp_config *config = &ps->port_priv[port].tstamp_config;
+
+	return copy_to_user(ifr->ifr_data, config, sizeof(*config)) ?
+		-EFAULT : 0;
+}
+
 /* Must be called with SMI lock held */
 static int _mv88e6xxx_wait(struct dsa_switch *ds, int reg, int offset, u16 mask)
 {
@@ -1067,7 +1247,7 @@ static int mv88e6xxx_set_port_state(struct dsa_switch *ds, int port, u8 state)
 		 */
 		if (oldstate >= PORT_CONTROL_STATE_LEARNING &&
 		    state <= PORT_CONTROL_STATE_BLOCKING) {
-			ret = _mv88e6xxx_flush_fid(ds, ps->fid[port]);
+			ret = _mv88e6xxx_flush_fid(ds, ps->port_priv[port].fid);
 			if (ret)
 				goto abort;
 		}
@@ -1085,7 +1265,7 @@ abort:
 static int _mv88e6xxx_update_port_config(struct dsa_switch *ds, int port)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
-	u8 fid = ps->fid[port];
+	u8 fid = ps->port_priv[port].fid;
 	u16 reg = fid << 12;
 
 	if (dsa_is_cpu_port(ds, port))
@@ -1109,7 +1289,7 @@ static int _mv88e6xxx_update_bridge_config(struct dsa_switch *ds, int fid)
 	while (mask) {
 		port = __ffs(mask);
 		mask &= ~(1 << port);
-		if (ps->fid[port] != fid)
+		if (ps->port_priv[port].fid != fid)
 			continue;
 
 		ret = _mv88e6xxx_update_port_config(ds, port);
@@ -1132,10 +1312,10 @@ int mv88e6xxx_join_bridge(struct dsa_switch *ds, int port, u32 br_port_mask)
 	/* If the bridge group is not empty, join that group.
 	 * Otherwise create a new group.
 	 */
-	fid = ps->fid[port];
+	fid = ps->port_priv[port].fid;
 	nmask = br_port_mask & ~(1 << port);
 	if (nmask)
-		fid = ps->fid[__ffs(nmask)];
+		fid = ps->port_priv[__ffs(nmask)].fid;
 
 	nmask = ps->bridge_mask[fid] | (1 << port);
 	if (nmask != br_port_mask) {
@@ -1149,9 +1329,9 @@ int mv88e6xxx_join_bridge(struct dsa_switch *ds, int port, u32 br_port_mask)
 
 	ps->bridge_mask[fid] = br_port_mask;
 
-	if (fid != ps->fid[port]) {
-		ps->fid_mask |= 1 << ps->fid[port];
-		ps->fid[port] = fid;
+	if (fid != ps->port_priv[port].fid) {
+		ps->fid_mask |= 1 << ps->port_priv[port].fid;
+		ps->port_priv[port].fid = fid;
 		ret = _mv88e6xxx_update_bridge_config(ds, fid);
 	}
 
@@ -1166,7 +1346,7 @@ int mv88e6xxx_leave_bridge(struct dsa_switch *ds, int port, u32 br_port_mask)
 	u8 fid, newfid;
 	int ret;
 
-	fid = ps->fid[port];
+	fid = ps->port_priv[port].fid;
 
 	if (ps->bridge_mask[fid] != br_port_mask) {
 		netdev_err(ds->ports[port],
@@ -1185,7 +1365,7 @@ int mv88e6xxx_leave_bridge(struct dsa_switch *ds, int port, u32 br_port_mask)
 	mutex_lock(&ps->smi_mutex);
 
 	newfid = __ffs(ps->fid_mask);
-	ps->fid[port] = newfid;
+	ps->port_priv[port].fid = newfid;
 	ps->fid_mask &= (1 << newfid);
 	ps->bridge_mask[fid] &= ~(1 << port);
 	ps->bridge_mask[newfid] = 1 << port;
@@ -1226,7 +1406,7 @@ int mv88e6xxx_port_stp_update(struct dsa_switch *ds, int port, u8 state)
 	/* mv88e6xxx_port_stp_update may be called with softirqs disabled,
 	 * so we can not update the port state directly but need to schedule it.
 	 */
-	ps->port_state[port] = stp_state;
+	ps->port_priv[port].stp_state = stp_state;
 	set_bit(port, &ps->port_state_update_mask);
 	schedule_work(&ps->bridge_work);
 
@@ -1269,7 +1449,7 @@ static int __mv88e6xxx_port_fdb_cmd(struct dsa_switch *ds, int port,
 				    const unsigned char *addr, int state)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
-	u8 fid = ps->fid[port];
+	u8 fid = ps->port_priv[port].fid;
 	int ret;
 
 	ret = _mv88e6xxx_atu_wait(ds);
@@ -1324,7 +1504,7 @@ static int __mv88e6xxx_port_getnext(struct dsa_switch *ds, int port,
 				    unsigned char *addr, bool *is_static)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
-	u8 fid = ps->fid[port];
+	u8 fid = ps->port_priv[port].fid;
 	int ret, state;
 
 	ret = _mv88e6xxx_atu_wait(ds);
@@ -1385,7 +1565,8 @@ static void mv88e6xxx_bridge_work(struct work_struct *work)
 	while (ps->port_state_update_mask) {
 		port = __ffs(ps->port_state_update_mask);
 		clear_bit(port, &ps->port_state_update_mask);
-		mv88e6xxx_set_port_state(ds, port, ps->port_state[port]);
+		mv88e6xxx_set_port_state(ds, port,
+					 ps->port_priv[port].stp_state);
 	}
 }
 
@@ -1393,6 +1574,8 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 	int ret, fid;
+
+	mutex_init(&ps->port_priv[port].ptp_mutex);
 
 	mutex_lock(&ps->smi_mutex);
 
@@ -1409,7 +1592,7 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 	 * the upstream port.
 	 */
 	fid = __ffs(ps->fid_mask);
-	ps->fid[port] = fid;
+	ps->port_priv[port].fid = fid;
 	ps->fid_mask &= ~(1 << fid);
 
 	if (!dsa_is_cpu_port(ds, port))
@@ -1436,6 +1619,7 @@ int mv88e6xxx_setup_common(struct dsa_switch *ds)
 	mutex_init(&ps->smi_mutex);
 	mutex_init(&ps->stats_mutex);
 	mutex_init(&ps->phy_mutex);
+	mutex_init(&ps->ptp_mutex);
 
 	ps->id = REG_READ(REG_PORT(0), PORT_SWITCH_ID) & 0xfff0;
 

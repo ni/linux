@@ -279,6 +279,8 @@
 #define PTP_PORT_CONFIG_0	0x00
 #define PTP_PORT_CONFIG_0_TRANS_1588		(0 << 12)
 #define PTP_PORT_CONFIG_0_TRANS_8021AS		(1 << 12)
+#define PTP_PORT_CONFIG_0_ENABLE_TRANS_CHECK	(0 << 11)
+#define PTP_PORT_CONFIG_0_DISABLE_TRANS_CHECK	(1 << 11)
 #define PTP_PORT_CONFIG_0_ENABLE_OVERWRITE	(0 << 1)
 #define PTP_PORT_CONFIG_0_DISABLE_OVERWRITE	(1 << 1)
 #define PTP_PORT_CONFIG_0_ENABLE_TS		(0 << 0)
@@ -302,6 +304,23 @@
 #define PTP_PORT_DEPARTURE_TIME_LO	0x11
 #define PTP_PORT_DEPARTURE_TIME_HI	0x12
 #define PTP_PORT_DEPARTURE_SEQUENCE	0x13
+
+struct mv88e6xxx_port_priv_state {
+	u8 fid;
+	u8 stp_state;
+
+	/* This mutex serializes access to the per-port PTP
+	 * timestamping configuration
+	 */
+	struct mutex ptp_mutex;
+
+	struct hwtstamp_config tstamp_config;
+
+	bool ts_enable;
+	bool check_trans_spec;
+	int ts_ver;
+	u16 ts_msg_types;
+};
 
 struct mv88e6xxx_priv_state {
 	/* When using multi-chip addressing, this mutex protects
@@ -343,16 +362,16 @@ struct mv88e6xxx_priv_state {
 
 	int		id; /* switch product id */
 	int		num_ports;	/* number of switch ports */
-	int             mdio_offset;    /* MDIO address of port 0 */
+	int		mdio_offset;    /* MDIO address of port 0 */
 
 	/* hw bridging */
 
 	u32 fid_mask;
-	u8 fid[DSA_MAX_PORTS];
 	u16 bridge_mask[DSA_MAX_PORTS];
 
 	unsigned long port_state_update_mask;
-	u8 port_state[DSA_MAX_PORTS];
+
+	struct mv88e6xxx_port_priv_state port_priv[DSA_MAX_PORTS];
 
 	struct work_struct bridge_work;
 };
@@ -421,6 +440,12 @@ int mv88e6xxx_port_fdb_getnext(struct dsa_switch *ds, int port,
 int mv88e6xxx_phy_page_read(struct dsa_switch *ds, int port, int page, int reg);
 int mv88e6xxx_phy_page_write(struct dsa_switch *ds, int port, int page,
 			     int reg, int val);
+
+int mv88e6xxx_port_set_ts_config(struct dsa_switch *ds, int port,
+				 struct ifreq *ifr);
+int mv88e6xxx_port_get_ts_config(struct dsa_switch *ds, int port,
+				 struct ifreq *ifr);
+
 extern struct dsa_switch_driver mv88e6131_switch_driver;
 extern struct dsa_switch_driver mv88e6123_61_65_switch_driver;
 extern struct dsa_switch_driver mv88e6352_switch_driver;
