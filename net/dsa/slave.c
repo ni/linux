@@ -672,6 +672,19 @@ static int dsa_slave_get_eee(struct net_device *dev, struct ethtool_eee *e)
 	return ret;
 }
 
+static int dsa_slave_get_ts_info(struct net_device *dev,
+				 struct ethtool_ts_info *ts)
+{
+	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_switch *ds = p->parent;
+	int ret = -EOPNOTSUPP;
+
+	if (ds->drv->get_ts_info)
+		ret = ds->drv->get_ts_info(ds, p->port, ts);
+
+	return ret;
+}
+
 static const struct ethtool_ops dsa_slave_ethtool_ops = {
 	.get_settings		= dsa_slave_get_settings,
 	.set_settings		= dsa_slave_set_settings,
@@ -690,6 +703,7 @@ static const struct ethtool_ops dsa_slave_ethtool_ops = {
 	.get_wol		= dsa_slave_get_wol,
 	.set_eee		= dsa_slave_set_eee,
 	.get_eee		= dsa_slave_get_eee,
+	.get_ts_info	= dsa_slave_get_ts_info,
 };
 
 static const struct net_device_ops dsa_slave_netdev_ops = {

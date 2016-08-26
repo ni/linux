@@ -243,6 +243,12 @@ struct dsa_switch_driver {
 			   struct ethtool_wolinfo *w);
 
 	/*
+	 * ethtool timestamp info
+	 */
+	int (*get_ts_info)(struct dsa_switch *ds, int port,
+				struct ethtool_ts_info *ts);
+
+	/*
 	 * Suspend and resume
 	 */
 	int	(*suspend)(struct dsa_switch *ds);
