@@ -306,6 +306,24 @@
 #define PTP_PORT_DEPARTURE_TIME_HI	0x12
 #define PTP_PORT_DEPARTURE_SEQUENCE	0x13
 
+#define TAI_GLOBAL_CONFIG	0x00
+#define TAI_GLOBAL_CLOCK_PERIOD	0x01
+#define TAI_GLOBAL_TRIG_GEN_AMOUNT_LO	0x02
+#define TAI_GLOBAL_TRIG_GEN_AMOUNT_HI	0x03
+#define TAI_GLOBAL_TRIG_CLOCK_COMP	0x04
+#define TAI_GLOBAL_TRIG_CONFIG	0x05
+#define TAI_GLOBAL_IRL_AMOUNT	0x06
+#define TAI_GLOBAL_IRL_COMP	0x07
+#define TAI_GLOBAL_EVENT_STATUS	0x08
+#define TAI_GLOBAL_EVENT_TIME_LO	0x09
+#define TAI_GLOBAL_EVENT_TIME_HI	0x0a
+#define TAI_GLOBAL_TIME_LO	0x0e
+#define TAI_GLOBAL_TIME_HI	0x0f
+#define TAI_GLOBAL_TRIG_TIME_LO	0x10
+#define TAI_GLOBAL_TRIG_TIME_HI	0x11
+#define TAI_GLOBAL_LOCK_STATUS	0x12
+#define TAI_GLOBAL_CLOCK_CONFIG	0x1e
+
 #define TX_TSTAMP_TIMEOUT	(HZ * 15)
 
 struct mv88e6xxx_port_priv_state {
@@ -382,6 +400,9 @@ struct mv88e6xxx_priv_state {
 	struct mv88e6xxx_port_priv_state port_priv[DSA_MAX_PORTS];
 
 	struct work_struct bridge_work;
+
+	struct ptp_clock *ptp_clock;
+	struct ptp_clock_info ptp_clock_caps;
 };
 
 enum stat_type {
@@ -457,6 +478,8 @@ int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 			    struct sk_buff *skb, unsigned int type);
 void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 			     struct sk_buff *clone, unsigned int type);
+
+int mv88e6xxx_setup_phc(struct dsa_switch *ds);
 
 extern struct dsa_switch_driver mv88e6131_switch_driver;
 extern struct dsa_switch_driver mv88e6123_61_65_switch_driver;

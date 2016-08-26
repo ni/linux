@@ -19,6 +19,7 @@
 #include <linux/netdevice.h>
 #include <linux/phy.h>
 #include <linux/ptp_classify.h>
+#include <linux/ptp_clock_kernel.h>
 #include <net/dsa.h>
 #include "mv88e6xxx.h"
 
@@ -1794,6 +1795,76 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 abort:
 	mutex_unlock(&ps->smi_mutex);
 	return ret;
+}
+
+static int mv88e6xxx_phc_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
+{
+	if (ppb == 0)
+		return 0;
+
+	return -EOPNOTSUPP;
+}
+
+static int mv88e6xxx_phc_adjtime(struct ptp_clock_info *ptp, s64 delta)
+{
+	/* Silently discard adjustment for now */
+	return 0;
+}
+
+static int mv88e6xxx_phc_gettime(struct ptp_clock_info *ptp,
+				 struct timespec64 *ts)
+{
+	struct mv88e6xxx_priv_state *ps =
+		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
+	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
+
+	u16 phc_time[4];
+	u64 ns;
+	int ret;
+
+	ret = mv88e6xxx_read_ptp_block(ds, GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_TIME_LO, phc_time);
+	if (ret < 0)
+		return ret;
+
+	ns = ((u32)phc_time[1] << 16) | phc_time[0];
+	*ts = ns_to_timespec64(ns);
+
+	return 0;
+}
+
+static int mv88e6xxx_phc_settime(struct ptp_clock_info *ptp,
+				 const struct timespec64 *ts)
+{
+	/* Silently discard for now */
+	return 0;
+}
+
+static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
+				struct ptp_clock_request *rq, int on)
+{
+	return -EOPNOTSUPP;
+}
+
+int mv88e6xxx_setup_phc(struct dsa_switch *ds)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+
+	ps->ptp_clock_caps.owner = THIS_MODULE;
+	snprintf(ps->ptp_clock_caps.name, 20, "dsa-%d:mv88e6xxx", ds->index);
+	ps->ptp_clock_caps.max_adj = 0;
+	ps->ptp_clock_caps.adjfreq = mv88e6xxx_phc_adjfreq;
+	ps->ptp_clock_caps.adjtime = mv88e6xxx_phc_adjtime;
+	ps->ptp_clock_caps.gettime64 = mv88e6xxx_phc_gettime;
+	ps->ptp_clock_caps.settime64 = mv88e6xxx_phc_settime;
+	ps->ptp_clock_caps.enable = mv88e6xxx_phc_enable;
+
+	ps->ptp_clock = ptp_clock_register(&ps->ptp_clock_caps, ds->master_dev);
+	if (IS_ERR(ps->ptp_clock))
+		return PTR_ERR(ps->ptp_clock);
+
+	return 0;
 }
 
 int mv88e6xxx_setup_common(struct dsa_switch *ds)

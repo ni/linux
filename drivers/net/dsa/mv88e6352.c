@@ -19,6 +19,7 @@
 #include <linux/net_tstamp.h>
 #include <linux/netdevice.h>
 #include <linux/platform_device.h>
+#include <linux/ptp_clock_kernel.h>
 #include <linux/phy.h>
 #include <net/dsa.h>
 #include "mv88e6xxx.h"
@@ -342,6 +343,8 @@ static int mv88e6352_setup(struct dsa_switch *ds)
 		if (ret < 0)
 			return ret;
 	}
+
+	mv88e6xxx_setup_phc(ds);
 
 	return 0;
 }
