@@ -581,6 +581,7 @@ struct dsa_switch_driver mv88e6352_switch_driver = {
 	.port_get_ts_config	= mv88e6xxx_port_get_ts_config,
 	.port_txtstamp	= mv88e6xxx_port_txtstamp,
 	.port_rxtstamp	= mv88e6xxx_port_rxtstamp,
+	.get_ts_info	= mv88e6xxx_get_ts_info,
 };
 
 MODULE_ALIAS("platform:mv88e6352");

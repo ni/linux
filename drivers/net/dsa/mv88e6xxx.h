@@ -478,6 +478,8 @@ int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 			    struct sk_buff *skb, unsigned int type);
 void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 			     struct sk_buff *clone, unsigned int type);
+int mv88e6xxx_get_ts_info(struct dsa_switch *ds, int port,
+			  struct ethtool_ts_info *info);
 
 int mv88e6xxx_setup_phc(struct dsa_switch *ds);
 
