@@ -301,13 +301,21 @@
 #define PTP_PORT_ARRIVAL_1_TIME_HI	0x0e
 #define PTP_PORT_ARRIVAL_1_SEQUENCE	0x0f
 #define PTP_PORT_DEPARTURE_STATUS	0x10
+#define PTP_PORT_DEPARTURE_STATUS_VALID	BIT(0)
 #define PTP_PORT_DEPARTURE_TIME_LO	0x11
 #define PTP_PORT_DEPARTURE_TIME_HI	0x12
 #define PTP_PORT_DEPARTURE_SEQUENCE	0x13
 
+#define TX_TSTAMP_TIMEOUT	(HZ * 15)
+
 struct mv88e6xxx_port_priv_state {
+	u8 port_id;
 	u8 fid;
 	u8 stp_state;
+
+	struct work_struct tx_tstamp_work;
+	unsigned long tx_tstamp_start;
+	struct sk_buff *tx_skb;
 
 	/* This mutex serializes access to the per-port PTP
 	 * timestamping configuration

@@ -1179,21 +1179,97 @@ int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 	return 1;
 }
 
+static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
+{
+	struct mv88e6xxx_port_priv_state *pps;
+	struct mv88e6xxx_priv_state *ps;
+	struct dsa_switch *ds;
+
+	u16 departure_block[4];
+	int ret;
+
+	pps = container_of(ugly, struct mv88e6xxx_port_priv_state,
+			   tx_tstamp_work);
+	/* There has to be a better way... */
+	ps = container_of(pps, struct mv88e6xxx_priv_state,
+			  port_priv[pps->port_id]);
+	ds = ((struct dsa_switch *)ps) - 1;
+
+	if (!pps->tx_skb)
+		return;
+
+	if (time_is_before_jiffies(pps->tx_tstamp_start +
+				   TX_TSTAMP_TIMEOUT)) {
+		netdev_warn(ds->ports[pps->port_id], "clearing Tx timestamp hang\n");
+		goto abort;
+	}
+
+	ret = mv88e6xxx_read_ptp_block(ds, pps->port_id,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       PTP_PORT_DEPARTURE_STATUS,
+				       departure_block);
+
+	if (ret < 0)
+		goto abort;
+
+	if (departure_block[0] & PTP_PORT_DEPARTURE_STATUS_VALID) {
+		/* TODO: verify sequence ID */
+
+		struct skb_shared_hwtstamps shhwtstamps;
+		u32 tx_ns = ((u32)departure_block[2] << 16) |
+			    departure_block[1];
+
+		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
+		shhwtstamps.hwtstamp = ns_to_ktime(tx_ns);
+		skb_complete_tx_timestamp(pps->tx_skb, &shhwtstamps);
+
+		/* No free required after skb_complete_tx_timestamp, but we do
+		 * need to clean up our state so we can timestamp the next
+		 * packet.
+		 */
+
+		netdev_dbg(ds->ports[pps->port_id], "txtstamp %llx\n",
+			   ktime_to_ns(shhwtstamps.hwtstamp));
+
+		/* Clear valid bit so the next timestamp can arrive */
+		mv88e6xxx_write_ptp_word(ds, pps->port_id,
+					 GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+					 PTP_PORT_DEPARTURE_STATUS, 0);
+
+		pps->tx_skb = NULL;
+	} else {
+		/* reschedule to check later */
+		schedule_work(&pps->tx_tstamp_work);
+	}
+
+	return;
+
+abort:
+	dev_kfree_skb_any(pps->tx_skb);
+	pps->tx_skb = NULL;
+}
+
 void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 			     struct sk_buff *clone, unsigned int type)
 {
-	struct skb_shared_hwtstamps shhwtstamps;
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 
-	if (mv88e6xxx_should_timestamp(ds, port, clone, type)) {
-		/* TODO: queue work to poll egress timestamp
-		 * For now we just fake it to get all the socket funcs working
-		 */
-		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
-		shhwtstamps.hwtstamp = ns_to_ktime(0x12345678);
-		skb_complete_tx_timestamp(clone, &shhwtstamps);
+	if (unlikely(skb_shinfo(clone)->tx_flags & SKBTX_HW_TSTAMP) &&
+	    mv88e6xxx_should_timestamp(ds, port, clone, type)) {
+		struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
 
-		netdev_dbg(ds->ports[port], "txtstamp %llx\n",
-			   ktime_to_ns(shhwtstamps.hwtstamp));
+		if (pps->tx_skb) {
+			netdev_dbg(ds->ports[port], "Tx timestamp already in progress, discarding");
+			kfree_skb(clone);
+		} else {
+			pps->tx_skb = clone;
+			pps->tx_tstamp_start = jiffies;
+
+			schedule_work(&pps->tx_tstamp_work);
+		}
+	} else {
+		/* We don't need it after all */
+		kfree_skb(clone);
 	}
 }
 
@@ -1676,11 +1752,16 @@ static void mv88e6xxx_bridge_work(struct work_struct *work)
 int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
 	int ret, fid;
 
-	mutex_init(&ps->port_priv[port].ptp_mutex);
+	pps->port_id = port;
+
+	mutex_init(&pps->ptp_mutex);
 
 	mutex_lock(&ps->smi_mutex);
+
+	INIT_WORK(&pps->tx_tstamp_work, mv88e6xxx_tx_tstamp_work);
 
 	/* Port Control 1: disable trunking, disable sending
 	 * learning messages to this port.
@@ -1695,7 +1776,7 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 	 * the upstream port.
 	 */
 	fid = __ffs(ps->fid_mask);
-	ps->port_priv[port].fid = fid;
+	pps->fid = fid;
 	ps->fid_mask &= ~(1 << fid);
 
 	if (!dsa_is_cpu_port(ds, port))
