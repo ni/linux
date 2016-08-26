@@ -401,6 +401,13 @@ struct mv88e6xxx_priv_state {
 
 	struct work_struct bridge_work;
 
+	/* This mutex serializes access to the upper 32-bits of
+	 * the PHC time
+	 */
+	struct mutex phc_mutex;
+	u32 phc_rollovers;
+	u32 last_phc_counter;
+
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_clock_caps;
 };
