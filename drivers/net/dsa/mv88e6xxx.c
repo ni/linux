@@ -1159,6 +1159,19 @@ out:
 	return ret;
 }
 
+static u64 mv88e6xxx_raw_to_ns(struct dsa_switch *ds, u64 raw)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	u64 ns;
+
+	mutex_lock(&ps->phc_mutex);
+	/* Raw timestamps are in units of 8-ns clock periods. */
+	ns = (raw * 8) + ps->phc_offset;
+	mutex_unlock(&ps->phc_mutex);
+
+	return ns;
+}
+
 /* Augment a 32-bit timestamp with the current rollover count, adjusting
  * for up to a single intervening rollover. This function must be called
  * within one rollover period from when the timestamp was taken to work
@@ -1166,7 +1179,7 @@ out:
  */
 static int mv88e6xxx_augment_tstamp(struct dsa_switch *ds, u32 ts, ktime_t *kt)
 {
-	u64 now, full_tstamp;
+	u64 now, raw_tstamp;
 	int ret;
 
 	ret = mv88e6xxx_get_raw_phc_time(ds, &now);
@@ -1174,16 +1187,16 @@ static int mv88e6xxx_augment_tstamp(struct dsa_switch *ds, u32 ts, ktime_t *kt)
 		return ret;
 
 	/* OR in top bits of global timestamp */
-	full_tstamp = (now & 0xffffffff00000000ULL) | ts;
+	raw_tstamp = (now & 0xffffffff00000000ULL) | ts;
 
 	/* Receipt time will always be in the past. Account for the
 	 * case where the 32-bit hardware time has rolled over between
 	 * when the packet was received and now.
 	 */
-	if (full_tstamp > now)
-		full_tstamp -= 0x100000000ULL;
+	if (raw_tstamp > now)
+		raw_tstamp -= 0x100000000ULL;
 
-	*kt = ns_to_ktime(full_tstamp * 8);
+	*kt = ns_to_ktime(mv88e6xxx_raw_to_ns(ds, raw_tstamp));
 
 	return 0;
 }
@@ -1876,7 +1889,15 @@ static int mv88e6xxx_phc_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 
 static int mv88e6xxx_phc_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
-	/* Silently discard adjustment for now */
+	struct mv88e6xxx_priv_state *ps =
+		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
+
+	mutex_lock(&ps->phc_mutex);
+
+	ps->phc_offset += delta;
+
+	mutex_unlock(&ps->phc_mutex);
+
 	return 0;
 }
 
@@ -1894,7 +1915,7 @@ static int mv88e6xxx_phc_gettime(struct ptp_clock_info *ptp,
 	if (ret < 0)
 		return ret;
 
-	*ts = ns_to_timespec64(raw_count * 8);
+	*ts = ns_to_timespec64(mv88e6xxx_raw_to_ns(ds, raw_count));
 
 	return 0;
 }
@@ -1902,7 +1923,25 @@ static int mv88e6xxx_phc_gettime(struct ptp_clock_info *ptp,
 static int mv88e6xxx_phc_settime(struct ptp_clock_info *ptp,
 				 const struct timespec64 *ts)
 {
-	/* Silently discard for now */
+	struct mv88e6xxx_priv_state *ps =
+		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
+	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
+
+	u64 raw_count, new_now;
+	int ret;
+
+	ret = mv88e6xxx_get_raw_phc_time(ds, &raw_count);
+	if (ret < 0)
+		return ret;
+
+	new_now = timespec64_to_ns(ts);
+
+	mutex_lock(&ps->phc_mutex);
+
+	ps->phc_offset = new_now - (raw_count * 8);
+
+	mutex_unlock(&ps->phc_mutex);
+
 	return 0;
 }
 
