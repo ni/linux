@@ -2019,6 +2019,78 @@ static int mv88e6xxx_config_periodic_trig(struct dsa_switch *ds, u32 ns, u16 ps)
 static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 				struct ptp_clock_request *rq, int on)
 {
+	struct mv88e6xxx_priv_state *ps =
+		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
+	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
+	int pin;
+	struct timespec ts;
+	u64 ns;
+	int ret;
+
+	switch (rq->type) {
+	case PTP_CLK_REQ_EXTTS:
+		pin = ptp_find_pin(ps->ptp_clock, PTP_PF_PEROUT,
+				   rq->perout.index);
+		if (pin < 0)
+			return -EBUSY;
+
+		ret = mv88e6xxx_config_gpio(ds, pin,
+					    MISC_REG_GPIO_MODE_EVREQ,
+					    MISC_REG_GPIO_DIR_IN);
+		return ret;
+
+	case PTP_CLK_REQ_PEROUT:
+		pin = ptp_find_pin(ps->ptp_clock, PTP_PF_PEROUT,
+				   rq->perout.index);
+		if (pin < 0)
+			return -EBUSY;
+
+		ts.tv_sec = rq->perout.period.sec;
+		ts.tv_nsec = rq->perout.period.nsec;
+		ns = timespec_to_ns(&ts);
+
+		if (ns > 0xffffffffULL)
+			return -ERANGE;
+
+		ret = mv88e6xxx_config_periodic_trig(ds, (u32)ns, 0);
+		if (ret < 0)
+			return ret;
+
+		if (on) {
+			ret = mv88e6xxx_config_gpio(ds, pin,
+						    MISC_REG_GPIO_MODE_TRIG,
+						    MISC_REG_GPIO_DIR_OUT);
+		} else {
+			ret = mv88e6xxx_config_gpio(ds, pin,
+						    MISC_REG_GPIO_MODE_GPIO,
+						    MISC_REG_GPIO_DIR_IN);
+		}
+
+		return ret;
+
+	case PTP_CLK_REQ_PPS:
+		pin = ptp_find_pin(ps->ptp_clock, PTP_PF_PEROUT,
+				   rq->perout.index);
+		if (pin < 0)
+			return -EBUSY;
+
+		ret = mv88e6xxx_config_periodic_trig(ds, 1000000000UL, 0);
+		if (ret < 0)
+			return ret;
+
+		if (on) {
+			ret = mv88e6xxx_config_gpio(ds, pin,
+						    MISC_REG_GPIO_MODE_TRIG,
+						    MISC_REG_GPIO_DIR_OUT);
+		} else {
+			ret = mv88e6xxx_config_gpio(ds, pin,
+						    MISC_REG_GPIO_MODE_GPIO,
+						    MISC_REG_GPIO_DIR_IN);
+		}
+
+		return ret;
+	}
+
 	return -EOPNOTSUPP;
 }
 
@@ -2026,7 +2098,15 @@ static int mv88e6xxx_phc_verify(struct ptp_clock_info *ptp,
 				unsigned int pin, enum ptp_pin_function func,
 				unsigned int chan)
 {
-	return -EOPNOTSUPP;
+	switch (func) {
+	case PTP_PF_NONE:
+	case PTP_PF_EXTTS:
+	case PTP_PF_PEROUT:
+		break;
+	case PTP_PF_PHYSYNC:
+		return -EOPNOTSUPP;
+	}
+	return 0;
 }
 
 int mv88e6xxx_setup_phc(struct dsa_switch *ds)
