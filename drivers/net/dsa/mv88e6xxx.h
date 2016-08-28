@@ -324,6 +324,10 @@
 #define TAI_GLOBAL_LOCK_STATUS	0x12
 #define TAI_GLOBAL_CLOCK_CONFIG	0x1e
 
+#define MV88E6XXX_NUM_EXTTS	1
+#define MV88E6XXX_NUM_PEROUT	1
+#define MV88E6XXX_NUM_GPIO	11
+
 #define TX_TSTAMP_TIMEOUT	(HZ * 15)
 
 struct mv88e6xxx_port_priv_state {
@@ -411,6 +415,8 @@ struct mv88e6xxx_priv_state {
 
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_clock_caps;
+
+	struct ptp_pin_desc pin_config[MV88E6XXX_NUM_GPIO];
 };
 
 enum stat_type {

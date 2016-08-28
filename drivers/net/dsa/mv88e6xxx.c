@@ -1951,18 +1951,38 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 	return -EOPNOTSUPP;
 }
 
+static int mv88e6xxx_phc_verify(struct ptp_clock_info *ptp,
+				unsigned int pin, enum ptp_pin_function func,
+				unsigned int chan)
+{
+	return -EOPNOTSUPP;
+}
+
 int mv88e6xxx_setup_phc(struct dsa_switch *ds)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	int i;
 
 	ps->ptp_clock_caps.owner = THIS_MODULE;
+	for (i = 0; i < MV88E6XXX_NUM_GPIO; i++) {
+		struct ptp_pin_desc *ppd = &ps->pin_config[i];
+
+		snprintf(ppd->name, sizeof(ppd->name), "mv88e6xxx_gpio%d", i);
+		ppd->index = i;
+		ppd->func = PTP_PF_NONE;
+	}
 	snprintf(ps->ptp_clock_caps.name, 20, "dsa-%d:mv88e6xxx", ds->index);
 	ps->ptp_clock_caps.max_adj = 0;
+	ps->ptp_clock_caps.n_ext_ts = MV88E6XXX_NUM_EXTTS;
+	ps->ptp_clock_caps.n_per_out = MV88E6XXX_NUM_PEROUT;
+	ps->ptp_clock_caps.n_pins = MV88E6XXX_NUM_GPIO;
+	ps->ptp_clock_caps.pin_config = ps->pin_config;
 	ps->ptp_clock_caps.adjfreq = mv88e6xxx_phc_adjfreq;
 	ps->ptp_clock_caps.adjtime = mv88e6xxx_phc_adjtime;
 	ps->ptp_clock_caps.gettime64 = mv88e6xxx_phc_gettime;
 	ps->ptp_clock_caps.settime64 = mv88e6xxx_phc_settime;
 	ps->ptp_clock_caps.enable = mv88e6xxx_phc_enable;
+	ps->ptp_clock_caps.verify = mv88e6xxx_phc_verify;
 
 	ps->ptp_clock = ptp_clock_register(&ps->ptp_clock_caps, ds->master_dev);
 	if (IS_ERR(ps->ptp_clock))
