@@ -1945,6 +1945,77 @@ static int mv88e6xxx_phc_settime(struct ptp_clock_info *ptp,
 	return 0;
 }
 
+static int mv88e6xxx_misc_reg_read(struct dsa_switch *ds, int reg)
+{
+	int ret;
+
+	ret = mv88e6xxx_reg_write(ds, REG_GLOBAL2, GLOBAL2_SCRATCH_MISC,
+				  reg << GLOBAL2_SCRATCH_MISC_REG_OFFSET);
+	if (ret < 0)
+		return ret;
+
+	ret = mv88e6xxx_reg_read(ds, REG_GLOBAL2, GLOBAL2_SCRATCH_MISC);
+	if (ret < 0)
+		return ret;
+
+	return ret & GLOBAL2_SCRATCH_MISC_DATA_MASK;
+}
+
+static int mv88e6xxx_misc_reg_write(struct dsa_switch *ds, int reg, u8 data)
+{
+	int ret;
+
+	ret = mv88e6xxx_reg_write(ds, REG_GLOBAL2, GLOBAL2_SCRATCH_MISC,
+				  GLOBAL2_SCRATCH_MISC_UPDATE |
+				  reg << GLOBAL2_SCRATCH_MISC_REG_OFFSET |
+				  data);
+
+	return ret;
+}
+
+/* Configures the specified pin for the specified function. This function does
+ * not unset other pins configured for the same function. If multiple pins
+ * are configured for the same function, the lower-index pin gets that function
+ * and the higher-index pin goes back to being GPIO.
+ */
+static int mv88e6xxx_config_gpio(struct dsa_switch *ds, int pin, int func,
+				 int dir)
+{
+	int reg_data;
+	int ret;
+
+	/* Set function first */
+	ret = mv88e6xxx_misc_reg_read(ds, MISC_REG_GPIO_MODE(pin));
+	if (ret < 0)
+		return ret;
+
+	/* Zero bits in the field for this GPIO and OR in the new config */
+	reg_data = ret & ~MISC_REG_GPIO_MODE_MASK(pin);
+	reg_data |= func << MISC_REG_GPIO_MODE_OFFSET(pin);
+
+	ret = mv88e6xxx_misc_reg_write(ds, MISC_REG_GPIO_MODE(pin), reg_data);
+	if (ret < 0)
+		return ret;
+
+	/* Set direction */
+	ret = mv88e6xxx_misc_reg_read(ds, MISC_REG_GPIO_DIR(pin));
+	if (ret < 0)
+		return ret;
+
+	/* Zero bits in the field for this GPIO and OR in the new config */
+	reg_data = ret & ~MISC_REG_GPIO_DIR_MASK(pin);
+	reg_data |= dir << MISC_REG_GPIO_DIR_OFFSET(pin);
+
+	ret = mv88e6xxx_misc_reg_write(ds, MISC_REG_GPIO_DIR(pin), reg_data);
+
+	return ret;
+}
+
+static int mv88e6xxx_config_periodic_trig(struct dsa_switch *ds, u32 ns, u16 ps)
+{
+	return -EOPNOTSUPP;
+}
+
 static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 				struct ptp_clock_request *rq, int on)
 {
