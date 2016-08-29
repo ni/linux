@@ -1984,6 +1984,9 @@ static int mv88e6xxx_config_gpio(struct dsa_switch *ds, int pin, int func,
 	int reg_data;
 	int ret;
 
+	dev_dbg(ds->master_dev, "config pin %d func %d dir %d\n",
+		pin, func, dir);
+
 	/* Set function first */
 	ret = mv88e6xxx_misc_reg_read(ds, MISC_REG_GPIO_MODE(pin));
 	if (ret < 0)
@@ -2022,28 +2025,31 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 	struct mv88e6xxx_priv_state *ps =
 		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
 	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
-	int pin;
 	struct timespec ts;
 	u64 ns;
 	int ret;
 
+	dev_dbg(ds->master_dev, "feature %d on=%d\n", rq->type, on);
+
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:
-		pin = ptp_find_pin(ps->ptp_clock, PTP_PF_PEROUT,
-				   rq->perout.index);
-		if (pin < 0)
-			return -EBUSY;
+		dev_dbg(ds->master_dev, "EXTTS req on=%d index %d\n",
+			on, rq->extts.index);
 
-		ret = mv88e6xxx_config_gpio(ds, pin,
-					    MISC_REG_GPIO_MODE_EVREQ,
-					    MISC_REG_GPIO_DIR_IN);
+		if (on) {
+			ret = mv88e6xxx_config_gpio(ds, rq->extts.index,
+						    MISC_REG_GPIO_MODE_EVREQ,
+						    MISC_REG_GPIO_DIR_IN);
+		} else {
+			ret = mv88e6xxx_config_gpio(ds, rq->extts.index,
+						    MISC_REG_GPIO_MODE_GPIO,
+						    MISC_REG_GPIO_DIR_IN);
+		}
 		return ret;
 
 	case PTP_CLK_REQ_PEROUT:
-		pin = ptp_find_pin(ps->ptp_clock, PTP_PF_PEROUT,
-				   rq->perout.index);
-		if (pin < 0)
-			return -EBUSY;
+		dev_dbg(ds->master_dev, "PEROUT req on=%d index %d\n",
+			on, rq->perout.index);
 
 		ts.tv_sec = rq->perout.period.sec;
 		ts.tv_nsec = rq->perout.period.nsec;
@@ -2057,11 +2063,11 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 			return ret;
 
 		if (on) {
-			ret = mv88e6xxx_config_gpio(ds, pin,
+			ret = mv88e6xxx_config_gpio(ds, rq->perout.index,
 						    MISC_REG_GPIO_MODE_TRIG,
 						    MISC_REG_GPIO_DIR_OUT);
 		} else {
-			ret = mv88e6xxx_config_gpio(ds, pin,
+			ret = mv88e6xxx_config_gpio(ds, rq->perout.index,
 						    MISC_REG_GPIO_MODE_GPIO,
 						    MISC_REG_GPIO_DIR_IN);
 		}
@@ -2069,24 +2075,12 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 		return ret;
 
 	case PTP_CLK_REQ_PPS:
-		pin = ptp_find_pin(ps->ptp_clock, PTP_PF_PEROUT,
-				   rq->perout.index);
-		if (pin < 0)
-			return -EBUSY;
-
+		dev_dbg(ds->master_dev, "PPS req on=%d\n", on);
 		ret = mv88e6xxx_config_periodic_trig(ds, 1000000000UL, 0);
 		if (ret < 0)
 			return ret;
 
-		if (on) {
-			ret = mv88e6xxx_config_gpio(ds, pin,
-						    MISC_REG_GPIO_MODE_TRIG,
-						    MISC_REG_GPIO_DIR_OUT);
-		} else {
-			ret = mv88e6xxx_config_gpio(ds, pin,
-						    MISC_REG_GPIO_MODE_GPIO,
-						    MISC_REG_GPIO_DIR_IN);
-		}
+		/* TODO: start PPS work for polling or enable interrupts */
 
 		return ret;
 	}
