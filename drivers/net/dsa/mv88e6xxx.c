@@ -2014,9 +2014,98 @@ static int mv88e6xxx_config_gpio(struct dsa_switch *ds, int pin, int func,
 	return ret;
 }
 
+static int mv88e6xxx_disable_trig(struct dsa_switch *ds)
+{
+	return -EOPNOTSUPP;
+}
+
 static int mv88e6xxx_config_periodic_trig(struct dsa_switch *ds, u32 ns, u16 ps)
 {
 	return -EOPNOTSUPP;
+}
+
+/* Configures the TAI event capture circuitry. Pass in
+ * TAI_GLOBAL_EVENT_STATUS_CAPTURE_TRIG for internal trigger
+ * TAI_GLOBAL_EVENT_STATUS_CAPTURE_EVREQ for external trigger
+ * This will also reset the capture sequence counter.
+ */
+static int mv88e6xxx_config_eventcap(struct dsa_switch *ds, u16 type,
+				     int rising)
+{
+	int ret;
+	u16 val;
+
+	val = TAI_GLOBAL_CONFIG_DISABLE_OVERWRITE |
+		TAI_GLOBAL_CONFIG_ENABLE_CAPTURE_COUNTER |
+		rising ? TAI_GLOBAL_CONFIG_EVREQ_RISING :
+			 TAI_GLOBAL_CONFIG_EVREQ_FALLING;
+
+	ret = mv88e6xxx_write_ptp_word(ds,
+				       GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_CONFIG, val);
+	if (ret < 0)
+		return ret;
+
+	ret = mv88e6xxx_write_ptp_word(ds,
+				       GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_EVENT_STATUS, type);
+
+	return ret;
+}
+
+static void mv88e6xxx_tai_work(struct work_struct *ugly)
+{
+	struct delayed_work *dw = to_delayed_work(ugly);
+	struct mv88e6xxx_priv_state *ps =
+		container_of(dw, struct mv88e6xxx_priv_state, tai_work);
+	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
+	u16 event_block[4];
+	int ret;
+
+	ret = mv88e6xxx_read_ptp_block(ds,
+				       GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_EVENT_STATUS, event_block);
+	if (ret < 0)
+		return;
+
+	if (event_block[0] & TAI_GLOBAL_EVENT_STATUS_ERROR)
+		dev_warn(ds->master_dev, "missed event capture\n");
+
+	if (event_block[0] & TAI_GLOBAL_EVENT_STATUS_VALID) {
+		struct ptp_clock_event ev;
+		ktime_t ev_time;
+		u32 raw_ts = ((u32)event_block[2] << 16) | event_block[1];
+
+		mv88e6xxx_augment_tstamp(ds, raw_ts, &ev_time);
+
+		/* Clear the valid bit so the next timestamp can come in */
+		event_block[0] &= ~TAI_GLOBAL_EVENT_STATUS_VALID;
+		ret = mv88e6xxx_write_ptp_word(ds,
+					       GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+					       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+					       TAI_GLOBAL_EVENT_STATUS,
+					       event_block[0]);
+
+		if (event_block[0] & TAI_GLOBAL_EVENT_STATUS_CAPTURE_TRIG) {
+			/* TAI is configured to timestamp internal events.
+			 * This will be a PPS event.
+			 */
+			ev.type = PTP_CLOCK_PPS;
+		} else {
+			/* Otherwise this is an external timestamp */
+			ev.type = PTP_CLOCK_EXTTS;
+		}
+		/* We only have the one TAI timestamping channel */
+		ev.index = 0;
+		ev.timestamp = ktime_to_ns(ev_time);
+
+		ptp_clock_event(ps->ptp_clock, &ev);
+	}
+
+	schedule_delayed_work(&ps->tai_work, TAI_WORK_INTERVAL);
 }
 
 static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
@@ -2040,10 +2129,15 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 			ret = mv88e6xxx_config_gpio(ds, rq->extts.index,
 						    MISC_REG_GPIO_MODE_EVREQ,
 						    MISC_REG_GPIO_DIR_IN);
+			schedule_delayed_work(&ps->tai_work, 0);
+			mv88e6xxx_config_eventcap(ds,
+						  TAI_GLOBAL_EVENT_STATUS_CAPTURE_EVREQ,
+						  rq->extts.flags & PTP_RISING_EDGE);
 		} else {
 			ret = mv88e6xxx_config_gpio(ds, rq->extts.index,
-						    MISC_REG_GPIO_MODE_GPIO,
-						    MISC_REG_GPIO_DIR_IN);
+						  MISC_REG_GPIO_MODE_GPIO,
+						  MISC_REG_GPIO_DIR_IN);
+			cancel_delayed_work_sync(&ps->tai_work);
 		}
 		return ret;
 
@@ -2076,11 +2170,18 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 
 	case PTP_CLK_REQ_PPS:
 		dev_dbg(ds->master_dev, "PPS req on=%d\n", on);
-		ret = mv88e6xxx_config_periodic_trig(ds, 1000000000UL, 0);
-		if (ret < 0)
-			return ret;
 
-		/* TODO: start PPS work for polling or enable interrupts */
+		if (on) {
+			ret = mv88e6xxx_config_periodic_trig(ds, 1000000000UL,
+							     0);
+			schedule_delayed_work(&ps->tai_work, 0);
+			mv88e6xxx_config_eventcap(ds,
+						  TAI_GLOBAL_EVENT_STATUS_CAPTURE_TRIG,
+						  1);
+		} else {
+			ret = mv88e6xxx_disable_trig(ds);
+			cancel_delayed_work_sync(&ps->tai_work);
+		}
 
 		return ret;
 	}
@@ -2182,6 +2283,7 @@ int mv88e6xxx_setup_common(struct dsa_switch *ds)
 	ps->fid_mask = (1 << DSA_MAX_PORTS) - 1;
 
 	INIT_WORK(&ps->bridge_work, mv88e6xxx_bridge_work);
+	INIT_DELAYED_WORK(&ps->tai_work, mv88e6xxx_tai_work);
 
 	return 0;
 }
