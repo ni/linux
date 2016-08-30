@@ -62,6 +62,39 @@
 		gpios = <&gpio 44 1 /* GPIO_ACTIVE_LOW */>;
 		priority = <200>;
 	};
+
+	dsa@0 {
+		compatible = "marvell,dsa";
+		#address-cells = <2>;
+		#size-cells = <0>;
+
+		dsa,ethernet = <&gem0>;
+		dsa,mii-bus = <&gem0>;
+
+		switch@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			/* MDIO addr 0x0 (single-chip addressing), switch 0 */
+			reg = <0 0>;
+
+			port@0 {
+				reg = <0x0>;
+				label = "cpu";
+			};
+
+			port@1 {
+				reg = <0x1>;
+				label = "sw0";
+				/* phy-handle = <&swport1>; */
+			};
+
+			port@2 {
+				reg = <0x2>;
+				label = "sw1";
+				/* phy-handle = <&swport2>; */
+			};
+		};
+	};
 };
 
 &gem0 {
