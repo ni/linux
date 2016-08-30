@@ -146,15 +146,22 @@ static int mv88e6352_setup_port(struct dsa_switch *ds, int p)
 	 * full duplex.
 	 */
 	if (dsa_is_cpu_port(ds, p) || ds->dsa_port_mask & (1 << p))
-		REG_WRITE(addr, 0x01, 0x003e);
+	{
+		REG_WRITE(addr, PORT_PCS_CTRL,
+			  PORT_PCS_LINK_VAL | PORT_PCS_FORCE_LINK |
+			  PORT_PCS_DPX_FULL | PORT_PCS_FORCE_DPX |
+			  PORT_PCS_SPD_1000);
+	}
 	else
-		REG_WRITE(addr, 0x01, 0x0003);
+	{
+		REG_WRITE(addr, PORT_PCS_CTRL, PORT_PCS_SPD_1000);
+	}
 
 	/* Do not limit the period of time that this port can be
 	 * paused for by the remote end or the period of time that
 	 * this port can pause the remote end.
 	 */
-	REG_WRITE(addr, 0x02, 0x0000);
+	REG_WRITE(addr, PORT_JAMMING_CTRL, 0x0000);
 
 	/* Port Control: disable Drop-on-Unlock, disable Drop-on-Lock,
 	 * disable Header mode, enable IGMP/MLD snooping, disable VLAN
@@ -181,7 +188,7 @@ static int mv88e6352_setup_port(struct dsa_switch *ds, int p)
 		val |= 0x0100;
 	if (p == dsa_upstream_port(ds))
 		val |= 0x000c;
-	REG_WRITE(addr, 0x04, val);
+	REG_WRITE(addr, PORT_CONTROL, val);
 
 	/* Port Control 2: don't force a good FCS, set the maximum
 	 * frame size to 10240 bytes, don't let the switch add or
@@ -191,41 +198,41 @@ static int mv88e6352_setup_port(struct dsa_switch *ds, int p)
 	 * send a copy of all transmitted/received frames on this port
 	 * to the CPU.
 	 */
-	REG_WRITE(addr, 0x08, 0x2080);
+	REG_WRITE(addr, PORT_CONTROL_2, 0x2080);
 
 	/* Egress rate control: disable egress rate control. */
-	REG_WRITE(addr, 0x09, 0x0001);
+	REG_WRITE(addr, PORT_RATE_CONTROL, 0x0001);
 
 	/* Egress rate control 2: disable egress rate control. */
-	REG_WRITE(addr, 0x0a, 0x0000);
+	REG_WRITE(addr, PORT_RATE_CONTROL_2, 0x0000);
 
 	/* Port Association Vector: when learning source addresses
 	 * of packets, add the address to the address database using
 	 * a port bitmap that has only the bit for this port set and
 	 * the other bits clear.
 	 */
-	REG_WRITE(addr, 0x0b, 1 << p);
+	REG_WRITE(addr, PORT_ASSOC_VECTOR, 1 << p);
 
 	/* Port ATU control: disable limiting the number of address
 	 * database entries that this port is allowed to use.
 	 */
-	REG_WRITE(addr, 0x0c, 0x0000);
+	REG_WRITE(addr, PORT_ATU_CTRL, 0x0000);
 
 	/* Priority Override: disable DA, SA and VTU priority override. */
-	REG_WRITE(addr, 0x0d, 0x0000);
+	REG_WRITE(addr, PORT_PRIORITY_OVERRIDE, 0x0000);
 
 	/* Port Ethertype: use the Ethertype DSA Ethertype value. */
-	REG_WRITE(addr, 0x0f, ETH_P_EDSA);
+	REG_WRITE(addr, PORT_ETHERTYPE, ETH_P_EDSA);
 
 	/* Tag Remap: use an identity 802.1p prio -> switch prio
 	 * mapping.
 	 */
-	REG_WRITE(addr, 0x18, 0x3210);
+	REG_WRITE(addr, PORT_TAG_REMAP_0123, 0x3210);
 
 	/* Tag Remap 2: use an identity 802.1p prio -> switch prio
 	 * mapping.
 	 */
-	REG_WRITE(addr, 0x19, 0x7654);
+	REG_WRITE(addr, PORT_TAG_REMAP_4567, 0x7654);
 
 	return mv88e6xxx_setup_port_common(ds, p);
 }
