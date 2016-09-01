@@ -472,6 +472,9 @@ struct mv88e6xxx_priv_state {
 
 	struct ptp_pin_desc pin_config[MV88E6XXX_NUM_GPIO];
 
+	u16 trig_config;
+	u16 evcap_config;
+
 	struct delayed_work tai_work;
 };
 

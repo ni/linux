@@ -2016,12 +2016,75 @@ static int mv88e6xxx_config_gpio(struct dsa_switch *ds, int pin, int func,
 
 static int mv88e6xxx_disable_trig(struct dsa_switch *ds)
 {
-	return -EOPNOTSUPP;
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	int ret;
+
+	mutex_lock(&ps->phc_mutex);
+
+	ps->trig_config = TAI_GLOBAL_CONFIG_TRIG_DISABLE;
+
+	ret = mv88e6xxx_write_ptp_word(ds,
+				       GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_CONFIG,
+				       ps->evcap_config | ps->trig_config);
+
+	mutex_unlock(&ps->phc_mutex);
+
+	return ret;
 }
 
-static int mv88e6xxx_config_periodic_trig(struct dsa_switch *ds, u32 ns, u16 ps)
+static int mv88e6xxx_config_periodic_trig(struct dsa_switch *ds, u32 ns,
+					  u16 picos)
 {
-	return -EOPNOTSUPP;
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	int ret;
+
+	if (picos >= 1000)
+		return -ERANGE;
+
+	/* TRIG generation is in units of 8 ns clock periods. Convert ns and
+	 * ps into 8 ns clock periods and up to 8000 additional ps.
+	 */
+	picos += (ns & 0x7) * 1000;
+	ns = ns >> 3;
+
+	mutex_lock(&ps->phc_mutex);
+
+	ret = mv88e6xxx_write_ptp_word(ds, GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_TRIG_GEN_AMOUNT_LO,
+				       ns & 0xffff);
+	if (ret < 0)
+		goto out;
+
+	ret = mv88e6xxx_write_ptp_word(ds, GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_TRIG_GEN_AMOUNT_HI,
+				       ns >> 16);
+	if (ret < 0)
+		goto out;
+
+	ret = mv88e6xxx_write_ptp_word(ds, GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_TRIG_CLOCK_COMP,
+				       picos);
+	if (ret < 0)
+		goto out;
+
+	ps->trig_config = TAI_GLOBAL_CONFIG_TRIG_ACTIVE_HI |
+		TAI_GLOBAL_CONFIG_TRIG_MODE_CLOCK |
+		TAI_GLOBAL_CONFIG_TRIG_ENABLE;
+
+	ret = mv88e6xxx_write_ptp_word(ds, GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
+				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+				       TAI_GLOBAL_CONFIG,
+				       ps->evcap_config | ps->trig_config);
+
+out:
+	mutex_unlock(&ps->phc_mutex);
+
+	return ret;
 }
 
 /* Configures the TAI event capture circuitry. Pass in
@@ -2032,10 +2095,12 @@ static int mv88e6xxx_config_periodic_trig(struct dsa_switch *ds, u32 ns, u16 ps)
 static int mv88e6xxx_config_eventcap(struct dsa_switch *ds, u16 type,
 				     int rising)
 {
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 	int ret;
-	u16 val;
 
-	val = TAI_GLOBAL_CONFIG_DISABLE_OVERWRITE |
+	mutex_lock(&ps->phc_mutex);
+
+	ps->evcap_config = TAI_GLOBAL_CONFIG_DISABLE_OVERWRITE |
 		TAI_GLOBAL_CONFIG_ENABLE_CAPTURE_COUNTER |
 		rising ? TAI_GLOBAL_CONFIG_EVREQ_RISING :
 			 TAI_GLOBAL_CONFIG_EVREQ_FALLING;
@@ -2043,14 +2108,18 @@ static int mv88e6xxx_config_eventcap(struct dsa_switch *ds, u16 type,
 	ret = mv88e6xxx_write_ptp_word(ds,
 				       GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
 				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
-				       TAI_GLOBAL_CONFIG, val);
+				       TAI_GLOBAL_CONFIG,
+				       ps->evcap_config | ps->trig_config);
 	if (ret < 0)
-		return ret;
+		goto out;
 
 	ret = mv88e6xxx_write_ptp_word(ds,
 				       GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
 				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
 				       TAI_GLOBAL_EVENT_STATUS, type);
+
+out:
+	mutex_unlock(&ps->phc_mutex);
 
 	return ret;
 }
