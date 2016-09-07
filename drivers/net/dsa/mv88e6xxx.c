@@ -1201,19 +1201,22 @@ static int mv88e6xxx_augment_tstamp(struct dsa_switch *ds, u32 ts, ktime_t *kt)
 	return 0;
 }
 
-static int mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
-				      struct sk_buff *skb, unsigned int type)
+static bool mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
+				       struct sk_buff *skb, unsigned int type)
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 	struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
 
 	u8 *msgtype, *ptp_hdr;
 	u16 msg_mask;
-	int ret;
+	bool ret;
+
+	if (port < 0 || port >= ps->num_ports)
+		return false;
 
 	ptp_hdr = _get_ptp_header(skb, type);
 	if (IS_ERR(ptp_hdr))
-		return 0;
+		return false;
 
 	if (unlikely(type & PTP_CLASS_V1))
 		msgtype = ptp_hdr + OFF_PTP_CONTROL;
@@ -1223,26 +1226,44 @@ static int mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
 	msg_mask = 1 << (*msgtype & 0xf);
 
 	mutex_lock(&pps->ptp_mutex);
-	ret = pps->ts_enable && (pps->ts_msg_types & msg_mask);
+	ret = pps->ts_enable && ((pps->ts_msg_types & msg_mask) != 0);
 	mutex_unlock(&pps->ptp_mutex);
 
 	return ret;
 }
 
-int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
-			    struct sk_buff *skb, unsigned int type)
+static void mv88e6xxx_rx_tstamp_work(struct work_struct *ugly)
 {
+	struct mv88e6xxx_port_priv_state *pps =
+		container_of(ugly, struct mv88e6xxx_port_priv_state,
+			     tx_tstamp_work);
+	struct mv88e6xxx_priv_state *ps;
+	struct dsa_switch *ds;
 	__le32 *ptp_rx_ts;
 	struct skb_shared_hwtstamps *shhwtstamps;
+	struct sk_buff *skb;
+	int type;
 	int ret;
+	unsigned long flags;
 
-	if (!mv88e6xxx_should_timestamp(ds, port, skb, type))
-		return 0;
+	ps = container_of(pps, struct mv88e6xxx_priv_state,
+			  port_priv[pps->port_id]);
+	ds = ((struct dsa_switch *)ps) - 1;
 
-	/* Clear valid bit so the next timestamp can arrive while we're
-	 * processing
+	spin_lock_irqsave(&pps->rx_tstamp_lock, flags);
+
+	skb = pps->rx_skb;
+	type = pps->rx_tstamp_type;
+	/* Let rxtstamp queue the next SKB. It would be more effective
+	 * here to have a real queue of SKBs, but this will do for now.
 	 */
-	mv88e6xxx_write_ptp_word(ds, port, GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+	pps->rx_skb = NULL;
+
+	spin_unlock_irqrestore(&pps->rx_tstamp_lock, flags);
+
+	/* Tell the hardware to enable the next timestamp */
+	mv88e6xxx_write_ptp_word(ds, pps->port_id,
+				 GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
 				 PTP_PORT_ARRIVAL_0_STATUS, 0);
 
 	shhwtstamps = skb_hwtstamps(skb);
@@ -1252,13 +1273,48 @@ int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 	ret = mv88e6xxx_augment_tstamp(ds, __le32_to_cpu(*ptp_rx_ts),
 				       &shhwtstamps->hwtstamp);
 	if (ret < 0)
-		return 0;
+		/* Packet gets discarded */
+		return;
 
-	netdev_dbg(ds->ports[port], "rxtstamp %lld\n",
+	netdev_dbg(ds->ports[pps->port_id], "rxtstamp %lld\n",
 		   ktime_to_ns(shhwtstamps->hwtstamp));
 
 	netif_receive_skb(skb);
-	return 1;
+}
+
+/* rxtstamp will be called in interrupt context so we can't do
+ * anything like read PTP registers
+ */
+bool mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
+			     struct sk_buff *skb, unsigned int type)
+{
+	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
+	struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
+	unsigned long flags;
+
+	if (port < 0 || port >= ps->num_ports)
+		return false;
+
+	if (!mv88e6xxx_should_timestamp(ds, port, skb, type))
+		return false;
+
+	spin_lock_irqsave(&pps->rx_tstamp_lock, flags);
+
+	if (pps->rx_skb)
+		/* Another packet is already queued for timestamping */
+		goto no_defer;
+
+	pps->rx_skb = skb;
+	pps->rx_tstamp_type = type;
+
+	spin_unlock_irqrestore(&pps->rx_tstamp_lock, flags);
+
+	schedule_work(&pps->rx_tstamp_work);
+	return true;
+
+no_defer:
+	spin_unlock_irqrestore(&pps->rx_tstamp_lock, flags);
+	return false;
 }
 
 static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
@@ -1337,23 +1393,28 @@ void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 
+	if (port < 0 || port >= ps->num_ports)
+		goto out;
+
 	if (unlikely(skb_shinfo(clone)->tx_flags & SKBTX_HW_TSTAMP) &&
 	    mv88e6xxx_should_timestamp(ds, port, clone, type)) {
 		struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
 
 		if (pps->tx_skb) {
 			netdev_dbg(ds->ports[port], "Tx timestamp already in progress, discarding");
-			kfree_skb(clone);
+			goto out;
 		} else {
 			pps->tx_skb = clone;
 			pps->tx_tstamp_start = jiffies;
 
 			schedule_work(&pps->tx_tstamp_work);
+			return;
 		}
-	} else {
-		/* We don't need it after all */
-		kfree_skb(clone);
 	}
+
+out:
+	/* We don't need it after all */
+	kfree_skb(clone);
 }
 
 /* Must be called with SMI lock held */
@@ -1841,10 +1902,12 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 	pps->port_id = port;
 
 	mutex_init(&pps->ptp_mutex);
-
-	mutex_lock(&ps->smi_mutex);
+	spin_lock_init(&pps->rx_tstamp_lock);
 
 	INIT_WORK(&pps->tx_tstamp_work, mv88e6xxx_tx_tstamp_work);
+	INIT_WORK(&pps->rx_tstamp_work, mv88e6xxx_rx_tstamp_work);
+
+	mutex_lock(&ps->smi_mutex);
 
 	/* Port Control 1: disable trunking, disable sending
 	 * learning messages to this port.

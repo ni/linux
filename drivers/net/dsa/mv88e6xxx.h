@@ -393,6 +393,11 @@ struct mv88e6xxx_port_priv_state {
 	unsigned long tx_tstamp_start;
 	struct sk_buff *tx_skb;
 
+	spinlock_t rx_tstamp_lock;
+	int rx_tstamp_type;
+	struct sk_buff *rx_skb;
+	struct work_struct rx_tstamp_work;
+
 	/* This mutex serializes access to the per-port PTP
 	 * timestamping configuration
 	 */
@@ -547,8 +552,8 @@ int mv88e6xxx_port_set_ts_config(struct dsa_switch *ds, int port,
 				 struct ifreq *ifr);
 int mv88e6xxx_port_get_ts_config(struct dsa_switch *ds, int port,
 				 struct ifreq *ifr);
-int mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
-			    struct sk_buff *skb, unsigned int type);
+bool mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
+			     struct sk_buff *skb, unsigned int type);
 void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 			     struct sk_buff *clone, unsigned int type);
 int mv88e6xxx_get_ts_info(struct dsa_switch *ds, int port,

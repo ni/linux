@@ -319,8 +319,8 @@ struct dsa_switch_driver {
 
 	void (*port_txtstamp)(struct dsa_switch *ds, int port,
 			      struct sk_buff *clone, unsigned int type);
-	int (*port_rxtstamp)(struct dsa_switch *ds, int port,
-			     struct sk_buff *skb, unsigned int type);
+	bool (*port_rxtstamp)(struct dsa_switch *ds, int port,
+			      struct sk_buff *skb, unsigned int type);
 };
 
 void register_switch_driver(struct dsa_switch_driver *type);
