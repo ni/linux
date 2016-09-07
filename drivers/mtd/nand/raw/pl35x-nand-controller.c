@@ -144,6 +144,14 @@ struct pl35x_nandc {
 	u8 *ecc_buf;
 };
 
+static bool enable_subpage_read = 1;
+module_param(enable_subpage_read, bool, 0444);
+MODULE_PARM_DESC(enable_subpage_read, "Load-time parameter to toggle subpage reads on supported nand chips. Enabled by default.");
+
+static bool enable_subpage_write = 1;
+module_param(enable_subpage_write, bool, 0444);
+MODULE_PARM_DESC(enable_subpage_write, "Load-time parameter to toggle subpage writes on supported nand chips. Enabled by default.");
+
 static inline struct pl35x_nandc *to_pl35x_nandc(struct nand_controller *ctrl)
 {
 	return container_of(ctrl, struct pl35x_nandc, controller);
@@ -977,6 +985,21 @@ static int pl35x_nand_init_hw_ecc_controller(struct pl35x_nandc *nfc,
 	return ret;
 }
 
+static void pl35x_nand_setup_ondie_ecc(struct nand_chip *chip)
+{
+	/* NAND with on-die ECC supports subpage reads */
+	if (enable_subpage_read)
+		chip->options |= NAND_SUBPAGE_READ;
+	else
+		chip->options &= ~(NAND_SUBPAGE_READ);
+
+	/* NAND with on-die ECC may support subpage writes */
+	if (enable_subpage_write)
+		chip->options &= ~(NAND_NO_SUBPAGE_WRITE);
+	else
+		chip->options |= NAND_NO_SUBPAGE_WRITE;
+}
+
 static int pl35x_nand_attach_chip(struct nand_chip *chip)
 {
 	const struct nand_ecc_props *requirements =
@@ -1011,6 +1034,7 @@ static int pl35x_nand_attach_chip(struct nand_chip *chip)
 
 	switch (chip->ecc.engine_type) {
 	case NAND_ECC_ENGINE_TYPE_ON_DIE:
+		pl35x_nand_setup_ondie_ecc(chip);
 		/* Keep these legacy BBT descriptors for ON_DIE situations */
 		chip->bbt_td = &bbt_main_descr;
 		chip->bbt_md = &bbt_mirror_descr;
