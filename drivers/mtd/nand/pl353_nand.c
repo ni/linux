@@ -204,6 +204,14 @@ static struct nand_bbt_descr bbt_mirror_descr = {
 	.pattern = mirror_pattern
 };
 
+static bool enable_subpage_read = 1;
+module_param(enable_subpage_read, bool, 0444);
+MODULE_PARM_DESC(enable_subpage_read, "Load-time parameter to toggle subpage reads on supported nand chips. Enabled by default.");
+
+static bool enable_subpage_write = 1;
+module_param(enable_subpage_write, bool, 0444);
+MODULE_PARM_DESC(enable_subpage_write, "Load-time parameter to toggle subpage writes on supported nand chips. Enabled by default.");
+
 /**
  * pl353_nand_calculate_hwecc - Calculate Hardware ECC
  * @mtd:	Pointer to the mtd_info structure
@@ -1056,12 +1064,20 @@ static void pl353_nand_ecc_init(struct mtd_info *mtd, int ondie_ecc_state)
 		nand_chip->ecc.size = mtd->writesize;
 
 		/* NAND with on-die ECC supports subpage reads */
-		nand_chip->options |= NAND_SUBPAGE_READ;
+		if (enable_subpage_read)
+			nand_chip->options |= NAND_SUBPAGE_READ;
+		else
+			nand_chip->options &= ~(NAND_SUBPAGE_READ);
 
 		/* NAND with on-die ECC may support subpage writes */
 		if (nand_chip->onfi_version)
 			nand_chip->ecc.size /=
 				nand_chip->onfi_params.programs_per_page;
+
+		if (enable_subpage_write)
+			nand_chip->options &= ~(NAND_NO_SUBPAGE_WRITE);
+		else
+			nand_chip->options |= NAND_NO_SUBPAGE_WRITE;
 
 		/*
 		 * On-Die ECC spare bytes offset 8 is used for ECC codes
