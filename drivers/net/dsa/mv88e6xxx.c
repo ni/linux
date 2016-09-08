@@ -1229,6 +1229,10 @@ static bool mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
 	ret = pps->ts_enable && ((pps->ts_msg_types & msg_mask) != 0);
 	mutex_unlock(&pps->ptp_mutex);
 
+	netdev_dbg(ds->ports[port],
+		   "PTP message classification 0x%x type 0x%x should ts %d",
+		   type, *msgtype, (int)ret);
+
 	return ret;
 }
 
@@ -1343,7 +1347,7 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 
 	if (time_is_before_jiffies(pps->tx_tstamp_start +
 				   TX_TSTAMP_TIMEOUT)) {
-		netdev_warn(ds->ports[pps->port_id], "clearing Tx timestamp hang\n");
+		netdev_warn(ds->ports[pps->port_id], "clearing tx timestamp hang\n");
 		goto free_skb;
 	}
 
@@ -1356,13 +1360,30 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 		goto free_skb;
 
 	if (departure_block[0] & PTP_PORT_DEPARTURE_STATUS_VALID) {
-		/* TODO: verify sequence ID */
-
+		u16 status;
 		struct skb_shared_hwtstamps shhwtstamps;
-		u32 tx_low_word = ((u32)departure_block[2] << 16) |
-				  departure_block[1];
+		u32 tx_low_word;
+
+		/* We have the timestamp; go ahead and clear valid now */
+		mv88e6xxx_write_ptp_word(ds, pps->port_id,
+					 GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+					 PTP_PORT_DEPARTURE_STATUS, 0);
+
+		status = departure_block[0] &
+				PTP_PORT_DEPARTURE_STATUS_STATUS_MASK;
+		if (status != PTP_PORT_DEPARTURE_STATUS_STATUS_NORMAL) {
+			netdev_warn(ds->ports[pps->port_id], "tx timestamp overrun\n");
+			goto free_skb;
+		}
+
+		if (departure_block[3] != pps->tx_seq_id) {
+			netdev_warn(ds->ports[pps->port_id], "unexpected sequence id\n");
+			goto free_skb;
+		}
 
 		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
+		tx_low_word = ((u32)departure_block[2] << 16) |
+			      departure_block[1];
 		ret = mv88e6xxx_augment_tstamp(ds, tx_low_word,
 					       &shhwtstamps.hwtstamp);
 		skb_complete_tx_timestamp(pps->tx_skb, &shhwtstamps);
@@ -1373,13 +1394,10 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 		 */
 		pps->tx_skb = NULL;
 
-		/* Clear valid bit so the next timestamp can arrive */
-		mv88e6xxx_write_ptp_word(ds, pps->port_id,
-					 GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
-					 PTP_PORT_DEPARTURE_STATUS, 0);
-
-		netdev_dbg(ds->ports[pps->port_id], "txtstamp %llx\n",
-			   ktime_to_ns(shhwtstamps.hwtstamp));
+		netdev_dbg(ds->ports[pps->port_id], "txtstamp %llx status 0x%04x skb ID 0x%04x hw ID 0x%04x\n",
+			   ktime_to_ns(shhwtstamps.hwtstamp),
+			   departure_block[0], pps->tx_seq_id,
+			   departure_block[3]);
 	} else {
 		/* reschedule to check later */
 		schedule_work(&pps->tx_tstamp_work);
@@ -1413,8 +1431,12 @@ void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 			netdev_dbg(ds->ports[port], "Tx timestamp already in progress, discarding");
 			kfree_skb(clone);
 		} else {
+			__be16 *seq_ptr = (__be16 *)(_get_ptp_header(clone, type) +
+						     OFF_PTP_SEQUENCE_ID);
+
 			pps->tx_skb = clone;
 			pps->tx_tstamp_start = jiffies;
+			pps->tx_seq_id = __be16_to_cpu(*seq_ptr);
 
 			schedule_work(&pps->tx_tstamp_work);
 		}

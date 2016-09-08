@@ -327,6 +327,10 @@
 #define PTP_PORT_ARRIVAL_1_TIME_HI	0x0e
 #define PTP_PORT_ARRIVAL_1_SEQUENCE	0x0f
 #define PTP_PORT_DEPARTURE_STATUS	0x10
+#define PTP_PORT_DEPARTURE_STATUS_STATUS_MASK	(3 << 1)
+#define PTP_PORT_DEPARTURE_STATUS_STATUS_NORMAL	(0 << 1)
+#define PTP_PORT_DEPARTURE_STATUS_STATUS_OVERWRITTEN	(1 << 1)
+#define PTP_PORT_DEPARTURE_STATUS_STATUS_DISCARDED	(2 << 1)
 #define PTP_PORT_DEPARTURE_STATUS_VALID	BIT(0)
 #define PTP_PORT_DEPARTURE_TIME_LO	0x11
 #define PTP_PORT_DEPARTURE_TIME_HI	0x12
@@ -394,6 +398,7 @@ struct mv88e6xxx_port_priv_state {
 	 */
 	struct mutex tx_tstamp_mutex;
 	struct work_struct tx_tstamp_work;
+	u16 tx_seq_id;
 	unsigned long tx_tstamp_start;
 	struct sk_buff *tx_skb;
 
