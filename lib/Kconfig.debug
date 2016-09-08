@@ -962,6 +962,7 @@ config TIMER_STATS
 config DEBUG_PREEMPT
 	bool "Debug preemptible kernel"
 	depends on DEBUG_KERNEL && PREEMPT && TRACE_IRQFLAGS_SUPPORT
+	select USING_GET_LOCK_PARENT_IP
 	default y
 	help
 	  If you say Y here then the kernel will use a debug variant of the
@@ -1144,8 +1145,17 @@ config LOCK_TORTURE_TEST
 
 endmenu # lock debugging
 
+config USING_GET_LOCK_PARENT_IP
+        bool
+	help
+	  Enables the use of the function get_lock_parent_ip() that
+	  will use __builtin_return_address(n) with n > 0 causing
+	  some gcc warnings. When this is selected, those warnings
+	  will be suppressed.
+
 config TRACE_IRQFLAGS
 	bool
+	select USING_GET_LOCK_PARENT_IP
 	help
 	  Enables hooks to interrupt enabling and disabling for
 	  either tracing or lock debugging.
