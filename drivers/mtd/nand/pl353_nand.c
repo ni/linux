@@ -204,11 +204,11 @@ static struct nand_bbt_descr bbt_mirror_descr = {
 	.pattern = mirror_pattern
 };
 
-static int enable_subpage_read = 1;
+static bool enable_subpage_read = 1;
 module_param(enable_subpage_read, bool, 0444);
 MODULE_PARM_DESC(enable_subpage_read, "Load-time parameter to toggle subpage reads on supported nand chips. Enabled by default.");
 
-static int enable_subpage_write = 1;
+static bool enable_subpage_write = 1;
 module_param(enable_subpage_write, bool, 0444);
 MODULE_PARM_DESC(enable_subpage_write, "Load-time parameter to toggle subpage writes on supported nand chips. Enabled by default.");
 
