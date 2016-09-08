@@ -1236,10 +1236,11 @@ static void mv88e6xxx_rx_tstamp_work(struct work_struct *ugly)
 {
 	struct mv88e6xxx_port_priv_state *pps =
 		container_of(ugly, struct mv88e6xxx_port_priv_state,
-			     tx_tstamp_work);
+			     rx_tstamp_work);
 	struct mv88e6xxx_priv_state *ps;
 	struct dsa_switch *ds;
-	__le32 *ptp_rx_ts;
+	__be32 *ptp_rx_ts;
+	u32 raw_ts;
 	struct skb_shared_hwtstamps *shhwtstamps;
 	struct sk_buff *skb;
 	int type;
@@ -1269,14 +1270,14 @@ static void mv88e6xxx_rx_tstamp_work(struct work_struct *ugly)
 	shhwtstamps = skb_hwtstamps(skb);
 	memset(shhwtstamps, 0, sizeof(*shhwtstamps));
 	/* RX timestamps are written into the PTP header itself */
-	ptp_rx_ts = (__le32 *)(_get_ptp_header(skb, type) + 16);
-	ret = mv88e6xxx_augment_tstamp(ds, __le32_to_cpu(*ptp_rx_ts),
-				       &shhwtstamps->hwtstamp);
+	ptp_rx_ts = (__be32 *)(_get_ptp_header(skb, type) + 16);
+	raw_ts = __be32_to_cpu(*ptp_rx_ts);
+	ret = mv88e6xxx_augment_tstamp(ds, raw_ts, &shhwtstamps->hwtstamp);
 	if (ret < 0)
 		/* Packet gets discarded */
 		return;
 
-	netdev_dbg(ds->ports[pps->port_id], "rxtstamp %lld\n",
+	netdev_dbg(ds->ports[pps->port_id], "rxtstamp %llx\n",
 		   ktime_to_ns(shhwtstamps->hwtstamp));
 
 	netif_receive_skb(skb);
@@ -1310,10 +1311,12 @@ bool mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 	spin_unlock_irqrestore(&pps->rx_tstamp_lock, flags);
 
 	schedule_work(&pps->rx_tstamp_work);
+
 	return true;
 
 no_defer:
 	spin_unlock_irqrestore(&pps->rx_tstamp_lock, flags);
+
 	return false;
 }
 

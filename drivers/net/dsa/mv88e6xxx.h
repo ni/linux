@@ -397,6 +397,10 @@ struct mv88e6xxx_port_priv_state {
 	unsigned long tx_tstamp_start;
 	struct sk_buff *tx_skb;
 
+	/* This spinlock serializes access to the RX timestamping
+	 * parameters. It must be a spinlock because incoming
+	 * packets are processing in a soft IRQ context.
+	 */
 	spinlock_t rx_tstamp_lock;
 	int rx_tstamp_type;
 	struct sk_buff *rx_skb;
