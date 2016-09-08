@@ -984,17 +984,17 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	case HWTSTAMP_FILTER_PTP_V1_L4_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
 		pps->ts_ver = 0;
-		pps->ts_msg_types = 0xffff;
+		pps->ts_msg_types = 0xf;
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
 		pps->ts_ver = 1;
-		pps->ts_msg_types = 0xffff;
+		pps->ts_msg_types = 0xf;
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_EVENT:
 	case HWTSTAMP_FILTER_ALL:
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
 		pps->check_trans_spec = false;
-		pps->ts_msg_types = 0xffff;
+		pps->ts_msg_types = 0xf;
 		break;
 	default:
 		config->rx_filter = HWTSTAMP_FILTER_NONE;
