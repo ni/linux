@@ -381,14 +381,18 @@
 #define MV88E6XXX_NUM_PEROUT	1
 #define MV88E6XXX_NUM_GPIO	11
 
-#define TX_TSTAMP_TIMEOUT	(HZ * 15)
-#define TAI_WORK_INTERVAL	(HZ * 15)
+#define TX_TSTAMP_TIMEOUT	(HZ / 20)
+#define TAI_WORK_INTERVAL	(HZ / 10)
 
 struct mv88e6xxx_port_priv_state {
 	u8 port_id;
 	u8 fid;
 	u8 stp_state;
 
+	/* This mutex serializes access to the TX timestamping
+	 * parameters.
+	 */
+	struct mutex tx_tstamp_mutex;
 	struct work_struct tx_tstamp_work;
 	unsigned long tx_tstamp_start;
 	struct sk_buff *tx_skb;

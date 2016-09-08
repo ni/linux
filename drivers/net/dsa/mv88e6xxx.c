@@ -1319,27 +1319,29 @@ no_defer:
 
 static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 {
-	struct mv88e6xxx_port_priv_state *pps;
+	struct mv88e6xxx_port_priv_state *pps =
+		container_of(ugly, struct mv88e6xxx_port_priv_state,
+			     tx_tstamp_work);
 	struct mv88e6xxx_priv_state *ps;
 	struct dsa_switch *ds;
 
 	u16 departure_block[4];
 	int ret;
 
-	pps = container_of(ugly, struct mv88e6xxx_port_priv_state,
-			   tx_tstamp_work);
 	/* There has to be a better way... */
 	ps = container_of(pps, struct mv88e6xxx_priv_state,
 			  port_priv[pps->port_id]);
 	ds = ((struct dsa_switch *)ps) - 1;
 
+	mutex_lock(&pps->tx_tstamp_mutex);
+
 	if (!pps->tx_skb)
-		return;
+		goto abort;
 
 	if (time_is_before_jiffies(pps->tx_tstamp_start +
 				   TX_TSTAMP_TIMEOUT)) {
 		netdev_warn(ds->ports[pps->port_id], "clearing Tx timestamp hang\n");
-		goto abort;
+		goto free_skb;
 	}
 
 	ret = mv88e6xxx_read_ptp_block(ds, pps->port_id,
@@ -1348,7 +1350,7 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 				       departure_block);
 
 	if (ret < 0)
-		goto abort;
+		goto free_skb;
 
 	if (departure_block[0] & PTP_PORT_DEPARTURE_STATUS_VALID) {
 		/* TODO: verify sequence ID */
@@ -1366,26 +1368,28 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 		 * need to clean up our state so we can timestamp the next
 		 * packet.
 		 */
-
-		netdev_dbg(ds->ports[pps->port_id], "txtstamp %llx\n",
-			   ktime_to_ns(shhwtstamps.hwtstamp));
+		pps->tx_skb = NULL;
 
 		/* Clear valid bit so the next timestamp can arrive */
 		mv88e6xxx_write_ptp_word(ds, pps->port_id,
 					 GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
 					 PTP_PORT_DEPARTURE_STATUS, 0);
 
-		pps->tx_skb = NULL;
+		netdev_dbg(ds->ports[pps->port_id], "txtstamp %llx\n",
+			   ktime_to_ns(shhwtstamps.hwtstamp));
 	} else {
 		/* reschedule to check later */
 		schedule_work(&pps->tx_tstamp_work);
 	}
 
+	mutex_unlock(&pps->tx_tstamp_mutex);
 	return;
 
-abort:
+free_skb:
 	dev_kfree_skb_any(pps->tx_skb);
 	pps->tx_skb = NULL;
+abort:
+	mutex_unlock(&pps->tx_tstamp_mutex);
 }
 
 void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
@@ -1400,16 +1404,20 @@ void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 	    mv88e6xxx_should_timestamp(ds, port, clone, type)) {
 		struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
 
+		mutex_lock(&pps->tx_tstamp_mutex);
+
 		if (pps->tx_skb) {
 			netdev_dbg(ds->ports[port], "Tx timestamp already in progress, discarding");
-			goto out;
+			kfree_skb(clone);
 		} else {
 			pps->tx_skb = clone;
 			pps->tx_tstamp_start = jiffies;
 
 			schedule_work(&pps->tx_tstamp_work);
-			return;
 		}
+
+		mutex_unlock(&pps->tx_tstamp_mutex);
+		return;
 	}
 
 out:
@@ -1902,6 +1910,7 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 	pps->port_id = port;
 
 	mutex_init(&pps->ptp_mutex);
+	mutex_init(&pps->tx_tstamp_mutex);
 	spin_lock_init(&pps->rx_tstamp_lock);
 
 	INIT_WORK(&pps->tx_tstamp_work, mv88e6xxx_tx_tstamp_work);
