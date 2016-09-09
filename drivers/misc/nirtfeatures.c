@@ -46,6 +46,7 @@
 
 #define NIRTF_PLATFORM_MISC_ID_MASK		0x07
 #define NIRTF_PLATFORM_MISC_ID_MANHATTAN	0
+#define NIRTF_PLATFORM_MISC_ID_FIRE_EAGLE	2
 #define NIRTF_PLATFORM_MISC_ID_HAMMERHEAD	4
 #define NIRTF_PLATFORM_MISC_ID_WINGHEAD		5
 
@@ -1403,6 +1404,9 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	switch (bpinfo) {
 	case NIRTF_PLATFORM_MISC_ID_MANHATTAN:
 		nirtfeatures->bpstring = "Manhattan";
+		break;
+	case NIRTF_PLATFORM_MISC_ID_FIRE_EAGLE:
+		nirtfeatures->bpstring = "Fire Eagle";
 		break;
 	case NIRTF_PLATFORM_MISC_ID_HAMMERHEAD:
 		nirtfeatures->bpstring = "Hammerhead";
