@@ -494,6 +494,9 @@ struct mv88e6xxx_priv_state {
 	u16 evcap_config;
 
 	struct delayed_work tai_work;
+
+	struct clk *xtal_in;
+	struct clk *ptp_extclk;
 };
 
 enum stat_type {
