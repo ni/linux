@@ -2298,6 +2298,24 @@ static void mv88e6xxx_tai_work(struct work_struct *ugly)
 	schedule_delayed_work(&ps->tai_work, TAI_WORK_INTERVAL);
 }
 
+/* ptp_find_pin locks the pincfg mutex, so we cannot use it to locate the
+ * appropriate pin from inside phc_enable below
+ */
+static int mv88e6xxx_find_pin(struct ptp_clock_info *ptp,
+			      enum ptp_pin_function func, unsigned int chan)
+{
+	int i;
+
+	for (i = 0; i < ptp->n_pins; i++) {
+		if (ptp->pin_config[i].func == func &&
+		    ptp->pin_config[i].chan == chan) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
 static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 				struct ptp_clock_request *rq, int on)
 {
@@ -2307,16 +2325,19 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 	struct timespec ts;
 	u64 ns;
 	int ret;
-
-	dev_dbg(ds->master_dev, "feature %d on=%d\n", rq->type, on);
+	int pin;
 
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:
-		dev_dbg(ds->master_dev, "EXTTS req on=%d index %d\n",
-			on, rq->extts.index);
+		pin = mv88e6xxx_find_pin(ptp, PTP_PF_EXTTS, rq->extts.index);
+		dev_dbg(ds->master_dev, "EXTTS req on=%d index %d pin %d\n",
+			on, rq->extts.index, pin);
+
+		if (pin < 0)
+			return -EINVAL;
 
 		if (on) {
-			ret = mv88e6xxx_config_gpio(ds, rq->extts.index,
+			ret = mv88e6xxx_config_gpio(ds, pin,
 						    MISC_REG_GPIO_MODE_EVREQ,
 						    MISC_REG_GPIO_DIR_IN);
 			schedule_delayed_work(&ps->tai_work, 0);
@@ -2324,16 +2345,20 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 						  TAI_GLOBAL_EVENT_STATUS_CAPTURE_EVREQ,
 						  rq->extts.flags & PTP_RISING_EDGE);
 		} else {
-			ret = mv88e6xxx_config_gpio(ds, rq->extts.index,
-						  MISC_REG_GPIO_MODE_GPIO,
-						  MISC_REG_GPIO_DIR_IN);
+			ret = mv88e6xxx_config_gpio(ds, pin,
+						    MISC_REG_GPIO_MODE_GPIO,
+						    MISC_REG_GPIO_DIR_IN);
 			cancel_delayed_work_sync(&ps->tai_work);
 		}
 		return ret;
 
 	case PTP_CLK_REQ_PEROUT:
-		dev_dbg(ds->master_dev, "PEROUT req on=%d index %d\n",
-			on, rq->perout.index);
+		pin = mv88e6xxx_find_pin(ptp, PTP_PF_PEROUT, rq->extts.index);
+		dev_dbg(ds->master_dev, "PEROUT req on=%d index %d pin %d\n",
+			on, rq->perout.index, pin);
+
+		if (pin < 0)
+			return -EINVAL;
 
 		ts.tv_sec = rq->perout.period.sec;
 		ts.tv_nsec = rq->perout.period.nsec;
@@ -2347,11 +2372,11 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 			return ret;
 
 		if (on) {
-			ret = mv88e6xxx_config_gpio(ds, rq->perout.index,
+			ret = mv88e6xxx_config_gpio(ds, pin,
 						    MISC_REG_GPIO_MODE_TRIG,
 						    MISC_REG_GPIO_DIR_OUT);
 		} else {
-			ret = mv88e6xxx_config_gpio(ds, rq->perout.index,
+			ret = mv88e6xxx_config_gpio(ds, pin,
 						    MISC_REG_GPIO_MODE_GPIO,
 						    MISC_REG_GPIO_DIR_IN);
 		}
@@ -2359,9 +2384,18 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 		return ret;
 
 	case PTP_CLK_REQ_PPS:
-		dev_dbg(ds->master_dev, "PPS req on=%d\n", on);
+		pin = mv88e6xxx_find_pin(ptp, PTP_PF_PEROUT, 0);
+		dev_dbg(ds->master_dev, "PPS req on=%d pin %d\n", on, pin);
+
+		if (pin < 0)
+			return -EINVAL;
 
 		if (on) {
+			ret = mv88e6xxx_config_gpio(ds, pin,
+						    MISC_REG_GPIO_MODE_TRIG,
+						    MISC_REG_GPIO_DIR_OUT);
+			if (ret < 0)
+				return ret;
 			ret = mv88e6xxx_config_periodic_trig(ds, 1000000000UL,
 							     0);
 			schedule_delayed_work(&ps->tai_work, 0);
@@ -2369,6 +2403,11 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 						  TAI_GLOBAL_EVENT_STATUS_CAPTURE_TRIG,
 						  1);
 		} else {
+			ret = mv88e6xxx_config_gpio(ds, pin,
+						    MISC_REG_GPIO_MODE_GPIO,
+						    MISC_REG_GPIO_DIR_IN);
+			if (ret < 0)
+				return ret;
 			ret = mv88e6xxx_disable_trig(ds);
 			cancel_delayed_work_sync(&ps->tai_work);
 		}
