@@ -957,41 +957,26 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 		pps->ts_enable = false;
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_SYNC:
-	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
 		pps->ts_ver = 0;
-		pps->ts_msg_types = (1 << 0);
-		break;
+	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
 	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
-		pps->ts_ver = 1;
-		pps->ts_msg_types = (1 << 0);
-		break;
 	case HWTSTAMP_FILTER_PTP_V2_SYNC:
-		pps->check_trans_spec = false;
 		pps->ts_msg_types = (1 << 0);
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ:
-	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
 		pps->ts_ver = 0;
-		pps->ts_msg_types = (1 << 1);
-		break;
+	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
 	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
-		pps->ts_ver = 1;
-		pps->ts_msg_types = (1 << 1);
-		break;
 	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
-		pps->check_trans_spec = false;
 		pps->ts_msg_types = (1 << 1);
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_EVENT:
-	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
 		pps->ts_ver = 0;
-		pps->ts_msg_types = 0xf;
-		break;
+	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
-		pps->ts_ver = 1;
+	case HWTSTAMP_FILTER_PTP_V2_EVENT:
 		pps->ts_msg_types = 0xf;
 		break;
-	case HWTSTAMP_FILTER_PTP_V2_EVENT:
 	case HWTSTAMP_FILTER_ALL:
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
 		pps->check_trans_spec = false;
@@ -1211,6 +1196,7 @@ static bool mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
 	u8 *msgtype, *ptp_hdr;
 	u16 msg_mask;
 	bool ret;
+	int trans_spec;
 
 	if (port < 0 || port >= ps->num_ports)
 		return false;
@@ -1225,9 +1211,11 @@ static bool mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
 		msgtype = ptp_hdr;
 
 	msg_mask = 1 << (*msgtype & 0xf);
+	trans_spec = (*msgtype >> 4);
 
 	mutex_lock(&pps->ptp_mutex);
-	ret = pps->ts_enable && ((pps->ts_msg_types & msg_mask) != 0);
+	ret = !pps->check_trans_spec || (pps->ts_ver == trans_spec);
+	ret &= pps->ts_enable && ((pps->ts_msg_types & msg_mask) != 0);
 	mutex_unlock(&pps->ptp_mutex);
 
 	netdev_dbg(ds->ports[port],
