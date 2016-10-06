@@ -11,6 +11,13 @@ obj-y     = fork.o exec_domain.o panic.o \
 	    notifier.o ksysfs.o cred.o reboot.o \
 	    async.o range.o smpboot.o
 
+# Tracing may do some dangerous __builtin_return_address() operations
+# We know they are dangerous, we don't need gcc telling us that.
+ifdef CONFIG_USING_GET_LOCK_PARENT_IP
+FRAME_CFLAGS := $(call cc-disable-warning,frame-address)
+KBUILD_CFLAGS += $(FRAME_CFLAGS)
+endif
+
 obj-$(CONFIG_MULTIUSER) += groups.o
 
 ifdef CONFIG_FUNCTION_TRACER
