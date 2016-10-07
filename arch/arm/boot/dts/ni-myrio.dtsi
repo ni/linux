@@ -44,7 +44,7 @@
 	 * always pretends to have a card present. This is to
 	 * work-around a hardware bug where TiWi WiFi does not
 	 * have its CD line connected correctly. */
-	force-sd-cd-test-mode = <1>;
+	xlnx,fails-without-test-cd;
 
 	non-removable = <1>;
 
