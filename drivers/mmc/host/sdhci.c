@@ -142,15 +142,6 @@ static void sdhci_dumpregs(struct sdhci_host *host)
 static void sdhci_set_card_detection(struct sdhci_host *host, bool enable)
 {
 	u32 present;
-	u8  ctrl;
-
-	if (host->quirks2 & SDHCI_QUIRK2_MUST_FORCE_SD_CD_TEST_MODE) {
-		/* Put the card in test mode, with card inserted */
-		ctrl = sdhci_readl(host, SDHCI_HOST_CONTROL);
-		ctrl |= SDHCI_CTRL_CD_TEST_INSERTED |
-			SDHCI_CTRL_CD_TEST_ENABLE;
-		sdhci_writeb(host, ctrl, SDHCI_HOST_CONTROL);
-	}
 
 	if ((host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION) ||
 	    (host->mmc->caps & MMC_CAP_NONREMOVABLE))
