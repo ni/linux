@@ -23,6 +23,7 @@
 #include <linux/mmc/sdio_ids.h>
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/sd.h>
+#include <linux/pm_runtime.h>
 #include "hif.h"
 #include "hif-ops.h"
 #include "target.h"
@@ -74,6 +75,8 @@ struct ath6kl_sdio {
 #define CMD53_ARG_BLOCK_BASIS   1
 #define CMD53_ARG_FIXED_ADDRESS 0
 #define CMD53_ARG_INCR_ADDRESS  1
+
+static int ath6kl_sdio_config(struct ath6kl *ar);
 
 static inline struct ath6kl_sdio *ath6kl_sdio_priv(struct ath6kl *ar)
 {
@@ -502,12 +505,26 @@ static int ath6kl_sdio_power_on(struct ath6kl *ar)
 {
 	struct ath6kl_sdio *ar_sdio = ath6kl_sdio_priv(ar);
 	struct sdio_func *func = ar_sdio->func;
+	struct mmc_card *card = func->card;
 	int ret = 0;
 
 	if (!ar_sdio->is_disabled)
 		return 0;
 
 	ath6kl_dbg(ATH6KL_DBG_BOOT, "sdio power on\n");
+
+	ret = pm_runtime_get_sync(&func->dev);
+	if (ret) {
+		/* Runtime PM might be temporarily disabled, or the device
+		 * might have a positive reference counter. Make sure it is
+		 * really powered on.
+		 */
+		ret = mmc_power_restore_host(card->host);
+		if (ret < 0) {
+			pm_runtime_put_sync(&func->dev);
+			goto out;
+		}
+	}
 
 	sdio_claim_host(func);
 
@@ -526,14 +543,22 @@ static int ath6kl_sdio_power_on(struct ath6kl *ar)
 	 */
 	msleep(10);
 
+	ret = ath6kl_sdio_config(ar);
+	if (ret) {
+		ath6kl_err("Failed to config sdio: %d\n", ret);
+		goto out;
+	}
+
 	ar_sdio->is_disabled = false;
 
+out:
 	return ret;
 }
 
 static int ath6kl_sdio_power_off(struct ath6kl *ar)
 {
 	struct ath6kl_sdio *ar_sdio = ath6kl_sdio_priv(ar);
+	struct mmc_card *card = ar_sdio->func->card;
 	int ret;
 
 	if (ar_sdio->is_disabled)
@@ -549,8 +574,30 @@ static int ath6kl_sdio_power_off(struct ath6kl *ar)
 	if (ret)
 		return ret;
 
+	/* Power off the card manually in case it wasn't powered off above */
+	ret = mmc_power_save_host(card->host);
+	if (ret < 0)
+		goto out;
+
+	/* Let runtime PM know the card is powered off */
+	pm_runtime_put_sync(&ar_sdio->func->dev);
+
+	ath6kl_info("Resetting radio via CPLD\n");
+
+	/* WiFi Reset Enable */
+	outb(0x03, 0x232);
+	/* WiFi into Reset */
+	outb(0x01, 0x232);
+	/* Silex specs say to assert reset for 5 us, make it 10 to be sure */
+	usleep_range(10, 1000);
+	/* WiFi out of Reset */
+	outb(0x03, 0x232);
+	/* WiFi Reset Disable */
+	outb(0x02, 0x232);
+
 	ar_sdio->is_disabled = true;
 
+out:
 	return ret;
 }
 
@@ -703,8 +750,10 @@ static void ath6kl_sdio_cleanup_scatter(struct ath6kl *ar)
 		 * ath6kl_hif_rw_comp_handler() with status -ECANCELED so
 		 * that the packet is properly freed?
 		 */
-		if (s_req->busrequest)
+		if (s_req->busrequest) {
+			s_req->busrequest->scat_req = 0;
 			ath6kl_sdio_free_bus_req(ar_sdio, s_req->busrequest);
+		}
 		kfree(s_req->virt_dma_buf);
 		kfree(s_req->sgentries);
 		kfree(s_req);
@@ -712,6 +761,8 @@ static void ath6kl_sdio_cleanup_scatter(struct ath6kl *ar)
 		spin_lock_bh(&ar_sdio->scat_lock);
 	}
 	spin_unlock_bh(&ar_sdio->scat_lock);
+
+	ar_sdio->scatter_enabled = false;
 }
 
 /* setup of HIF scatter resources */
@@ -1378,6 +1429,8 @@ err_hif:
 static void ath6kl_sdio_remove(struct sdio_func *func)
 {
 	struct ath6kl_sdio *ar_sdio;
+	struct mmc_card *card = func->card;
+	int ret;
 
 	ath6kl_dbg(ATH6KL_DBG_BOOT,
 		   "sdio removed func %d vendor 0x%x device 0x%x\n",
@@ -1390,6 +1443,17 @@ static void ath6kl_sdio_remove(struct sdio_func *func)
 
 	ath6kl_core_cleanup(ar_sdio->ar);
 	ath6kl_core_destroy(ar_sdio->ar);
+
+	ret = pm_runtime_get_sync(&func->dev);
+	if (ret) {
+		/* Runtime PM might be disabled, or the device
+		 * might have a positive reference counter. Make sure it is
+		 * really powered on.
+		 */
+		ret = mmc_power_restore_host(card->host);
+		if (ret < 0)
+			ath6kl_err("Unable to restore power\n");
+	}
 
 	kfree(ar_sdio->dma_buffer);
 	kfree(ar_sdio);

@@ -151,6 +151,9 @@ enum ath6kl_fw_capability {
 	/* firmare doesn't support IP checksumming */
 	ATH6KL_FW_CAPABILITY_NO_IP_CHECKSUM,
 
+	/* firmware supports setting RSN CAP directly */
+	ATH6KL_FW_CAPABILITY_SET_RSN_CAP,
+
 	/* this needs to be last */
 	ATH6KL_FW_CAPABILITY_MAX,
 };
@@ -872,6 +875,9 @@ struct ath6kl {
 		u8 disc_timeout;
 	} debug;
 #endif /* CONFIG_ATH6KL_DEBUG */
+
+	/* Number of times we have attempted to boot the radio */
+	unsigned int boot_attempts;
 };
 
 static inline struct ath6kl *ath6kl_priv(struct net_device *dev)

@@ -3569,8 +3569,38 @@ int ath6kl_wmi_set_appie_cmd(struct wmi *wmi, u8 if_idx, u8 mgmt_frm_type,
 	if (ie != NULL && ie_len > 0)
 		memcpy(p->ie_info, ie, ie_len);
 
-	return ath6kl_wmi_cmd_send(wmi, if_idx, skb, WMI_SET_APPIE_CMDID,
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+	return ath6kl_wmi_cmd_send(wmi, if_idx, skb,
+				   WMI_SET_APPIE_SILEX_CMDID, NO_SYNC_WMIFLAG);
+#else
+	return ath6kl_wmi_cmd_send(wmi, if_idx, skb,
+				   WMI_SET_APPIE_CMDID, NO_SYNC_WMIFLAG);
+#endif
+}
+
+int ath6kl_wmi_set_rsn_cmd(struct wmi *wmi, u8 if_idx, u16 rsn_capab)
+{
+	struct sk_buff *skb;
+	struct wmi_set_rsn_cmd *p;
+
+	skb = ath6kl_wmi_get_new_buf(sizeof(*p));
+	if (!skb)
+		return -ENOMEM;
+
+	ath6kl_info("set_rsn_cmd: rsn_capab=0x%4.4x\n",
+		    rsn_capab);
+	p = (struct wmi_set_rsn_cmd *)skb->data;
+	p->rsn_capab = rsn_capab;
+
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+	return ath6kl_wmi_cmd_send(wmi, if_idx, skb,
+				   WMI_SET_RSN_CAP_SILEX_CMDID,
 				   NO_SYNC_WMIFLAG);
+#else
+	return ath6kl_wmi_cmd_send(wmi, if_idx, skb,
+				   WMI_SET_RSN_CAP_CMDID,
+				   NO_SYNC_WMIFLAG);
+#endif
 }
 
 int ath6kl_wmi_set_ie_cmd(struct wmi *wmi, u8 if_idx, u8 ie_id, u8 ie_field,

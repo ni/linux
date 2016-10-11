@@ -22,6 +22,7 @@
 #include <linux/export.h>
 #include <linux/vmalloc.h>
 #include <linux/dmi.h>
+#include <linux/ctype.h>
 
 #include "debug.h"
 #include "hif-ops.h"
@@ -36,6 +37,7 @@ static unsigned int ath6kl_p2p;
 static unsigned int testmode;
 static unsigned int recovery_enable;
 static unsigned int heart_beat_poll;
+static unsigned int boot_attempts;
 
 module_param(debug_mask, uint, 0644);
 module_param(suspend_mode, uint, 0644);
@@ -45,9 +47,11 @@ module_param(ath6kl_p2p, uint, 0644);
 module_param(testmode, uint, 0644);
 module_param(recovery_enable, uint, 0644);
 module_param(heart_beat_poll, uint, 0644);
+module_param(boot_attempts, uint, 0644);
 MODULE_PARM_DESC(recovery_enable, "Enable recovery from firmware error");
 MODULE_PARM_DESC(heart_beat_poll,
 		 "Enable fw error detection periodic polling in msecs - Also set recovery_enable for this to be effective");
+MODULE_PARM_DESC(boot_attempts, "Number of times to retry booting the firmware");
 
 
 #define WLAN_REGION_ID 161
@@ -94,20 +98,21 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	int ret = 0, i;
 
 #ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+	char *region_board_file = NULL;
 	/* get region code from DMI */
 	dmi_walk(find_region_type, &ret);
 	if (!ret)
 		return -ENODEV;
 
+	if(!isascii(region[0]) || !isascii(region[1]))
+		return -EINVAL;
+
 	ath6kl_info("Using region: %c%c\n",
 		    region[0],
 		    region[1]);
-
-	/* region code should be US or world */
-	if ((region[0] != 'U' && region[1] != 'S') &&
-	    (region[0] != '0' && region[1] != '0'))
-		return -EINVAL;
 #endif
+
+	ar->boot_attempts = boot_attempts;
 
 	switch (htc_type) {
 	case ATH6KL_HTC_TYPE_MBOX:
@@ -135,6 +140,15 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	 * seconds.
 	 */
 	ret = ath6kl_hif_power_on(ar);
+	while (ret && ar->boot_attempts) {
+		ath6kl_err("Failed to turn on hardware: %d (retry %d)\n",
+			   ret,
+			   ar->boot_attempts);
+		ar->boot_attempts--;
+		ret = ath6kl_hif_power_off(ar);
+		ret = ath6kl_hif_power_on(ar);
+	}
+
 	if (ret)
 		goto err_bmi_cleanup;
 
@@ -159,6 +173,18 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 
 	ar->testmode = testmode;
 
+#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+	/*
+	 * ath6kl_init_hw_params() will set the board file name, but we want
+	 * to override it with a region specific board file here.
+	 */
+	region_board_file = devm_kzalloc(ar->dev, 64, GFP_KERNEL);
+
+	snprintf(region_board_file, 64, AR6004_HW_3_0_FW_DIR "/bdata%c%c.bin",
+		 region[0], region[1]);
+
+	ar->hw.fw_board = region_board_file;
+#endif
 	ret = ath6kl_init_fetch_firmwares(ar);
 	if (ret)
 		goto err_htc_cleanup;
@@ -181,6 +207,8 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 		__set_bit(ATH6KL_FW_CAPABILITY_HEART_BEAT_POLL,
 			  ar->fw_capabilities);
 		__set_bit(ATH6KL_FW_CAPABILITY_RATETABLE_MCS15,
+			  ar->fw_capabilities);
+		__set_bit(ATH6KL_FW_CAPABILITY_SET_RSN_CAP,
 			  ar->fw_capabilities);
 #endif
 
@@ -236,14 +264,21 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	ath6kl_debug_init(ar);
 
 	ret = ath6kl_init_hw_start(ar);
-	if (ret) {
-		ath6kl_err("Failed to start hardware: %d\n", ret);
-		goto err_rxbuf_cleanup;
+	while (ret && ar->boot_attempts) {
+		ath6kl_err("Failed to start hardware: %d (retry %d)\n",
+			   ret,
+			   ar->boot_attempts);
+		ar->boot_attempts--;
+		ret = ath6kl_init_hw_start(ar);
 	}
 
+	if (ret)
+		/* Did not boot after several attempts */
+		goto err_rxbuf_cleanup;
+
 #ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-	/* set region from DMI if not international */
-	if (!(region[0] == '0' && region[1] == '0')) {
+	/* set region from DMI if it is US */
+	if (region[0] == 'U' && region[1] == 'S') {
 		ret = ath6kl_wmi_set_regdomain_cmd(ar->wmi, region);
 		if (ret)
 			goto err_rxbuf_cleanup;

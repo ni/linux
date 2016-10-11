@@ -5,7 +5,7 @@
 # Options selectable by arch Kconfig
 
 # Watchdog function for clocksources to detect instabilities
-config CLOCKSOURCE_WATCHDOG
+config HAVE_CLOCKSOURCE_WATCHDOG
 	bool
 
 # Architecture has extra clocksource data
@@ -194,6 +194,16 @@ config HIGH_RES_TIMERS
 	  This option enables high resolution timer support. If your
 	  hardware is not capable then this option only increases
 	  the size of the kernel image.
+
+config CLOCKSOURCE_WATCHDOG
+	bool "Clocksource watchdog"
+	depends on HAVE_CLOCKSOURCE_WATCHDOG
+	default y
+	help
+	  This option enables the watchdog function for clocksources. It is
+	  used to detect instabilities in the currently selected clocksource.
+
+	  Say Y if you are unsure.
 
 endmenu
 endif

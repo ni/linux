@@ -1623,6 +1623,7 @@ static const struct fw_capa_str_map {
 	{ ATH6KL_FW_CAPABILITY_MAP_LP_ENDPOINT, "map-lp-endpoint" },
 	{ ATH6KL_FW_CAPABILITY_RATETABLE_MCS15, "ratetable-mcs15" },
 	{ ATH6KL_FW_CAPABILITY_NO_IP_CHECKSUM, "no-ip-checksum" },
+	{ ATH6KL_FW_CAPABILITY_SET_RSN_CAP, "set-rsn-cap" },
 };
 
 static const char *ath6kl_init_get_fw_capa_name(unsigned int id)
@@ -1753,6 +1754,8 @@ static int __ath6kl_init_hw_start(struct ath6kl *ar)
 						    WMI_TIMEOUT);
 	if (timeleft <= 0) {
 		clear_bit(WMI_READY, &ar->flag);
+		ath6kl_init_hw_reset(ar);
+		ath6kl_bmi_reset(ar);
 		ath6kl_err("wmi is not ready or wait was interrupted: %ld\n",
 			   timeleft);
 		ret = -EIO;

@@ -646,6 +646,8 @@ enum wmi_cmd_id {
 
 /* Silex has this command at a different ID */
 #define WMI_SET_REGDOMAIN_SILEX_CMDID 0xf0b0
+#define WMI_SET_APPIE_SILEX_CMDID 0x3f
+#define WMI_SET_RSN_CAP_SILEX_CMDID 0xf082
 
 enum wmi_mgmt_frame_type {
 	WMI_FRAME_BEACON = 0,
@@ -2057,6 +2059,10 @@ struct wmi_set_appie_cmd {
 	u8 ie_info[0];
 } __packed;
 
+struct wmi_set_rsn_cmd {
+	u16 rsn_capab;
+} __packed;
+
 struct wmi_set_ie_cmd {
 	u8 ie_id;
 	u8 ie_field;	/* enum wmi_ie_field_type */
@@ -2690,6 +2696,8 @@ int ath6kl_wmi_set_pvb_cmd(struct wmi *wmi, u8 if_idx, u16 aid, bool flag);
 int ath6kl_wmi_set_rx_frame_format_cmd(struct wmi *wmi, u8 if_idx,
 				       u8 rx_meta_version,
 				       bool rx_dot11_hdr, bool defrag_on_host);
+
+int ath6kl_wmi_set_rsn_cmd(struct wmi *wmi, u8 if_idx, u16 rsn_capab);
 
 int ath6kl_wmi_set_appie_cmd(struct wmi *wmi, u8 if_idx, u8 mgmt_frm_type,
 			     const u8 *ie, u8 ie_len);
