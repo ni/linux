@@ -662,7 +662,6 @@ static int write_bbt(struct mtd_info *mtd, uint8_t *buf,
 			page = td->pages[chip];
 			goto write;
 		}
-next:
 
 		/*
 		 * Automatic placement of the bad block table. Search direction
@@ -788,26 +787,14 @@ next:
 		einfo.addr = to;
 		einfo.len = 1 << this->bbt_erase_shift;
 		res = nand_erase_nand(mtd, &einfo, 1);
-		if (res < 0) {
-			/* This block is bad. Mark it as such and see if there's
-			   another available in the BBT area. */
-			int block = page >>
-				(this->bbt_erase_shift - this->page_shift);
-			this->bbt[block >> 2] |= 0x01 << ((block & 0x03) << 1);
-			goto next;
-		}
+		if (res < 0)
+			goto outerr;
 
 		res = scan_write_bbt(mtd, to, len, buf,
 				td->options & NAND_BBT_NO_OOB ? NULL :
 				&buf[len]);
-		if (res < 0) {
-			/* This block is bad. Mark it as such and see if there's
-			   another available in the BBT area. */
-			int block = page >>
-				(this->bbt_erase_shift - this->page_shift);
-			this->bbt[block >> 2] |= 0x01 << ((block & 0x03) << 1);
-			goto next;
-		}
+		if (res < 0)
+			goto outerr;
 
 		pr_info("Bad block table written to 0x%012llx, version 0x%02X\n",
 			 (unsigned long long)to, td->version[chip]);
