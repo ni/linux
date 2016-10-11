@@ -931,7 +931,7 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	mutex_lock(&pps->ptp_mutex);
 
 	pps->ts_enable = true;
-	pps->check_trans_spec = true;
+	pps->check_trans_spec = false;
 	pps->ts_ver = 1;
 	pps->ts_msg_types = 0;
 
@@ -951,27 +951,26 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 		return -ERANGE;
 	}
 
-	/* The switch does not support timestamping both L2 and L4 */
+	/* The switch supports timestamping both L2 and L4; one cannot be
+	 * disabled independently of the other
+	 */
 	switch (config->rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
 		pps->ts_enable = false;
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_SYNC:
-		pps->ts_ver = 0;
 	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
 	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
 	case HWTSTAMP_FILTER_PTP_V2_SYNC:
 		pps->ts_msg_types = (1 << 0);
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ:
-		pps->ts_ver = 0;
 	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
 	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
 	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
 		pps->ts_msg_types = (1 << 1);
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_EVENT:
-		pps->ts_ver = 0;
 	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_EVENT:
