@@ -68,7 +68,8 @@
 
 /*=====================================================================
  * ACPI NI physical interface element support
- *===================================================================*/
+ *=====================================================================
+ */
 #define MAX_NAMELEN	64
 #define MAX_NODELEN	128
 #define MIN_PIE_CAPS_VERSION	2
@@ -444,7 +445,8 @@ nirtfeatures_led_brightness_get(struct led_classdev *led_cdev)
 	data = inb(led->nirtfeatures->io_base + led->address);
 
 	/* For the yellow status LED, the blink pattern used for brightness
-	   on write is write-only, so we just return on/off for all LEDs. */
+	 * on write is write-only, so we just return on/off for all LEDs.
+	 */
 	return (data & led->mask) ? LED_FULL : LED_OFF;
 }
 
@@ -484,7 +486,8 @@ static struct nirtfeatures_led nirtfeatures_leds_common[] = {
 
 /*=====================================================================
  * ACPI NI physical interface element support
- *===================================================================*/
+ *=====================================================================
+ */
 
 /* Note that callers of this function are responsible for deallocating
  * the buffer allocated by acpi_evaluate_object() by calling
@@ -502,8 +505,8 @@ static int nirtfeatures_call_acpi_method(struct nirtfeatures *nirtfeatures,
 	struct acpi_object_list acpi_params;
 	struct acpi_buffer acpi_result = { ACPI_ALLOCATE_BUFFER, NULL };
 
-	if (NULL == nirtfeatures || NULL == result_size ||
-	   NULL == result_buffer)
+	if (nirtfeatures == NULL || result_size == NULL ||
+	   result_buffer == NULL)
 		return -EINVAL;
 
 	acpi_ret = acpi_get_handle(nirtfeatures->acpi_device->handle,
@@ -544,7 +547,7 @@ static int nirtfeatures_pie_set_state(struct nirtfeatures *nirtfeatures,
 	union acpi_object       *acpi_buffer;
 	int                      err = 0;
 
-	if (NULL == nirtfeatures)
+	if (nirtfeatures == NULL)
 		return -EINVAL;
 
 	pies_args[0].type = ACPI_TYPE_INTEGER;
@@ -560,7 +563,7 @@ static int nirtfeatures_pie_set_state(struct nirtfeatures *nirtfeatures,
 
 	if (err == 0) {
 		acpi_buffer = (union acpi_object *) result_buffer;
-		if (ACPI_TYPE_INTEGER == acpi_buffer->type)
+		if (acpi_buffer->type == ACPI_TYPE_INTEGER)
 			err = (int) acpi_buffer->integer.value;
 		kfree(result_buffer);
 	}
@@ -580,7 +583,7 @@ static int nirtfeatures_pie_get_state(struct nirtfeatures *nirtfeatures,
 	union acpi_object       *acpi_buffer;
 	int                      err = 0;
 
-	if (NULL == nirtfeatures || NULL == result)
+	if (nirtfeatures == NULL || result == NULL)
 		return -EINVAL;
 
 	pies_args[0].type = ACPI_TYPE_INTEGER;
@@ -594,7 +597,7 @@ static int nirtfeatures_pie_get_state(struct nirtfeatures *nirtfeatures,
 
 	if (err == 0) {
 		acpi_buffer = (union acpi_object *) result_buffer;
-		if (ACPI_TYPE_INTEGER == acpi_buffer->type)
+		if (acpi_buffer->type == ACPI_TYPE_INTEGER)
 			*result = (int) acpi_buffer->integer.value;
 		kfree(result_buffer);
 	}
@@ -615,7 +618,7 @@ static int nirtfeatures_pie_enable_notifications(
 	union acpi_object       *acpi_buffer;
 	int                      err = 0;
 
-	if (NULL == nirtfeatures)
+	if (nirtfeatures == NULL)
 		return -EINVAL;
 
 	pies_args[0].type = ACPI_TYPE_INTEGER;
@@ -631,7 +634,7 @@ static int nirtfeatures_pie_enable_notifications(
 
 	if (err == 0) {
 		acpi_buffer = (union acpi_object *) result_buffer;
-		if (ACPI_TYPE_INTEGER == acpi_buffer->type)
+		if (acpi_buffer->type == ACPI_TYPE_INTEGER)
 			err = (int) acpi_buffer->integer.value;
 		kfree(result_buffer);
 	}
@@ -691,12 +694,12 @@ static int nirtfeatures_parse_led_pie_color(struct nirtfeatures *nirtfeatures,
 {
 	unsigned int i;
 
-	if (NULL == nirtfeatures || NULL == led_color_descriptor ||
-	   NULL == acpi_buffer)
+	if (nirtfeatures == NULL || led_color_descriptor == NULL ||
+	   acpi_buffer == NULL)
 		return -EINVAL;
 
 	/* element 0 of a PIE LED color caps package is the name */
-	if (ACPI_TYPE_BUFFER == acpi_buffer->package.elements[0].type) {
+	if (acpi_buffer->package.elements[0].type == ACPI_TYPE_BUFFER) {
 		for (i = 0;
 		   i < acpi_buffer->package.elements[0].buffer.length; i++) {
 			/* get pointer to Nth Unicode character in name */
@@ -711,14 +714,14 @@ static int nirtfeatures_parse_led_pie_color(struct nirtfeatures *nirtfeatures,
 		return -EINVAL;
 
 	/* element 1 is the brightness min value */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[1].type)
+	if (acpi_buffer->package.elements[1].type == ACPI_TYPE_INTEGER)
 		led_color_descriptor->brightness_range_low =
 		   (int) acpi_buffer->package.elements[1].integer.value;
 	else
 		return -EINVAL;
 
 	/* element 2 is the brightness max value */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[2].type)
+	if (acpi_buffer->package.elements[2].type == ACPI_TYPE_INTEGER)
 		led_color_descriptor->brightness_range_high =
 		   (int) acpi_buffer->package.elements[2].integer.value;
 	else
@@ -744,15 +747,15 @@ static int nirtfeatures_parse_led_pie(
 	int                                          err;
 	int                                          is_wifi, is_user;
 
-	if (NULL == nirtfeatures || NULL == pie ||
-	   NULL == acpi_buffer)
+	if (nirtfeatures == NULL || pie == NULL ||
+	   acpi_buffer == NULL)
 		return -EINVAL;
 
-	if (ACPI_TYPE_PACKAGE != acpi_buffer->type)
+	if (acpi_buffer->type != ACPI_TYPE_PACKAGE)
 		return -EINVAL;
 
 	/* element 0 is the number of colors */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[0].type) {
+	if (acpi_buffer->package.elements[0].type == ACPI_TYPE_INTEGER) {
 		num_colors = (unsigned int)
 		   acpi_buffer->package.elements[0].integer.value;
 	} else {
@@ -768,12 +771,13 @@ static int nirtfeatures_parse_led_pie(
 
 		/* create an LED class device for this LED */
 		led_dev = kzalloc(sizeof(struct nirtfeatures_led), GFP_KERNEL);
-		if (NULL == led_dev)
+		if (led_dev == NULL)
 			return -ENOMEM;
 
 		/* for compatibility with existing LVRT support, PIEs beginning
 		 * with 'user' or 'wifi' should not affix the uservisible
-		 * attribute to their name */
+		 * attribute to their name
+		 */
 		is_user = strncasecmp(pie->name, "user", strlen("user"));
 		is_wifi = strncasecmp(pie->name, "wifi", strlen("wifi"));
 		if (is_user != 0 &&
@@ -809,7 +813,7 @@ static int nirtfeatures_parse_led_pie(
 
 		err = led_classdev_register(&nirtfeatures->acpi_device->dev,
 		   &led_dev->cdev);
-		if (0 != err) {
+		if (err != 0) {
 			kfree(led_dev);
 			return err;
 		}
@@ -835,14 +839,14 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 	struct nirtfeatures_switch                *switch_dev = NULL;
 	int                                        err = 0;
 
-	if (NULL == nirtfeatures || NULL == pie || NULL == acpi_buffer)
+	if (nirtfeatures == NULL || pie == NULL || acpi_buffer == NULL)
 		return -EINVAL;
 
-	if (ACPI_TYPE_PACKAGE != acpi_buffer->type)
+	if (acpi_buffer->type != ACPI_TYPE_PACKAGE)
 		return -EINVAL;
 
 	/* element 0 is the number of states */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[0].type)
+	if (acpi_buffer->package.elements[0].type == ACPI_TYPE_INTEGER)
 		num_states = (unsigned int)
 		   acpi_buffer->package.elements[0].integer.value;
 	else
@@ -852,15 +856,15 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 	switch_descriptor = kzalloc(
 	   sizeof(struct nirtfeatures_pie_descriptor_switch) +
 	   sizeof(int) * (num_states - 1), GFP_KERNEL);
-	if (NULL == switch_descriptor)
+	if (switch_descriptor == NULL)
 		return -ENOMEM;
 
 	switch_descriptor->num_states = num_states;
 
 	/* parse individual states in elements 1..N-1 */
 	for (i = 0; i < num_states; i++) {
-		if (ACPI_TYPE_INTEGER !=
-		   acpi_buffer->package.elements[i + 1].type) {
+		if (acpi_buffer->package.elements[i + 1].type
+		   != ACPI_TYPE_INTEGER) {
 			err = -EINVAL;
 			goto exit;
 		}
@@ -871,13 +875,13 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 
 	/* create an input class device for this switch */
 	switch_dev = kzalloc(sizeof(struct nirtfeatures_switch), GFP_KERNEL);
-	if (NULL == switch_dev) {
+	if (switch_dev == NULL) {
 		err = -ENOMEM;
 		goto exit;
 	}
 
 	switch_dev->cdev = input_allocate_device();
-	if (NULL == switch_dev->cdev) {
+	if (switch_dev->cdev == NULL) {
 		err = -ENOMEM;
 		goto exit_dealloc_switch_dev;
 	}
@@ -914,7 +918,7 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 	set_bit(BTN_0, switch_dev->cdev->keybit);
 
 	err = input_register_device(switch_dev->cdev);
-	if (0 != err) {
+	if (err != 0) {
 		input_free_device(switch_dev->cdev);
 		goto exit_dealloc_switch_dev;
 	}
@@ -923,7 +927,7 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 	if (pie->notification_value != 0) {
 		err = nirtfeatures_pie_enable_notifications(nirtfeatures,
 		   pie_element, 0, 1);
-		if (0 != err) {
+		if (err != 0) {
 			input_unregister_device(switch_dev->cdev);
 			input_free_device(switch_dev->cdev);
 			goto exit_dealloc_switch_dev;
@@ -954,16 +958,16 @@ static int nirtfeatures_parse_one_pie(struct nirtfeatures *nirtfeatures,
 	struct nirtfeatures_pie_descriptor pie;
 	unsigned int                       i;
 
-	if (NULL == nirtfeatures || NULL == acpi_buffer)
+	if (nirtfeatures == NULL || acpi_buffer == NULL)
 		return -EINVAL;
 
 	/* check for proper type and number of elements */
-	if (ACPI_TYPE_PACKAGE != acpi_buffer->type ||
-	   6 != acpi_buffer->package.count)
+	if (acpi_buffer->type != ACPI_TYPE_PACKAGE ||
+	   acpi_buffer->package.count != 6)
 		return -EINVAL;
 
 	/* element 0 of the package is the name */
-	if (ACPI_TYPE_BUFFER == acpi_buffer->package.elements[0].type) {
+	if (acpi_buffer->package.elements[0].type == ACPI_TYPE_BUFFER) {
 		for (i = 0;
 		   i < acpi_buffer->package.elements[0].buffer.length &&
 		   i < MAX_NAMELEN; i++) {
@@ -978,28 +982,28 @@ static int nirtfeatures_parse_one_pie(struct nirtfeatures *nirtfeatures,
 		return -EINVAL;
 
 	/* element 1 of the package is the PIE class */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[1].type)
+	if (acpi_buffer->package.elements[1].type == ACPI_TYPE_INTEGER)
 		pie.pie_class = (enum nirtfeatures_pie_class)
 		   acpi_buffer->package.elements[1].integer.value;
 	else
 		return -EINVAL;
 
 	/* element 2 of the package is the PIE type */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[2].type)
+	if (acpi_buffer->package.elements[2].type == ACPI_TYPE_INTEGER)
 		pie.pie_type = (enum nirtfeatures_pie_type)
 		   acpi_buffer->package.elements[2].integer.value;
 	else
 		return -EINVAL;
 
 	/* element 4 of an package is the visible flag */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[4].type)
+	if (acpi_buffer->package.elements[4].type == ACPI_TYPE_INTEGER)
 		pie.is_user_visible =
 		   (acpi_buffer->package.elements[4].integer.value != 0);
 	else
 		return -EINVAL;
 
 	/* element 5 of the package is the notification value */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[5].type)
+	if (acpi_buffer->package.elements[5].type == ACPI_TYPE_INTEGER)
 		pie.notification_value =
 		   acpi_buffer->package.elements[5].integer.value;
 	else
@@ -1022,7 +1026,6 @@ static int nirtfeatures_parse_one_pie(struct nirtfeatures *nirtfeatures,
 
 	default:
 		return -EINVAL;
-		break;
 	}
 
 	return 0;
@@ -1041,7 +1044,7 @@ static int nirtfeatures_populate_pies(struct nirtfeatures *nirtfeatures)
 	unsigned int       i;
 	unsigned int       err = 0;
 
-	if (NULL == nirtfeatures)
+	if (nirtfeatures == NULL)
 		return -EINVAL;
 
 	/* get the PIE descriptor buffer from DSDT */
@@ -1050,13 +1053,13 @@ static int nirtfeatures_populate_pies(struct nirtfeatures *nirtfeatures)
 		return -1;
 
 	acpi_buffer = (union acpi_object *) result_buffer;
-	if (ACPI_TYPE_PACKAGE != acpi_buffer->type) {
+	if (acpi_buffer->type != ACPI_TYPE_PACKAGE) {
 		err = -1;
 		goto exit;
 	}
 
 	/* the first element of the package is the caps version */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[0].type)
+	if (acpi_buffer->package.elements[0].type == ACPI_TYPE_INTEGER)
 		pie_caps_version = (unsigned int)
 		   acpi_buffer->package.elements[0].integer.value;
 	else {
@@ -1073,7 +1076,7 @@ static int nirtfeatures_populate_pies(struct nirtfeatures *nirtfeatures)
 	}
 
 	/* the second element of the package is the number of PIEs */
-	if (ACPI_TYPE_INTEGER == acpi_buffer->package.elements[1].type)
+	if (acpi_buffer->package.elements[1].type == ACPI_TYPE_INTEGER)
 		num_elements = (unsigned int)
 		   acpi_buffer->package.elements[1].integer.value;
 	else {
@@ -1086,7 +1089,7 @@ static int nirtfeatures_populate_pies(struct nirtfeatures *nirtfeatures)
 		err = nirtfeatures_parse_one_pie(nirtfeatures,
 		   pie_caps_version, i - 2,
 		   &(acpi_buffer->package.elements[i]));
-		if (0 != err)
+		if (err != 0)
 			break;
 	}
 
@@ -1104,7 +1107,7 @@ static int nirtfeatures_create_leds(struct nirtfeatures *nirtfeatures)
 
 		nirtfeatures_leds_common[i].nirtfeatures = nirtfeatures;
 
-		if (0 == nirtfeatures_leds_common[i].cdev.max_brightness)
+		if (nirtfeatures_leds_common[i].cdev.max_brightness == 0)
 			nirtfeatures_leds_common[i].cdev.max_brightness = 1;
 
 		nirtfeatures_leds_common[i].cdev.brightness_set =
@@ -1425,7 +1428,7 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	spin_lock_init(&nirtfeatures->lock);
 
 	err = nirtfeatures_populate_pies(nirtfeatures);
-	if (0 != err) {
+	if (err != 0) {
 		nirtfeatures_acpi_remove(device);
 		return err;
 	}
@@ -1438,13 +1441,13 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 
 	err = sysfs_create_files(&nirtfeatures->acpi_device->dev.kobj,
 				 nirtfeatures_attrs);
-	if (0 != err) {
+	if (err != 0) {
 		nirtfeatures_acpi_remove(device);
 		return err;
 	}
 
 	err = nirtfeatures_create_leds(nirtfeatures);
-	if (0 != err) {
+	if (err != 0) {
 		nirtfeatures_acpi_remove(device);
 		return err;
 	}
@@ -1457,7 +1460,7 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	if (nirtfeatures->has_wifi) {
 		err = nirtfeatures_wifi_regulator_init(&device->dev,
 						       nirtfeatures);
-		if (0 != err) {
+		if (err != 0) {
 			nirtfeatures_acpi_remove(device);
 			return err;
 		}
