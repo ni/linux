@@ -1026,7 +1026,7 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 		break;
 
 	case FPGA_PERIPHERAL_UP:
-		/* If the FGPA programming succeeds and the FGPA is back
+		/* If the FPGA programming succeeds and the FPGA is back
 		 * online, we do the following steps:
 		 *
 		 * 1. We short-circuited the serial_in and serial_out functions
@@ -1074,7 +1074,7 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 
 		/*
 		 * 2. Unlock the FPGA lock. The functions which were waiting
-		 *    for the FGPA can now check for fpga_state and return
+		 *    for the FPGA can now check for fpga_state and return
 		 *    errors because of FPGA programming failure.
 		 */
 		up_write(&port->fpga_lock);

@@ -167,7 +167,7 @@ struct uart_port {
 	/*
 	 * Functions which need to access the UART should acquire a
 	 * read lock on this. The FPGA will not get reprogrammed unless this
-	 * lock is released. The FGPA reprogramming will acquire an
+	 * lock is released. The FPGA reprogramming will acquire an
 	 * exclusive lock (write lock) on this, thereby preventing the said
 	 * functions from accessing the UART in the FPGA
 	 */
