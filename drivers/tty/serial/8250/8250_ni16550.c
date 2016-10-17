@@ -16,10 +16,6 @@
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  *  more details.
- *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc., 51
- *  Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 #include "8250.h"
@@ -66,6 +62,7 @@
 static int ni16550_enable_transceivers(struct uart_port *port)
 {
 	uint8_t pcr;
+
 	dev_dbg(port->dev, ">ni16550_enable_transceivers\n");
 
 	pcr = port->serial_in(port, NI16550_PCR_OFFSET);
@@ -81,6 +78,7 @@ static int ni16550_enable_transceivers(struct uart_port *port)
 static int ni16550_disable_transceivers(struct uart_port *port)
 {
 	uint8_t pcr;
+
 	dev_dbg(port->dev, ">ni16550_disable_transceivers\n");
 
 	pcr = port->serial_in(port, NI16550_PCR_OFFSET);
@@ -97,6 +95,7 @@ static int ni16550_config_rs485(struct uart_port *port,
 		struct serial_rs485 *rs485)
 {
 	uint8_t pcr;
+
 	dev_dbg(port->dev, ">ni16550_config_rs485\n");
 
 	/* "rs485" should be given to us non-NULL. */
@@ -150,7 +149,8 @@ static void
 ni16550_set_rs485_defaults(struct serial_rs485 *rs485)
 {
 	/* The hardware comes up by default in 2-wire auto mode and we
-	 * set the flags to represent that */
+	 * set the flags to represent that
+	 */
 	rs485->flags = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND;
 }
 
@@ -164,18 +164,21 @@ bool is_rs232_mode(unsigned long iobase)
 	uint8_t pmr = inb(iobase + NI16550_PMR_OFFSET);
 
 	/* If the PMR is not implemented, then by default NI UARTs are
-	 * connected to RS-485 transceivers */
+	 * connected to RS-485 transceivers
+	 */
 	if ((pmr & NI16550_PMR_CAP_MASK) == NI16550_PMR_NOT_IMPL)
 		return false;
 
 	if ((pmr & NI16550_PMR_CAP_MASK) == NI16550_PMR_CAP_DUAL)
 		/* If the port is dual-mode capable, then read the mode bit
-		 * to know the current mode */
+		 * to know the current mode
+		 */
 		return ((pmr & NI16550_PMR_MODE_MASK)
 					== NI16550_PMR_MODE_RS232);
 	else
 		/* If it is not dual-mode capable, then decide based on the
-		 * capability */
+		 * capability
+		 */
 		return ((pmr & NI16550_PMR_CAP_MASK) == NI16550_PMR_CAP_RS232);
 }
 
