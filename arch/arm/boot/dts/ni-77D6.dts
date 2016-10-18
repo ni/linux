@@ -75,17 +75,20 @@
 
 		/* RX_DV Pad Skew [7:4] = +0.30ns (0xC0) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 + 300 is 720 ps. */
+		 * ps. 420 + 300 is 720 ps.
+		 */
 		rxdv-skew-ps = <720>;
 
 		/* TX_EN Pad Skew [3:0] = -0.30ns (0x02) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 - 300 is 120 ps. */
+		 * ps. 420 - 300 is 120 ps.
+		 */
 		txen-skew-ps = <120>;
 
 		/* RXD 0-3 Pad Skew = +0.30ns (0xC) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 + 300 is 720 ps. */
+		 * ps. 420 + 300 is 720 ps.
+		 */
 		rxd0-skew-ps = <720>;
 		rxd1-skew-ps = <720>;
 		rxd2-skew-ps = <720>;
@@ -93,7 +96,8 @@
 
 		/* TXD 0-3 Pad Skew = -0.30ns (0x2) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 - 300 is 120 ps. */
+		 * ps. 420 - 300 is 120 ps.
+		 */
 		txd0-skew-ps = <120>;
 		txd1-skew-ps = <120>;
 		txd2-skew-ps = <120>;
@@ -102,11 +106,13 @@
 		/* Write value to MMD Address 2h, Register 8h */
 		/* RX_CLK Pad Skew [4:0] = -0.9ns (0x0) */
 		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.90 ns is
-		 * 900 ps. 900 - 900 is 0 ps. */
+		 * 900 ps. 900 - 900 is 0 ps.
+		 */
 		rxc-skew-ps = <0>;
 		/* GTX_CLK Pad Skew [9:5] = +0.96ns (0x3E) */
 		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.96 ns is
-		 * 960 ps. 900 + 960 is 1860 ps. */
+		 * 960 ps. 900 + 960 is 1860 ps.
+		 */
 		txc-skew-ps = <1860>;
 	};
 
@@ -120,17 +126,20 @@
 
 		/* RX_DV Pad Skew [7:4] = +0.30ns (0xC0) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 + 300 is 720 ps. */
+		 * ps. 420 + 300 is 720 ps.
+		 */
 		rxdv-skew-ps = <720>;
 
 		/* TX_EN Pad Skew [3:0] = -0.30ns (0x02) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 - 300 is 120 ps. */
+		 * ps. 420 - 300 is 120 ps.
+		 */
 		txen-skew-ps = <120>;
 
 		/* RXD 0-3 Pad Skew = +0.30ns (0xC) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 + 300 is 720 ps. */
+		 * ps. 420 + 300 is 720 ps.
+		 */
 		rxd0-skew-ps = <720>;
 		rxd1-skew-ps = <720>;
 		rxd2-skew-ps = <720>;
@@ -138,7 +147,8 @@
 
 		/* TXD 0-3 Pad Skew = -0.30ns (0x2) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
-		 * ps. 420 - 300 is 120 ps. */
+		 * ps. 420 - 300 is 120 ps.
+		 */
 		txd0-skew-ps = <120>;
 		txd1-skew-ps = <120>;
 		txd2-skew-ps = <120>;
@@ -147,11 +157,13 @@
 		/* Write value to MMD Address 2h, Register 8h */
 		/* RX_CLK Pad Skew [4:0] = -0.9ns (0x0) */
 		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.90 ns is
-		 * 900 ps. 900 - 900 is 0 ps. */
+		 * 900 ps. 900 - 900 is 0 ps.
+		 */
 		rxc-skew-ps = <0>;
 		/* GTX_CLK Pad Skew [9:5] = +0.96ns (0x3E) */
 		/* Default is 0b01111, or 15. 15 * 60 ps = 900 ps. 0.96 ns is
-		 * 960 ps. 900 + 960 is 1860 ps. */
+		 * 960 ps. 900 + 960 is 1860 ps.
+		 */
 		txc-skew-ps = <1860>;
 	};
 };
