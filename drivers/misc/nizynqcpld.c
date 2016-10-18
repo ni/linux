@@ -122,7 +122,7 @@ struct nizynqcpld_desc {
 	u8 supported_version;
 	u8 supported_product;
 	struct nizynqcpld_led_desc *led_descs;
-	unsigned num_led_descs;
+	unsigned int num_led_descs;
 	struct nizynqcpld_watchdog_desc *watchdog_desc;
 	u8 reboot_addr;
 	u8 scratch_hr_addr;
@@ -157,7 +157,8 @@ static inline void nizynqcpld_unlock(struct nizynqcpld *cpld)
 }
 
 /* Can't issue i2c transfers in set_brightness, because
- * they can sleep */
+ * they can sleep
+ */
 static void nizynqcpld_set_brightness_work(struct work_struct *work)
 {
 	struct nizynqcpld_led *led = container_of(work, struct nizynqcpld_led,
@@ -195,9 +196,11 @@ static void nizynqcpld_led_set_brightness(struct led_classdev *led_cdev,
 					  enum led_brightness brightness)
 {
 	struct nizynqcpld_led *led = to_nizynqcpld_led(led_cdev);
+
 	led->on = !!brightness;
 	/* some LED's support a blink pattern instead of a variable brightness,
-	   and blink_set isn't flexible enough for the supported patterns */
+	 * and blink_set isn't flexible enough for the supported patterns
+	 */
 	led->blink_pattern = brightness;
 	schedule_work(&led->deferred_work);
 }
@@ -216,7 +219,8 @@ nizynqcpld_led_get_brightness(struct led_classdev *led_cdev)
 	nizynqcpld_unlock(cpld);
 
 	/* for the status LED, the blink pattern used for brightness on write
-	   is write-only, so we just return on/off for all LED's */
+	 * is write-only, so we just return on/off for all LED's
+	 */
 	return tmp & desc->bit ? LED_FULL : 0;
 }
 
@@ -268,7 +272,8 @@ static int nizynqcpld_led_register(struct nizynqcpld *cpld,
 	node = of_get_child_by_name(leds_node, desc->of_node_name);
 	if (!node) {
 		/* Don't register the LED if the LED is not specified in device
-		 * tree. */
+		 * tree.
+		 */
 		err = -ENOENT;
 		goto err_out;
 	}
@@ -366,6 +371,7 @@ static ssize_t nizynqcpld_scratchsr_show(struct device *dev,
 {
 	struct nizynqcpld *cpld = dev_get_drvdata(dev);
 	struct nizynqcpld_desc *desc = cpld->desc;
+
 	return nizynqcpld_scratch_show(cpld, attr, buf, desc->scratch_sr_addr);
 }
 
@@ -374,6 +380,7 @@ static ssize_t nizynqcpld_scratchhr_show(
 {
 	struct nizynqcpld *cpld = dev_get_drvdata(dev);
 	struct nizynqcpld_desc *desc = cpld->desc;
+
 	return nizynqcpld_scratch_show(cpld, attr, buf, desc->scratch_hr_addr);
 }
 
@@ -411,6 +418,7 @@ static ssize_t nizynqcpld_scratchsr_store(struct device *dev,
 {
 	struct nizynqcpld *cpld = dev_get_drvdata(dev);
 	struct nizynqcpld_desc *desc = cpld->desc;
+
 	return nizynqcpld_scratch_store(cpld, attr, buf, count,
 					desc->scratch_sr_addr);
 }
@@ -421,6 +429,7 @@ static ssize_t nizynqcpld_scratchhr_store(struct device *dev,
 {
 	struct nizynqcpld *cpld = dev_get_drvdata(dev);
 	struct nizynqcpld_desc *desc = cpld->desc;
+
 	return nizynqcpld_scratch_store(cpld, attr, buf, count,
 					desc->scratch_hr_addr);
 }
@@ -564,11 +573,12 @@ static inline ssize_t nizynqcpld_powerstatus_show(struct device *dev,
 	return sprintf(buf, "%u\n", !!(data & pa->bit));
 }
 
-#define POWERSTATUS_ATTR(_name,_bit)							\
-	struct powerstatus_attribute dev_attr_##_name = {				\
-		.bit = _bit,							\
-		.dev_attr =							\
-			__ATTR(_name, 0444, nizynqcpld_powerstatus_show, NULL),	\
+#define POWERSTATUS_ATTR(_name, _bit)					 \
+	struct powerstatus_attribute dev_attr_##_name = {		 \
+		.bit = _bit,						 \
+		.dev_attr =						 \
+			__ATTR(_name, 0444, nizynqcpld_powerstatus_show, \
+			       NULL),					 \
 	}
 
 static POWERSTATUS_ATTR(pwr_aux_valid,  1 << 4);
@@ -615,7 +625,8 @@ static ssize_t dosequiscpld_wdmode_show(struct device *dev,
 		return err;
 
 	/* you write a 1 to the bit to enter user mode, but it reads as a
-	   0 in user mode for backwards compatibility */
+	 * 0 in user mode for backwards compatibility
+	 */
 	tmp &= DOSX_WATCHDOGCONTROL_ENTER_USER_MODE;
 	return sprintf(buf, "%s\n", tmp ? "boot" : "user");
 }
@@ -748,9 +759,9 @@ static int nizynqcpld_watchdog_add_action(struct nizynqcpld *cpld, u32 action)
 	int err;
 	u8 action_bit;
 
-	if (NIWATCHDOG_ACTION_INTERRUPT == action)
+	if (action == NIWATCHDOG_ACTION_INTERRUPT)
 		action_bit = DOSX_WATCHDOGCONTROL_PROC_INTERRUPT;
-	else if (NIWATCHDOG_ACTION_RESET == action)
+	else if (action == NIWATCHDOG_ACTION_RESET)
 		action_bit = DOSX_WATCHDOGCONTROL_PROC_RESET;
 	else
 		return -ENOTSUPP;
@@ -898,7 +909,7 @@ static int nizynqcpld_watchdog_counter_get(struct nizynqcpld *cpld,
 					    DOSX_WATCHDOGCOUNTER2,
 					    DOSX_WATCHDOG_COUNTER_BYTES,
 					    data);
-	if (DOSX_WATCHDOG_COUNTER_BYTES == err)
+	if (err == DOSX_WATCHDOG_COUNTER_BYTES)
 		err = 0;
 	else {
 		dev_err(cpld->dev,
@@ -991,6 +1002,7 @@ static int nizynqcpld_watchdog_misc_release(struct inode *inode,
 					    struct file *file)
 {
 	struct nizynqcpld *cpld = file->private_data;
+
 	free_irq(cpld->irq, cpld);
 	atomic_inc(&cpld->watchdog.available);
 	return 0;
@@ -1009,18 +1021,21 @@ long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	switch (cmd) {
 	case NIWATCHDOG_IOCTL_PERIOD_NS: {
 		__u32 period = desc->watchdog_period_ns;
+
 		err = copy_to_user((__u32 *)arg, &period,
 				   sizeof(__u32));
 		break;
 	}
 	case NIWATCHDOG_IOCTL_MAX_COUNTER: {
 		__u32 counter = DOSX_WATCHDOG_MAX_COUNTER;
+
 		err = copy_to_user((__u32 *)arg, &counter,
 				   sizeof(__u32));
 		break;
 	}
 	case NIWATCHDOG_IOCTL_COUNTER_SET: {
 		__u32 counter;
+
 		err = copy_from_user(&counter, (__u32 *)arg,
 				     sizeof(__u32));
 		if (!err)
@@ -1029,6 +1044,7 @@ long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	}
 	case NIWATCHDOG_IOCTL_CHECK_ACTION: {
 		__u32 action;
+
 		err = copy_from_user(&action, (__u32 *)arg,
 				     sizeof(__u32));
 		if (!err)
@@ -1037,6 +1053,7 @@ long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	}
 	case NIWATCHDOG_IOCTL_ADD_ACTION: {
 		__u32 action;
+
 		err = copy_from_user(&action, (__u32 *)arg,
 				     sizeof(__u32));
 		if (!err)
@@ -1049,6 +1066,7 @@ long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	}
 	case NIWATCHDOG_IOCTL_PET: {
 		__u32 state;
+
 		err = nizynqcpld_watchdog_pet(cpld, &state);
 		if (!err)
 			err = copy_to_user((__u32 *)arg, &state,
@@ -1061,6 +1079,7 @@ long nizynqcpld_watchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	}
 	case NIWATCHDOG_IOCTL_COUNTER_GET: {
 		__u32 counter;
+
 		err = nizynqcpld_watchdog_counter_get(cpld, &counter);
 		if (!err) {
 			err = copy_to_user((__u32 *)arg, &counter,
@@ -1374,6 +1393,7 @@ static void wifi_sw_work_func(struct work_struct *work)
 static irqreturn_t wifi_sw_hnd(int irq, void *irq_data)
 {
 	struct myrio_wifi_sw *wifi_sw = (struct myrio_wifi_sw *)irq_data;
+
 	schedule_work(&wifi_sw->deferred_work);
 
 	return IRQ_HANDLED;
@@ -1541,14 +1561,14 @@ static int nizynqcpld_probe(struct i2c_client *client,
 	if (!desc) {
 		err = -ENODEV;
 		dev_err(cpld->dev,
-			"this driver does not support cpld with version %d and"
-			" product %d.\n", version, product);
+			"this driver does not support cpld with version %d and product %d.\n",
+			version, product);
 		goto err_no_version;
 	}
 
 	cpld->desc = desc;
 
-	cpld->leds = kzalloc(sizeof(*cpld->leds) * desc->num_led_descs,
+	cpld->leds = kcalloc(desc->num_led_descs, sizeof(*cpld->leds),
 			     GFP_KERNEL);
 	if (!cpld->leds) {
 		err = -ENOMEM;
@@ -1560,7 +1580,8 @@ static int nizynqcpld_probe(struct i2c_client *client,
 		err = nizynqcpld_led_register(cpld, &desc->led_descs[i],
 					      &cpld->leds[i]);
 		/* Skip LEDs that are missing from device tree, but continue
-		 * adding other LEDs. */
+		 * adding other LEDs.
+		 */
 		if (err)
 			dev_dbg(&client->dev,
 				"Omitting %s LED\n",
