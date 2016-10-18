@@ -901,12 +901,15 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 
 	if (command == NAND_CMD_READ0) {
 		/* If using on-die ECC, we must check the NAND status for an
-		   ECC warning or error after reading a page. */
+		 * ECC warning or error after reading a page.
+		 */
 		if (xnand->ondie_ecc_enabled) {
 			uint8_t status;
+
 			pl353_nand_cmd_function(mtd, NAND_CMD_STATUS, -1, -1);
 			status = chip->read_byte(mtd);
-			pl353_nand_cmd_function(mtd, NAND_CMD_READ0_ONLY, -1, -1);
+			pl353_nand_cmd_function(mtd, NAND_CMD_READ0_ONLY, -1,
+						-1);
 			if (status & NAND_STATUS_RR)
 				++mtd->ecc_stats.corrected;
 			else if (status & NAND_STATUS_FAIL)
