@@ -1093,7 +1093,8 @@ static int serial8250_fpga_notification(struct notifier_block *nb,
 
 	/* We ignore all errors encountered in this function in order to ensure
 	 * that the fpgaperipheral blocking chain notifier notifies all
-	 * clients. (See documentation in include/misc/fpgaperipheral.h) */
+	 * clients. (See documentation in include/misc/fpgaperipheral.h)
+	 */
 	return notifier_from_errno(0);
 }
 
@@ -1211,7 +1212,8 @@ int serial8250_register_8250_port(struct uart_8250_port *up)
 			ret = serial8250_setup_fpga_notifier(&uart->port);
 			if (ret < 0) {
 				dev_err(uart->port.dev,
-					"notify register failed; err=%i\n", ret);
+					"notify register failed; err=%i\n",
+					ret);
 				goto unlock;
 			}
 
