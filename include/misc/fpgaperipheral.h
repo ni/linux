@@ -21,7 +21,7 @@
  * The value passed to notifier callbacks will be one of these.
  * FPGA_PERIPHERAL_DOWN: The FPGA is about to be unprogrammed.
  * FPGA_PERIPHERAL_UP: The FPGA is now programmed.
- *  This may be called even if not preceeded by an FPGA_PERIPHERAL_DOWN.
+ *  This may be called even if not preceded by an FPGA_PERIPHERAL_DOWN.
  * FPGA_PERIPHERAL_FAILED: The FPGA programming failed.
  *  If this is called, clients should not use the FPGA as it might be in
  *  a bad state. This is to notify the clients to abort any waiting for

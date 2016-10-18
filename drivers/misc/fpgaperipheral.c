@@ -196,7 +196,7 @@ static int __exit fpgaperipheral_remove(struct platform_device *pdev)
 
 /* Match table for of_platform binding */
 #ifdef CONFIG_OF
-static struct of_device_id fpgaperipheral_of_match[] = {
+static const struct of_device_id fpgaperipheral_of_match[] = {
 	{ .compatible = FPGAPERIPHERAL_NAME, },
 	{}
 };
