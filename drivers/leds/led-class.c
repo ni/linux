@@ -77,6 +77,7 @@ static ssize_t inverted_show(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
 	return sprintf(buf, "%u\n", led_cdev->inverted);
 }
 
@@ -84,10 +85,10 @@ static ssize_t inverted_store(struct device *dev, struct device_attribute *attr,
 			      const char *buf, size_t size)
 {
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
-	unsigned long inverted;
+	u8 inverted;
 	int ret;
 
-	ret = kstrtoul(buf, 10, &inverted);
+	ret = kstrtou8(buf, 10, &inverted);
 	if (ret < 0)
 		return ret;
 
@@ -97,7 +98,8 @@ static ssize_t inverted_store(struct device *dev, struct device_attribute *attr,
 	led_cdev->inverted = inverted;
 
 	/* Note: The LED brightness is not immediately
-	   updated as a result of changing the inversion. */
+	 * updated as a result of changing the inversion.
+	 */
 
 	return size;
 }

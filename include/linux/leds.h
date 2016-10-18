@@ -102,7 +102,7 @@ struct led_classdev {
 	/* true if activated - deactivate routine uses it to do cleanup */
 	bool			activated;
 #endif
-	unsigned		inverted;
+	u8			inverted;
 
 	/* Ensures consistent access to the LED Flash Class device */
 	struct mutex		led_access;
