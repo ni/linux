@@ -318,15 +318,14 @@ int pl353_smc_set_onfi_mode(unsigned int onfi_mode)
 
 	/* reinitialize NAND with new ONFI mode */
 	if (!pdev_cached || !nand_node_cached) {
-		printk(KERN_ERR "%s: cached pointers invalid or not set!\n",
-				__func__);
+		pr_err("%s: cached pointers invalid or not set!\n", __func__);
 		err = -1;
 		goto out_set_onfi_mode;
 	}
 
 	pl353_smc_init_nand_interface(pdev_cached, nand_node_cached, onfi_mode);
 
-	out_set_onfi_mode:
+out_set_onfi_mode:
 	return err;
 }
 EXPORT_SYMBOL_GPL(pl353_smc_set_onfi_mode);
@@ -370,10 +369,11 @@ static SIMPLE_DEV_PM_OPS(pl353_smc_dev_pm_ops, pl353_smc_suspend,
  * @nand_node:	Pointer to the pl353_nand device_node struct
  */
 static void pl353_smc_init_nand_interface(struct platform_device *pdev,
-				       struct device_node *nand_node, int onfi_mode)
+				       struct device_node *nand_node,
+				       int onfi_mode)
 {
 	u32 t_rc, t_wc, t_rea, t_wp, t_clr, t_ar, t_rr;
-	int err=0;
+	int err = 0;
 	unsigned long timeout = jiffies + PL353_NAND_ECC_BUSY_TIMEOUT;
 	const u32 *timing_prop;
 	int i, len = 0;
@@ -390,11 +390,12 @@ static void pl353_smc_init_nand_interface(struct platform_device *pdev,
 	 *  t5 : t_ar
 	 *  t6 : t_rr
 	 */
-	if(devtree_has_been_read)
+	if (devtree_has_been_read)
 		goto skip_devtree_read;
 
 	for (i = 0; i < 6; ++i) {
 		char prop_name[16];
+
 		sprintf(prop_name, "xlnx,onfi-mode%u", i);
 
 		timing_prop = of_get_property(nand_node, prop_name, &len);
@@ -411,20 +412,19 @@ static void pl353_smc_init_nand_interface(struct platform_device *pdev,
 			chip_timings[i].t_ar  = be32_to_cpup(&timing_prop[2]);
 			chip_timings[i].t_rr  = be32_to_cpup(&timing_prop[1]);
 
-			pr_info("%s: read timings for ONFI %u: clk=%u, t_rc=%u,"
-					" t_wc=%u, t_rea=%u, t_wp=%u,"
-					" t_clr=%u, t_ar=%u, t_rr=%u\n",
-					__func__, i, chip_timings[i].smc_clk_freq,
-					chip_timings[i].t_rc, chip_timings[i].t_wc,
-					chip_timings[i].t_rea, chip_timings[i].t_wp,
-					chip_timings[i].t_clr, chip_timings[i].t_ar,
-					chip_timings[i].t_rr);
+			pr_info("%s: read timings for ONFI %u: clk=%u, t_rc=%u, t_wc=%u, t_rea=%u, t_wp=%u, t_clr=%u, t_ar=%u, t_rr=%u\n",
+				__func__, i, chip_timings[i].smc_clk_freq,
+				chip_timings[i].t_rc, chip_timings[i].t_wc,
+				chip_timings[i].t_rea, chip_timings[i].t_wp,
+				chip_timings[i].t_clr, chip_timings[i].t_ar,
+				chip_timings[i].t_rr);
 
 			prop_found[i] = 1;
 		} else {
 			/* No property */
-			dev_warn(&pdev->dev, "Device timing for ONFI mode %d", i);
-			dev_warn(&pdev->dev, "not found in device tree!");
+			dev_warn(&pdev->dev,
+				 "Device timing for ONFI mode %d not found in device tree!",
+				 i);
 			prop_found[i] = 0;
 		}
 	}
@@ -432,9 +432,9 @@ static void pl353_smc_init_nand_interface(struct platform_device *pdev,
 
 skip_devtree_read:
 	if (prop_found[onfi_mode]) {
-		if (err) {
-			dev_warn(&pdev->dev, "failed to set SMC clock frequency!");
-		}
+		if (err)
+			dev_warn(&pdev->dev,
+				 "failed to set SMC clock frequency!");
 
 		t_rc  = chip_timings[onfi_mode].t_rc;
 		t_wc  = chip_timings[onfi_mode].t_wc;
