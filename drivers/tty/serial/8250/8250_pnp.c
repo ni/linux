@@ -522,7 +522,8 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 			line = serial8250_register_8250_port(&uart);
 		} else
 			/* Either the PMR register is not implemented, or it is
-			 * and the UART is in RS-485 mode as set in the PMR */
+			 * and the UART is in RS-485 mode as set in the PMR
+			 */
 			line = ni16550_register_port(&uart);
 	} else
 		line = serial8250_register_8250_port(&uart);
