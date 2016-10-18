@@ -3205,9 +3205,11 @@ static int macb_probe(struct platform_device *pdev)
 	* or 1000 (low).
 	*/
 	bp->gpiospeed_100 = devm_gpiod_get_index_optional(&pdev->dev,
-							  "emio-speed", 0, GPIOD_ASIS);
+							  "emio-speed", 0,
+							  GPIOD_ASIS);
 	if (IS_ERR(bp->gpiospeed_100)) {
-		dev_err(&pdev->dev, "Error retreiving handle to EMIO gpiospeed_100\n");
+		dev_err(&pdev->dev,
+			"Error retreiving handle to EMIO gpiospeed_100\n");
 		err = PTR_ERR(bp->gpiospeed_100);
 		goto err_disable_clocks;
 	}
@@ -3215,15 +3217,18 @@ static int macb_probe(struct platform_device *pdev)
 	if (bp->gpiospeed_100) {
 		err = gpiod_direction_output(bp->gpiospeed_100, 0);
 		if (err) {
-			dev_err(&pdev->dev, "Unable to set EMIO gpiospeed_100 as output\n");
+			dev_err(&pdev->dev,
+				"Unable to set EMIO gpiospeed_100 as output\n");
 			goto err_disable_clocks;
 		}
 	}
 
 	bp->gpiospeed_1000 = devm_gpiod_get_index_optional(&pdev->dev,
-							  "emio-speed", 1, GPIOD_ASIS);
+							  "emio-speed", 1,
+							  GPIOD_ASIS);
 	if (IS_ERR(bp->gpiospeed_1000)) {
-		dev_err(&pdev->dev, "Error retreiving handle to EMIO gpiospeed_1000\n");
+		dev_err(&pdev->dev,
+			"Error retreiving handle to EMIO gpiospeed_1000\n");
 		err = PTR_ERR(bp->gpiospeed_1000);
 		goto err_disable_clocks;
 	}
@@ -3231,7 +3236,8 @@ static int macb_probe(struct platform_device *pdev)
 	if (bp->gpiospeed_1000) {
 		err = gpiod_direction_output(bp->gpiospeed_1000, 0);
 		if (err) {
-			dev_err(&pdev->dev, "Unable to set EMIO gpiospeed_1000 as output\n");
+			dev_err(&pdev->dev,
+				"Unable to set EMIO gpiospeed_1000 as output\n");
 			goto err_disable_clocks;
 		}
 	}
