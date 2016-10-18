@@ -1147,8 +1147,8 @@ static void __init __gic_init_bases(unsigned int gic_nr, int irq_start,
 		gic->domain = irq_domain_add_legacy(NULL, gic_irqs, irq_base,
 					hwirq_base, &gic_irq_domain_ops, gic);
 #ifdef CONFIG_GIC_LEGACY_IRQDOMAIN
-               /* Set the fwnode so irq_find_matching_fwnode() will work */
-               gic->domain->fwnode = handle;
+		/* Set the fwnode so irq_find_matching_fwnode() will work */
+		gic->domain->fwnode = handle;
 #endif
 	}
 
