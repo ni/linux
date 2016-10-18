@@ -866,7 +866,6 @@ static int m88e1145_config_init(struct phy_device *phydev)
 	return 0;
 }
 
-
 /* marvell_read_status
  *
  * Generic status code does not detect Fiber correctly!
