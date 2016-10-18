@@ -45,7 +45,8 @@
 
 	/* No fpga_clk specified because we want our FPGA clock
 	 * (fclk0) to always be 125 MHz. The bootloader sets
-	 * fclk0 to 125 MHz and we just leave it like that. */
+	 * fclk0 to 125 MHz and we just leave it like that.
+	 */
 
 	phy-handle = <&phy0>;
 	phy-mode = "rgmii-id";
@@ -73,7 +74,8 @@
 
 	/* No fpga_clk specified because we want our FPGA clock (fclk0) to
 	 * always be 125 MHz. The bootloader sets fclk0 to 125 MHz and we just
-	 * leave it like that. */
+	 * leave it like that.
+	 */
 
 	phy-handle = <&phy1>;
 	phy-mode = "rgmii-id";

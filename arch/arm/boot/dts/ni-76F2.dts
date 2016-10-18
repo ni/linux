@@ -106,24 +106,24 @@
 			speed-hz = <200000000>;
 
 			spidev@0 {
-                                compatible = "spidev";
-                                spi-max-frequency = <2000000>;
-                                reg = <0>;
+				compatible = "spidev";
+				spi-max-frequency = <2000000>;
+				reg = <0>;
 			};
 			spidev@1 {
-                                compatible = "spidev";
-                                spi-max-frequency = <2000000>;
-                                reg = <1>;
+				compatible = "spidev";
+				spi-max-frequency = <2000000>;
+				reg = <1>;
 			};
 			spidev@2 {
-                                compatible = "spidev";
-                                spi-max-frequency = <2000000>;
-                                reg = <2>;
+				compatible = "spidev";
+				spi-max-frequency = <2000000>;
+				reg = <2>;
 			};
 			spidev@3 {
-                                compatible = "spidev";
-                                spi-max-frequency = <2000000>;
-                                reg = <3>;
+				compatible = "spidev";
+				spi-max-frequency = <2000000>;
+				reg = <3>;
 			};
 		};
 
@@ -134,9 +134,9 @@
 			speed-hz = <200000000>;
 
 			spidev@0 {
-                                compatible = "spidev";
-                                spi-max-frequency = <2000000>;
-                                reg = <0>;
+				compatible = "spidev";
+				spi-max-frequency = <2000000>;
+				reg = <0>;
 			};
 		};
 	};

@@ -74,7 +74,8 @@
 		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
 		interrupt-parent = <&gpio>;
 		/* Page 3, Register 16, LED[2:0] Function
-		   Control Register */
+		 * Control Register
+		 */
 		leds = <0x1881>;
 	};
 
@@ -86,7 +87,8 @@
 		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
 		interrupt-parent = <&gpio>;
 		/* Page 3, Register 16, LED[2:0] Function
-		   Control Register */
+		 * Control Register
+		 */
 		leds = <0x1881>;
 	};
 };

@@ -163,12 +163,18 @@
 				bank-width = <1>; /* 8-bit width */
 				xlnx,nand-width = <0x8>;
 
-				/* SLCR SMC_CLK_CTRL value, 83MHz clock, 12ns cycle time */
-				/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
+				/* SLCR SMC_CLK_CTRL value, 83MHz clock, 12ns
+				 * cycle time
+				 * <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in
+				 * cycles
+				 */
 				xlnx,onfi-mode0 = <0x0001021 4 3 2 7 4 10 10>;
 
-				/* SLCR SMC_CLK_CTRL value, 166MHz clock, 6ns cycle time */
-				/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
+				/* SLCR SMC_CLK_CTRL value, 166MHz clock, 6ns
+				 * cycle time
+				 * <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in
+				 * cycles
+				 */
 				xlnx,onfi-mode1 = <0x0000821 4 2 2 7 4 10 10>;
 				xlnx,onfi-mode2 = <0x0000821 4 2 2 5 3 8 7>;
 				xlnx,onfi-mode3 = <0x0000821 4 2 2 5 2 7 6>;
