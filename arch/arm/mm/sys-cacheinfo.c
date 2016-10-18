@@ -59,9 +59,9 @@
 /* CTR: cache type field */
 #define ARM_V4_6_CTR_Ctype(r)		((r >> 25) & 0x0F)
 /* CTR: separate caches bit
-   0 = unified, ISize and DSize fields both describe the unified cache;
-   1 = separate instruction and data caches
-*/
+ * 0 = unified, ISize and DSize fields both describe the unified cache;
+ * 1 = separate instruction and data caches
+ */
 #define ARM_V4_6_CTR_S(r)		((r >> 24) & 0x01)
 /* CTR: data cache page coloring restriction bit for VMSA architectures */
 #define ARM_V4_6_CTR_DSize_P(r)		((r >> 23) & 0x01)
@@ -104,7 +104,8 @@ static const char *arm_cache_type_str[CACHE_TYPE_NUM] = {"NULL",
 
 struct _arm_cache_info {
 	int level;			/* zero based cache level (i.e. an L1
-					   cache will be represented as 0) */
+					 * cache will be represented as 0)
+					 */
 	enum _arm_cache_type type;	/* cache type (instruction, data etc.)*/
 	unsigned long flags;
 	unsigned long size;		/* total cache size in bytes */
@@ -169,7 +170,8 @@ static unsigned short find_num_cache_leaves(void)
 				break;
 
 			/* if we have separate instruction and data
-			   caches count them individually */
+			 * caches count them individually
+			 */
 			if (type == CACHE_TYPE_INSTnDATA)
 				leaves++;
 
@@ -181,10 +183,12 @@ static unsigned short find_num_cache_leaves(void)
 	case CPU_ARCH_ARMv6:
 	default:
 		/* before ARMv7 the best we can do is detect the L1
-		   cache configuration */
+		 * cache configuration
+		 */
 		if (ARM_V4_6_CTR_S(ctr)) {
 			leaves = 2;	/* we have separate instruction
-					   and data caches */
+					 * and data caches
+					 */
 		} else {
 			leaves = 1;	/* unified L1 cache */
 		}
@@ -215,7 +219,8 @@ arm_v7_get_cache_level_and_type(int leaf, struct _arm_cache_info *this_leaf)
 		if (leaf == leaves) {
 			this_leaf->level = cache_level;
 			/* we count the instruction and data caches on the same
-			   level as separate leaves (instruction first) */
+			 * level as separate leaves (instruction first)
+			 */
 			this_leaf->type = (cache_type == CACHE_TYPE_INSTnDATA) ?
 				CACHE_TYPE_INST : cache_type;
 			break;
@@ -223,7 +228,8 @@ arm_v7_get_cache_level_and_type(int leaf, struct _arm_cache_info *this_leaf)
 
 		if (cache_type == CACHE_TYPE_INSTnDATA) {
 			/* if we have separate instruction and data caches
-			   count them individually */
+			 * count them individually
+			 */
 			leaves++;
 			if (leaf == leaves) {
 				this_leaf->level = cache_level;
@@ -270,7 +276,8 @@ static int arm_v4_6_cache_lookup(int index, struct _arm_cache_info *this_leaf)
 	unsigned long line_length;
 
 	this_leaf->level = 0;		/* before ARMv7 the best we can do is
-					   detect the L1 cache configuration */
+					 * detect the L1 cache configuration
+					 */
 	this_leaf->flags = ARM_V4_6_CTR_Ctype(ctr);
 
 	if (index == 0) {
