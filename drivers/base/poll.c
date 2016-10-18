@@ -87,8 +87,9 @@ static ssize_t device_poll_set_interval(struct device *dev,
 #ifdef CONFIG_DEVICE_POLL_NI_COMPAT
 	/* For backwards compatibility with NI software. An interval of zero
 	 * now indicates interrupt mode. Shipping NI software can get confused
-	 * by this, so force 0 to -1. */
-	if (0 == interval)
+	 * by this, so force 0 to -1.
+	 */
+	if (interval == 0)
 		interval = -1;
 #endif
 	device_poll->ops->lock(device_poll);
@@ -195,7 +196,8 @@ static const DEVICE_ATTR(priority, S_IWUSR | S_IRUGO,
 
 #ifdef CONFIG_DEVICE_POLL_NI_COMPAT
 /* For backwards compatibility with NI software. The interval attribute had a
- * different name, and shipping NI software looks for this other name. */
+ * different name, and shipping NI software looks for this other name.
+ */
 static const DEVICE_ATTR(ni_polling_interval, S_IWUSR | S_IRUGO,
 			 device_poll_get_interval, device_poll_set_interval);
 #endif
@@ -300,13 +302,15 @@ int device_poll_init(struct device_poll *device_poll)
 	/* For backwards compatibility with NI software. */
 
 	/* An interval of zero now indicates interrupt mode. Shipping NI
-	 * software can get confused by this, so force 0 to -1. */
-	if (0 == device_poll->interval)
+	 * software can get confused by this, so force 0 to -1.
+	 */
+	if (device_poll->interval == 0)
 		device_poll->interval = -1;
 
 	/* The interval attribute originally had a different name and location,
 	 * and shipping NI software looks for this other name in this other
-	 * location. */
+	 * location.
+	 */
 	device_poll->ni_interval_attr.attr = dev_attr_ni_polling_interval;
 	device_poll->ni_interval_attr.var = device_poll;
 
