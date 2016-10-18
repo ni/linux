@@ -720,7 +720,8 @@ static void pl353_nand_select_chip(struct mtd_info *mtd, int chip)
 	/* CS is automatically asserted when a command or data access is
 	 * started. In this function we only need to deassert CS when the
 	 * chip is no longer in use. Unfortunately, the only way we can
-	 * do this is to read a byte of data from the NAND chip. */
+	 * do this is to read a byte of data from the NAND chip.
+	 */
 	if (-1 == chip) {
 		struct nand_chip *nand_chip;
 		unsigned long data_phase_addr;
