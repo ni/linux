@@ -3206,7 +3206,7 @@ static void e1000_configure_rx(struct e1000_adapter *adapter)
 	rctl = er32(RCTL);
 	if (!(adapter->flags2 & FLAG2_NO_DISABLE_RX))
 		ew32(RCTL, rctl & ~E1000_RCTL_EN);
-        E1000_WR_DELAY();
+	E1000_WR_DELAY();
 	e1e_flush();
 	usleep_range(10000, 20000);
 
@@ -3388,7 +3388,8 @@ static int e1000e_write_uc_addr_list(struct net_device *netdev)
 
 	/* preserve number of remaining RAR entries for delay
 	 * function in order to prevent latency issues caused by
-	 * MMIO writes */
+	 * MMIO writes
+	 */
 #ifdef CONFIG_E1000_DELAY
 	rar_count = rar_entries;
 #endif

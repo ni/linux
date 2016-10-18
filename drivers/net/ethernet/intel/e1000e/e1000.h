@@ -91,7 +91,7 @@ struct e1000_info;
 
 /* Time to wait after writing large amount of data to registers */
 #ifdef CONFIG_E1000_DELAY
-#define E1000_WR_DELAY()		usleep_range(50,100)
+#define E1000_WR_DELAY()		usleep_range(50, 100)
 #else
 #define E1000_WR_DELAY()
 #endif
