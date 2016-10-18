@@ -174,8 +174,7 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	ar->testmode = testmode;
 
 #ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-	/*
-	 * ath6kl_init_hw_params() will set the board file name, but we want
+	/* ath6kl_init_hw_params() will set the board file name, but we want
 	 * to override it with a region specific board file here.
 	 */
 	region_board_file = devm_kzalloc(ar->dev, 64, GFP_KERNEL);
