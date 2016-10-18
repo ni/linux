@@ -151,9 +151,9 @@ static int niwatchdog_add_action(struct niwatchdog *niwatchdog, u32 action)
 	u8 control;
 	unsigned long flags;
 
-	if (NIWATCHDOG_ACTION_INTERRUPT == action)
+	if (action == NIWATCHDOG_ACTION_INTERRUPT)
 		action_mask = NIWD_CONTROL_PROC_INTERRUPT;
-	else if (NIWATCHDOG_ACTION_RESET == action)
+	else if (action == NIWATCHDOG_ACTION_RESET)
 		action_mask = NIWD_CONTROL_PROC_RESET;
 	else
 		return -ENOTSUPP;
@@ -307,6 +307,7 @@ static int niwatchdog_misc_open(struct inode *inode, struct file *file)
 static int niwatchdog_misc_release(struct inode *inode, struct file *file)
 {
 	struct niwatchdog *niwatchdog = file->private_data;
+
 	free_irq(niwatchdog->irq, niwatchdog);
 	atomic_inc(&niwatchdog->available);
 	return 0;
@@ -321,18 +322,21 @@ static long niwatchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	switch (cmd) {
 	case NIWATCHDOG_IOCTL_PERIOD_NS: {
 		__u32 period = NIWD_PERIOD_NS;
+
 		err = copy_to_user((__u32 *)arg, &period,
 				   sizeof(__u32));
 		break;
 	}
 	case NIWATCHDOG_IOCTL_MAX_COUNTER: {
 		__u32 counter = NIWD_MAX_COUNTER;
+
 		err = copy_to_user((__u32 *)arg, &counter,
 				   sizeof(__u32));
 		break;
 	}
 	case NIWATCHDOG_IOCTL_COUNTER_SET: {
 		__u32 counter;
+
 		err = copy_from_user(&counter, (__u32 *)arg,
 				     sizeof(__u32));
 		if (!err)
@@ -341,6 +345,7 @@ static long niwatchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	}
 	case NIWATCHDOG_IOCTL_CHECK_ACTION: {
 		__u32 action;
+
 		err = copy_from_user(&action, (__u32 *)arg,
 				     sizeof(__u32));
 		if (!err)
@@ -361,6 +366,7 @@ static long niwatchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	}
 	case NIWATCHDOG_IOCTL_PET: {
 		__u32 state;
+
 		err = niwatchdog_pet(niwatchdog, &state);
 		if (!err)
 			err = copy_to_user((__u32 *)arg, &state,
@@ -373,6 +379,7 @@ static long niwatchdog_misc_ioctl(struct file *file, unsigned int cmd,
 	}
 	case NIWATCHDOG_IOCTL_COUNTER_GET: {
 		__u32 counter;
+
 		err = niwatchdog_counter_get(niwatchdog, &counter);
 		if (!err) {
 			err = copy_to_user((__u32 *)arg, &counter,
