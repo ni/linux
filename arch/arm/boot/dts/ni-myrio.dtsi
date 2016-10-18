@@ -43,7 +43,8 @@
 	/* We must force the SDHCI into test mode, so that it
 	 * always pretends to have a card present. This is to
 	 * work-around a hardware bug where TiWi WiFi does not
-	 * have its CD line connected correctly. */
+	 * have its CD line connected correctly.
+	 */
 	xlnx,fails-without-test-cd;
 
 	non-removable = <1>;
