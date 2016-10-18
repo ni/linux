@@ -198,6 +198,7 @@ static int of_platform_serial_probe(struct platform_device *ofdev)
 	case PORT_8250 ... PORT_MAX_8250:
 	{
 		struct uart_8250_port port8250;
+
 		memset(&port8250, 0, sizeof(port8250));
 		port8250.port = port;
 
@@ -217,6 +218,7 @@ static int of_platform_serial_probe(struct platform_device *ofdev)
 	{
 		struct device_node *np = ofdev->dev.of_node;
 		const char *transceiver;
+
 		struct uart_8250_port port8250;
 		memset(&port8250, 0, sizeof(port8250));
 		port8250.port = port;
