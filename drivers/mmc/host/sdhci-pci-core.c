@@ -397,7 +397,7 @@ static int ni_byt_sdio_probe_slot(struct sdhci_pci_slot *slot)
 
 	acpi_buffer = (union acpi_object *) acpi_result.pointer;
 
-	if (ACPI_TYPE_INTEGER != acpi_buffer->type)
+	if (acpi_buffer->type != ACPI_TYPE_INTEGER)
 		return -EINVAL;
 
 	max_freq = acpi_buffer->integer.value;
