@@ -35,7 +35,8 @@ struct device_poll_ops {
 
 struct device_poll {
 	/* The following must be initialized by the driver before calling
-	   device_poll_init. */
+	 * device_poll_init.
+	 */
 
 	/* The device for which we're polling. */
 	struct device *device;
@@ -44,12 +45,14 @@ struct device_poll {
 	struct device_poll_ops *ops;
 
 	/* A capability can be specified to allow non-root users to modify
-	   the sysfs attributes. */
+	 * the sysfs attributes.
+	 */
 	bool use_capability;
 	int capability;
 
 	/* Polling interval in milliseconds. A value of 0 or less means
-	   use interrupts. */
+	 * use interrupts.
+	 */
 	int interval;
 
 	/* Polling task policy and priority, such as SCHED_FIFO 10. */
@@ -57,7 +60,8 @@ struct device_poll {
 	int priority;
 
 	/* The following are internal struct members and should not be touched
-	   by drivers. */
+	 * by drivers.
+	 */
 
 	struct task_struct *task;
 	int enabled;
@@ -90,7 +94,8 @@ static inline void device_poll_enable_irq(struct device_poll *device_poll)
 	if (device_poll_is_active(device_poll)) {
 		device_poll->enabled = 1;
 		/* Ensure changes to device_poll->enabled are seen by the
-		   polling thread. */
+		 * polling thread.
+		 */
 		smp_wmb();
 	}
 }
@@ -100,7 +105,8 @@ static inline void device_poll_disable_irq(struct device_poll *device_poll)
 	if (device_poll_is_active(device_poll)) {
 		device_poll->enabled = 0;
 		/* Ensure changes to device_poll->enabled are seen by the
-		   polling thread. */
+		 * polling thread.
+		 */
 		smp_wmb();
 	}
 }

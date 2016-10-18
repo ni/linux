@@ -81,7 +81,7 @@ static ssize_t device_poll_set_interval(struct device *dev,
 	if (device_poll->use_capability && !capable(device_poll->capability))
 		return -EPERM;
 
-	if (0 > kstrtoint(buf, 0, &interval))
+	if (kstrtoint(buf, 0, &interval) < 0)
 		return -EINVAL;
 
 #ifdef CONFIG_DEVICE_POLL_NI_COMPAT
@@ -118,19 +118,19 @@ static ssize_t device_poll_set_policy(struct device *dev,
 	if (device_poll->use_capability && !capable(device_poll->capability))
 		return -EPERM;
 
-	if (1 != sscanf(buf, "%15s", policy_str))
+	if (sscanf(buf, "%15s", policy_str) != 1)
 		return -EINVAL;
 
-	if ((0 == strcmp(policy_str, "SCHED_NORMAL") ||
-	     (0 == strcmp(policy_str, "SCHED_OTHER"))))
+	if ((strcmp(policy_str, "SCHED_NORMAL") == 0 ||
+	     (strcmp(policy_str, "SCHED_OTHER") == 0)))
 		policy = SCHED_NORMAL;
-	else if (0 == strcmp(policy_str, "SCHED_FIFO"))
+	else if (strcmp(policy_str, "SCHED_FIFO") == 0)
 		policy = SCHED_FIFO;
-	else if (0 == strcmp(policy_str, "SCHED_RR"))
+	else if (strcmp(policy_str, "SCHED_RR") == 0)
 		policy = SCHED_RR;
-	else if (0 == strcmp(policy_str, "SCHED_BATCH"))
+	else if (strcmp(policy_str, "SCHED_BATCH") == 0)
 		policy = SCHED_BATCH;
-	else if (0 == strcmp(policy_str, "SCHED_IDLE"))
+	else if (strcmp(policy_str, "SCHED_IDLE") == 0)
 		policy = SCHED_IDLE;
 	else
 		return -EINVAL;
@@ -163,7 +163,7 @@ static ssize_t device_poll_set_priority(struct device *dev,
 	if (device_poll->use_capability && !capable(device_poll->capability))
 		return -EPERM;
 
-	if (0 > kstrtoint(buf, 0, &priority))
+	if (kstrtoint(buf, 0, &priority) < 0)
 		return -EINVAL;
 
 	device_poll->ops->lock(device_poll);
@@ -212,8 +212,9 @@ static int device_poll_thread(void *info)
 	polling_interval = device_poll->interval;
 
 	/* If we got changed to interrupt mode before the polling thread
-	   started. */
-	if (unlikely(0 >= polling_interval)) {
+	 * started.
+	 */
+	if (unlikely(polling_interval <= 0)) {
 		while (!kthread_should_stop())
 			usleep_range(1000, 1100);
 		return -EINTR;
@@ -226,12 +227,13 @@ static int device_poll_thread(void *info)
 
 	while (!kthread_should_stop()) {
 		/* Ensure changes to device_poll->enabled made on other CPUs
-		   are seen here. */
+		 * are seen here.
+		 */
 		smp_rmb();
 		if (device_poll->enabled)
 			device_poll->ops->interrupt(device_poll);
 
-		if (20 > polling_interval)
+		if (polling_interval < 20)
 			usleep_range(polling_interval_us, polling_interval_us
 				     + 100);
 		else
