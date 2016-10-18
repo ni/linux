@@ -774,8 +774,9 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 	}
 
 	/* If we receive a READ0 for the page that we've most recently read,
-	   without an intervening command that would change the state of the
-	   NAND cache register, we can replace the READ0 with a RNDOUT. */
+	 * without an intervening command that would change the state of the
+	 * NAND cache register, we can replace the READ0 with a RNDOUT.
+	 */
 	if ((command == NAND_CMD_READ0) &&
 			(xnand->last_read_page == page_addr)) {
 		command = NAND_CMD_RNDOUT;
@@ -792,7 +793,8 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 		return;
 
 	/* We want to preserve the page address of the last READ0
-	 * when just changing the read column address. */
+	 * when just changing the read column address.
+	 */
 	if (command != NAND_CMD_RNDOUT)
 		xnand->last_read_page = -1;
 
@@ -912,7 +914,8 @@ static void pl353_nand_cmd_function(struct mtd_info *mtd, unsigned int command,
 		}
 
 		/* Store the read page address so that we can detect consecutive
-		   reads of the same page and only send one read command. */
+		 * reads of the same page and only send one read command.
+		 */
 		xnand->last_read_page = page_addr;
 	}
 }
