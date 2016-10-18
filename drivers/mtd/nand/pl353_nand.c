@@ -426,7 +426,7 @@ static int pl353_nand_read_subpage_raw(struct mtd_info *mtd,
 				    struct nand_chip *chip, uint32_t data_offs,
 				    uint32_t readlen, uint8_t *buf, int page)
 {
-	if (0 != data_offs) {
+	if (data_offs != 0) {
 		chip->cmdfunc(mtd, NAND_CMD_RNDOUT, data_offs, -1);
 		buf += data_offs;
 	}
@@ -449,7 +449,8 @@ static int pl353_nand_read_subpage_raw(struct mtd_info *mtd,
  */
 static int pl353_nand_write_page_raw(struct mtd_info *mtd,
 				    struct nand_chip *chip,
-				    const uint8_t *buf, int oob_required, int page)
+				    const uint8_t *buf,
+				    int oob_required, int page)
 {
 	unsigned long data_phase_addr;
 	uint8_t *p;
@@ -486,7 +487,8 @@ static int pl353_nand_write_subpage_raw(struct mtd_info *mtd,
 				     uint32_t data_len, const uint8_t *data_buf,
 				     int oob_required, int page)
 {
-	return pl353_nand_write_page_raw(mtd, chip, data_buf, oob_required, page);
+	return pl353_nand_write_page_raw(mtd, chip, data_buf, oob_required,
+					 page);
 }
 
 /**
