@@ -1077,7 +1077,8 @@ static int irq_thread(void *data)
 	task_work_add(current, &on_exit_work, false);
 
 	/* optimize jitter for the irq threads that don't change affinity or
-	 * priority dynamically */
+	 * priority dynamically
+	 */
 	irq_thread_check_affinity(desc, action);
 	irq_thread_check_priority(desc, action);
 
