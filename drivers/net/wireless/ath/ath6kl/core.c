@@ -72,7 +72,7 @@ static void find_region_type(const struct dmi_header *dm, void *private_data)
 			container_of(dm, struct region_table, header);
 
 		ath6kl_dbg(ATH6KL_DBG_TRC, "Region code from BIOS: %c%c\n",
-				table->alpha2[0], table->alpha2[1]);
+			   table->alpha2[0], table->alpha2[1]);
 		memcpy(region, table->alpha2, 2);
 		*found = 1;
 	}
@@ -104,7 +104,7 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	if (!ret)
 		return -ENODEV;
 
-	if(!isascii(region[0]) || !isascii(region[1]))
+	if (!isascii(region[0]) || !isascii(region[1]))
 		return -EINVAL;
 
 	ath6kl_info("Using region: %c%c\n",
