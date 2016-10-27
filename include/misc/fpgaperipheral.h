@@ -22,12 +22,17 @@
  * FPGA_PERIPHERAL_DOWN: The FPGA is about to be unprogrammed.
  * FPGA_PERIPHERAL_UP: The FPGA is now programmed.
  *  This may be called even if not preceded by an FPGA_PERIPHERAL_DOWN.
+ * FPGA_PERIPHERAL_FAILED: The FPGA programming failed.
+ *  If this is called, clients should not use the FPGA as it might be in
+ *  a bad state. This is to notify the clients to abort any waiting for
+ *  the FPGA to come back up.
  *
  * Client callbacks should always return notifier_from_errno(0) so the
  * call chain continues to all clients.
  */
 #define FPGA_PERIPHERAL_DOWN	0
 #define FPGA_PERIPHERAL_UP	1
+#define FPGA_PERIPHERAL_FAILED	2
 
 extern struct blocking_notifier_head fpgaperipheral_notifier_list;
 
