@@ -1022,6 +1022,20 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	if (ret < 0)
 		goto out;
 
+	/* Set PTP timestamping mode to timestamp at the MAC on 6341 */
+	switch (ps->id) {
+	case PORT_SWITCH_ID_6341:
+		ret = mv88e6xxx_write_ptp_word(ds,
+					       GLOBAL2_PTP_AVB_OP_PORT_PTP_GLOBAL,
+					       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
+					       PTP_GLOBAL_CONFIG,
+					       PTP_GLOBAL_CONFIG_UPD |
+					       	PTP_GLOBAL_CONFIG_MODE_IDX |
+						PTP_GLOBAL_CONFIG_MODE_TS_AT_MAC);
+		if (ret < 0)
+			goto out;
+	}
+
 	/* Final port configuration and enable timestamping */
 	val = PTP_PORT_CONFIG_0_DISABLE_OVERWRITE;
 	val |= pps->check_trans_spec ?
