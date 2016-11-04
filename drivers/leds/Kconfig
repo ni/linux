@@ -637,6 +637,17 @@ config LEDS_VERSATILE
 	  This option enabled support for the LEDs on the ARM Versatile
 	  and RealView boards. Say Y to enabled these.
 
+config LEDS_NIC78BX
+	tristate "LED support for NI PXI NIC78bx devices"
+	depends on LEDS_CLASS
+	depends on X86 && ACPI
+	help
+	  This option enables support for the User1 and User2 LEDs on NI
+	  PXI NIC78bx devices.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called leds-nic78bx.
+
 comment "LED Triggers"
 source "drivers/leds/trigger/Kconfig"
 
