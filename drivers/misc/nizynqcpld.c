@@ -933,6 +933,11 @@ static irqreturn_t nizynqcpld_watchdog_irq(int irq, void *data)
 
 	nizynqcpld_lock(cpld);
 
+	cpld->watchdog.expired = true;
+
+	/* Signal the watchdog event. */
+	wake_up_all(&cpld->watchdog.irq_event);
+
 	err = nizynqcpld_read(cpld, DOSX_WATCHDOGCONTROL, &control);
 
 	if (err) {
@@ -945,17 +950,12 @@ static irqreturn_t nizynqcpld_watchdog_irq(int irq, void *data)
 		goto out_unlock;
 	}
 
-	cpld->watchdog.expired = true;
-
 	/* Mask off all the read-only and write-only bits. */
 	control &= DOSX_WATCHDOGCONTROL_RW_BITS;
 
 	/* Acknowledge the interrupt. */
 	control |= DOSX_WATCHDOGCONTROL_RESET;
 	err = nizynqcpld_write(cpld, DOSX_WATCHDOGCONTROL, control);
-
-	/* Signal the watchdog event. */
-	wake_up_all(&cpld->watchdog.irq_event);
 
 	ret = IRQ_HANDLED;
 
@@ -1100,14 +1100,10 @@ unsigned int nizynqcpld_watchdog_misc_poll(struct file *file,
 					   struct poll_table_struct *wait)
 {
 	struct nizynqcpld *cpld = file->private_data;
-	unsigned int mask = 0;
-
 	poll_wait(file, &cpld->watchdog.irq_event, wait);
-	nizynqcpld_lock(cpld);
-	if (cpld->watchdog.expired)
-		mask = POLLIN;
-	nizynqcpld_unlock(cpld);
-	return mask;
+	if (READ_ONCE(cpld->watchdog.expired))
+		return POLLIN;
+	return 0;
 }
 
 static const struct file_operations nizynqcpld_watchdog_misc_fops = {
