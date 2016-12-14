@@ -932,8 +932,23 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 
 	pps->ts_enable = true;
 	pps->check_trans_spec = false;
-	pps->ts_ver = 1;
+	pps->check_trans_spec_val = PTP_PORT_CONFIG_0_TRANS_1588;
 	pps->ts_msg_types = 0;
+
+	/* In default hardware configuration, 1588 SYNC frames are
+	 * forwarded through the switch thus condidates for
+	 * timestamping on egress. boundary clock implementation
+	 * must configure the ATU to capture/discard these frames.
+	 */
+
+#ifdef CONFIG_NET_DSA_MV88E6XXX_ONLY_8021AS
+	/* Config override to enable transport specific check for
+	 * 802.1AS frames as default. The rx_filter can override
+	 * this.
+	 */
+	pps->check_trans_spec = true;
+	pps->check_trans_spec_val = PTP_PORT_CONFIG_0_TRANS_8021AS;
+#endif
 
 	/* reserved for future extensions */
 	if (config->flags) {
@@ -1041,9 +1056,7 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	val |= pps->check_trans_spec ?
 			PTP_PORT_CONFIG_0_ENABLE_TRANS_CHECK :
 			PTP_PORT_CONFIG_0_DISABLE_TRANS_CHECK;
-	val |= pps->ts_ver > 0 ?
-			PTP_PORT_CONFIG_0_TRANS_8021AS :
-			PTP_PORT_CONFIG_0_TRANS_1588;
+	val |= pps->check_trans_spec_val;
 	val |= pps->ts_enable ?
 			PTP_PORT_CONFIG_0_ENABLE_TS :
 			PTP_PORT_CONFIG_0_DISABLE_TS;
@@ -1053,9 +1066,11 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	if (ret < 0)
 		goto out;
 
-	netdev_dbg(ds->ports[port], "HWTStamp %s ver %d msg types %x\n",
+	netdev_dbg(ds->ports[port], "HWTStamp %s msg types %x transcheck %s val %d\n",
 		   pps->ts_enable ? "enabled" : "disabled",
-		   pps->ts_ver, pps->ts_msg_types);
+		   pps->ts_msg_types,
+		   pps->check_trans_spec ? "ON" : "OFF",
+		   PTP_PORT_CONFIG_0_TRANS_TO_VAL(pps->check_trans_spec_val));
 
 out:
 	mutex_unlock(&pps->ptp_mutex);
@@ -1227,7 +1242,8 @@ static bool mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
 	trans_spec = (*msgtype >> 4);
 
 	mutex_lock(&pps->ptp_mutex);
-	ret = !pps->check_trans_spec || (pps->ts_ver == trans_spec);
+	ret = !pps->check_trans_spec ||
+		(PTP_PORT_CONFIG_0_TRANS_TO_VAL(pps->check_trans_spec_val) == trans_spec);
 	ret &= pps->ts_enable && ((pps->ts_msg_types & msg_mask) != 0);
 	mutex_unlock(&pps->ptp_mutex);
 

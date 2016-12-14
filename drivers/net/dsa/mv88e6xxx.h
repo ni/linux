@@ -315,6 +315,7 @@
 #define PTP_PORT_CONFIG_0	0x00
 #define PTP_PORT_CONFIG_0_TRANS_1588		(0 << 12)
 #define PTP_PORT_CONFIG_0_TRANS_8021AS		(1 << 12)
+#define PTP_PORT_CONFIG_0_TRANS_TO_VAL(t)	((t) >> 12)
 #define PTP_PORT_CONFIG_0_ENABLE_TRANS_CHECK	(0 << 11)
 #define PTP_PORT_CONFIG_0_DISABLE_TRANS_CHECK	(1 << 11)
 #define PTP_PORT_CONFIG_0_ENABLE_OVERWRITE	(0 << 1)
@@ -429,9 +430,9 @@ struct mv88e6xxx_port_priv_state {
 	struct hwtstamp_config tstamp_config;
 
 	bool ts_enable;
-	bool check_trans_spec;
-	int ts_ver;
 	u16 ts_msg_types;
+	bool check_trans_spec;
+	int check_trans_spec_val;
 };
 
 struct mv88e6xxx_priv_state {

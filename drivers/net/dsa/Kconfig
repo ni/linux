@@ -54,6 +54,13 @@ config NET_DSA_MV88E6352
 	  This enables support for the Marvell 88E6176 and 88E6352 ethernet
 	  switch chips.
 
+config NET_DSA_MV88E6XXX_ONLY_8021AS
+	tristate "Enable PTP transport specific value check for 802.1AS"
+	depends on NET_DSA_MV88E6XXX
+	---help---
+	  This turns on the PTP transport specific value check for 802.1AS
+	  which prevents 1588 frames from being timestamped in hardware
+
 config NET_DSA_BCM_SF2
 	tristate "Broadcom Starfighter 2 Ethernet switch support"
 	depends on HAS_IOMEM && NET_DSA
