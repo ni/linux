@@ -62,10 +62,6 @@ EXPORT_SYMBOL(irq_stat);
 static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;
 
 DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
-#ifdef CONFIG_PREEMPT_RT_FULL
-#define TIMER_SOFTIRQS	((1 << TIMER_SOFTIRQ) | (1 << HRTIMER_SOFTIRQ))
-DEFINE_PER_CPU(struct task_struct *, ktimer_softirqd);
-#endif
 
 const char * const softirq_to_name[NR_SOFTIRQS] = {
 	"HI", "TIMER", "NET_TX", "NET_RX", "BLOCK", "BLOCK_IOPOLL",
@@ -178,17 +174,6 @@ static void wakeup_softirqd(void)
 	if (tsk && tsk->state != TASK_RUNNING)
 		wake_up_process(tsk);
 }
-
-#ifdef CONFIG_PREEMPT_RT_FULL
-static void wakeup_timer_softirqd(void)
-{
-	/* Interrupts are disabled: no need to stop preemption */
-	struct task_struct *tsk = __this_cpu_read(ktimer_softirqd);
-
-	if (tsk && tsk->state != TASK_RUNNING)
-		wake_up_process(tsk);
-}
-#endif
 
 static void handle_softirq(unsigned int vec_nr)
 {
@@ -492,6 +477,7 @@ void __raise_softirq_irqoff(unsigned int nr)
 static inline void local_bh_disable_nort(void) { local_bh_disable(); }
 static inline void _local_bh_enable_nort(void) { _local_bh_enable(); }
 static void ksoftirqd_set_sched_params(unsigned int cpu) { }
+static void ksoftirqd_clr_sched_params(unsigned int cpu, bool online) { }
 
 #else /* !PREEMPT_RT_FULL */
 
@@ -639,12 +625,8 @@ void thread_do_softirq(void)
 
 static void do_raise_softirq_irqoff(unsigned int nr)
 {
-	unsigned int mask;
-
-	mask = 1UL << nr;
-
 	trace_softirq_raise(nr);
-	or_softirq_pending(mask);
+	or_softirq_pending(1UL << nr);
 
 	/*
 	 * If we are not in a hard interrupt and inside a bh disabled
@@ -653,30 +635,16 @@ static void do_raise_softirq_irqoff(unsigned int nr)
 	 * delegate it to ksoftirqd.
 	 */
 	if (!in_irq() && current->softirq_nestcnt)
-		current->softirqs_raised |= mask;
-	else if (!__this_cpu_read(ksoftirqd) || !__this_cpu_read(ktimer_softirqd))
-		return;
-
-	if (mask & TIMER_SOFTIRQS)
-		__this_cpu_read(ktimer_softirqd)->softirqs_raised |= mask;
-	else
-		__this_cpu_read(ksoftirqd)->softirqs_raised |= mask;
+		current->softirqs_raised |= (1U << nr);
+	else if (__this_cpu_read(ksoftirqd))
+		__this_cpu_read(ksoftirqd)->softirqs_raised |= (1U << nr);
 }
-
-static void wakeup_proper_softirq(unsigned int nr)
-{
-	if ((1UL << nr) & TIMER_SOFTIRQS)
-		wakeup_timer_softirqd();
-	else
-		wakeup_softirqd();
-}
-
 
 void __raise_softirq_irqoff(unsigned int nr)
 {
 	do_raise_softirq_irqoff(nr);
 	if (!in_irq() && !current->softirq_nestcnt)
-		wakeup_proper_softirq(nr);
+		wakeup_softirqd();
 }
 
 /*
@@ -686,18 +654,14 @@ void __raise_softirq_irqoff_ksoft(unsigned int nr)
 {
 	unsigned int mask;
 
-	if (WARN_ON_ONCE(!__this_cpu_read(ksoftirqd) ||
-			 !__this_cpu_read(ktimer_softirqd)))
+	if (WARN_ON_ONCE(!__this_cpu_read(ksoftirqd)))
 		return;
 	mask = 1UL << nr;
 
 	trace_softirq_raise(nr);
 	or_softirq_pending(mask);
-	if (mask & TIMER_SOFTIRQS)
-		__this_cpu_read(ktimer_softirqd)->softirqs_raised |= mask;
-	else
-		__this_cpu_read(ksoftirqd)->softirqs_raised |= mask;
-	wakeup_proper_softirq(nr);
+	__this_cpu_read(ksoftirqd)->softirqs_raised |= mask;
+	wakeup_softirqd();
 }
 
 /*
@@ -723,7 +687,7 @@ void raise_softirq_irqoff(unsigned int nr)
 	 * raise a WARN() if the condition is met.
 	 */
 	if (!current->softirq_nestcnt)
-		wakeup_proper_softirq(nr);
+		wakeup_softirqd();
 }
 
 static inline int ksoftirqd_softirq_pending(void)
@@ -736,37 +700,20 @@ static inline void _local_bh_enable_nort(void) { }
 
 static inline void ksoftirqd_set_sched_params(unsigned int cpu)
 {
-	/* Take over all but timer pending softirqs when starting */
-	local_irq_disable();
-	current->softirqs_raised = local_softirq_pending() & ~TIMER_SOFTIRQS;
-	local_irq_enable();
-}
-
-static inline void ktimer_softirqd_set_sched_params(unsigned int cpu)
-{
-	struct sched_param param = {
-			.sched_priority = ksoftirqd_pri
-	};
+	struct sched_param param = { .sched_priority = ksoftirqd_pri };
 
 	sched_setscheduler(current, SCHED_FIFO, &param);
-
-	/* Take over timer pending softirqs when starting */
+	/* Take over all pending softirqs when starting */
 	local_irq_disable();
-	current->softirqs_raised = local_softirq_pending() & TIMER_SOFTIRQS;
+	current->softirqs_raised = local_softirq_pending();
 	local_irq_enable();
 }
 
-static inline void ktimer_softirqd_clr_sched_params(unsigned int cpu,
-						    bool online)
+static inline void ksoftirqd_clr_sched_params(unsigned int cpu, bool online)
 {
 	struct sched_param param = { .sched_priority = 0 };
 
 	sched_setscheduler(current, SCHED_NORMAL, &param);
-}
-
-static int ktimer_softirqd_should_run(unsigned int cpu)
-{
-	return current->softirqs_raised;
 }
 
 static __init int set_ksoftirqd_pri(char *str)
@@ -830,9 +777,6 @@ static inline void invoke_softirq(void)
 	if (__this_cpu_read(ksoftirqd) &&
 			__this_cpu_read(ksoftirqd)->softirqs_raised)
 		wakeup_softirqd();
-	if (__this_cpu_read(ktimer_softirqd) &&
-			__this_cpu_read(ktimer_softirqd)->softirqs_raised)
-		wakeup_timer_softirqd();
 	local_irq_restore(flags);
 #endif
 }
@@ -1265,30 +1209,17 @@ static struct notifier_block cpu_nfb = {
 static struct smp_hotplug_thread softirq_threads = {
 	.store			= &ksoftirqd,
 	.setup			= ksoftirqd_set_sched_params,
+	.cleanup		= ksoftirqd_clr_sched_params,
 	.thread_should_run	= ksoftirqd_should_run,
 	.thread_fn		= run_ksoftirqd,
 	.thread_comm		= "ksoftirqd/%u",
 };
-
-#ifdef CONFIG_PREEMPT_RT_FULL
-static struct smp_hotplug_thread softirq_timer_threads = {
-	.store			= &ktimer_softirqd,
-	.setup			= ktimer_softirqd_set_sched_params,
-	.cleanup		= ktimer_softirqd_clr_sched_params,
-	.thread_should_run	= ktimer_softirqd_should_run,
-	.thread_fn		= run_ksoftirqd,
-	.thread_comm		= "ktimersoftd/%u",
-};
-#endif
 
 static __init int spawn_ksoftirqd(void)
 {
 	register_cpu_notifier(&cpu_nfb);
 
 	BUG_ON(smpboot_register_percpu_thread(&softirq_threads));
-#ifdef CONFIG_PREEMPT_RT_FULL
-	BUG_ON(smpboot_register_percpu_thread(&softirq_timer_threads));
-#endif
 
 	return 0;
 }
