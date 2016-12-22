@@ -413,15 +413,6 @@ struct mv88e6xxx_port_priv_state {
 	unsigned long tx_tstamp_start;
 	struct sk_buff *tx_skb;
 
-	/* This spinlock serializes access to the RX timestamping
-	 * parameters. It must be a spinlock because incoming
-	 * packets are processing in a soft IRQ context.
-	 */
-	spinlock_t rx_tstamp_lock;
-	int rx_tstamp_type;
-	struct sk_buff *rx_skb;
-	struct work_struct rx_tstamp_work;
-
 	/* This mutex serializes access to the per-port PTP
 	 * timestamping configuration
 	 */
@@ -488,13 +479,20 @@ struct mv88e6xxx_priv_state {
 
 	struct work_struct bridge_work;
 
-	/* This mutex serializes access to the upper 32-bits of
-	 * the PHC time
+	/* This spinlock serializes access to the upper 32-bits of the
+	 * PHC time, and the offset. Must be a spinlock because
+	 * incoming timetamped PTP packets are processing in a soft
+	 * IRQ context.
+	 */
+	spinlock_t phc_lock;
+	u32 phc_rollovers;
+	u32 latest_phc_counter;
+	u64 phc_offset_ns;
+
+	/* This mutex serializes access to the rest of the PTP
+	 * hardware clock resources.
 	 */
 	struct mutex phc_mutex;
-	u32 phc_rollovers;
-	u32 last_phc_counter;
-	u64 phc_offset;
 
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_clock_caps;
