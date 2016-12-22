@@ -1952,6 +1952,8 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 
 	pps->port_id = port;
 
+	pps->ts_enable = false;
+
 	mutex_init(&pps->ptp_mutex);
 	mutex_init(&pps->tx_tstamp_mutex);
 	spin_lock_init(&pps->rx_tstamp_lock);
