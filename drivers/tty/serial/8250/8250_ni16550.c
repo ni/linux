@@ -168,6 +168,31 @@ bool is_rs232_mode(unsigned long iobase)
 		return ((pmr & NI16550_PMR_CAP_MASK) == NI16550_PMR_CAP_RS232);
 }
 
+void ni16550_config_prescaler(unsigned long iobase, uint8_t prescaler)
+{
+	/* Page in the Enhanced Mode Registers
+	 * Sets EFR[4] for Enhanced Mode.
+	 */
+	uint8_t lcr_value;
+
+	lcr_value = inb(iobase + UART_LCR);
+	outb(UART_LCR_CONF_MODE_B, iobase + UART_LCR);
+
+	uint8_t efr_value;
+
+	efr_value = inb(iobase + UART_EFR);
+	efr_value |= UART_EFR_ECB;
+
+	outb(efr_value, iobase + UART_EFR);
+
+	/* Page out the Enhanced Mode Registers */
+	outb(lcr_value, iobase + UART_LCR);
+
+	/* Set prescaler to CPR register. */
+	outb(UART_CPR, iobase + UART_SCR);
+	outb(prescaler, iobase + UART_ICR);
+}
+
 static struct txvr_ops ni16550_txvr_ops = {
 	.enable_transceivers = ni16550_enable_transceivers,
 	.disable_transceivers = ni16550_disable_transceivers,
