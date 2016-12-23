@@ -23,5 +23,6 @@
 
 bool is_rs232_mode(unsigned long iobase);
 void ni16550_port_setup(struct uart_port *port);
+void ni16550_config_prescaler(unsigned long iobase, uint8_t prescaler);
 
 #endif
