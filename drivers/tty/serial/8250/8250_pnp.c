@@ -26,9 +26,10 @@
 #define UNKNOWN_DEV 0x3000
 #define CIR_PORT	0x0800
 
-#define NI_16BYTE_FIFO	0x0004
-#define NI_CLK_33333333	0x0002
-#define NI_CAP_PMR	0x0001
+#define NI_16BYTE_FIFO		0x0004
+#define NI_CAP_PMR		0x0001
+#define NI_CLK_33333333		0x0002
+#define NI_CPR_CLK_25000000	0x0008
 
 static bool is_niport(struct pnp_dev *dev)
 {
@@ -211,6 +212,7 @@ static const struct pnp_device_id pnp_dev_table[] = {
 	/* National Instruments (NI) 16550 PNP */
 	{	"NIC7750",	NI_CLK_33333333			},
 	{	"NIC7772",	NI_CAP_PMR | NI_16BYTE_FIFO	},
+	{	"NIC792B",	NI_CPR_CLK_25000000		},
 	/* NEC 98NOTE SPEAKER PHONE FAX MODEM(33600bps) */
 	{	"nEC8241",		0	},
 	/* Pace 56 Voice Internal Plug & Play Modem */
@@ -495,8 +497,19 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 
 #ifdef CONFIG_SERIAL_8250_NI16550
 	if (is_niport(dev)) {
+		WARN_ON((flags & (NI_CLK_33333333 | NI_CPR_CLK_25000000)) ==
+		    (NI_CLK_33333333 | NI_CPR_CLK_25000000));
 		if (flags & NI_CLK_33333333)
 			uart.port.uartclk = 33333333;
+		if (flags & NI_CPR_CLK_25000000) {
+			/* Sets UART clock rate to 22.222 MHz
+			 * with prescaler 1.125.
+			 */
+			uart.port.uartclk = 22222222;
+			uart.mcr_force = UART_MCR_CLKSEL;
+			ni16550_config_prescaler(uart.port.iobase, 0x9);
+		}
+
 		uart.port.flags |= UPF_FIXED_PORT | UPF_FIXED_TYPE;
 
 		if (flags & NI_16BYTE_FIFO)
@@ -583,4 +596,3 @@ void serial8250_pnp_exit(void)
 {
 	pnp_unregister_driver(&serial_pnp_driver);
 }
-
