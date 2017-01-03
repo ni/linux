@@ -2339,7 +2339,7 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 			ret = mv88e6xxx_config_gpio(ds, pin,
 						    MISC_REG_GPIO_MODE_EVREQ,
 						    MISC_REG_GPIO_DIR_IN);
-			schedule_delayed_work(&ps->tai_work, 0);
+			schedule_delayed_work(&ps->tai_work, TAI_WORK_INTERVAL);
 			mv88e6xxx_config_eventcap(ds,
 						  TAI_GLOBAL_EVENT_STATUS_CAPTURE_EVREQ,
 						  rq->extts.flags & PTP_RISING_EDGE);
