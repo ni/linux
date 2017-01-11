@@ -409,19 +409,22 @@ struct mv88e6xxx_port_priv_state {
 	u8 fid;
 	u8 stp_state;
 
-	/* This mutex serializes access to the TX timestamping
+	/* This spinlock serializes access to the TX timestamping
 	 * parameters.
 	 */
-	struct mutex tx_tstamp_mutex;
+	spinlock_t tx_tstamp_lock;
 	struct work_struct tx_tstamp_work;
 	u16 tx_seq_id;
 	unsigned long tx_tstamp_start;
 	struct sk_buff *tx_skb;
 
-	/* This mutex serializes access to the per-port PTP
-	 * timestamping configuration
+	/* The mutex serializes access to the per-port PTP timestamping
+	 * configuration between timestamping clients. The spinlock serializes
+	 * access to the parts of the configuration that have to be checked
+	 * from the RX and TX paths.
 	 */
 	struct mutex ptp_mutex;
+	spinlock_t ptp_lock;
 
 	struct hwtstamp_config tstamp_config;
 

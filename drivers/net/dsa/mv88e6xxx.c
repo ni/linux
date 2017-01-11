@@ -931,15 +931,27 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 {
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 	struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
+	bool port_ts_enable;
+	bool port_check_trans_spec;
+	int port_check_trans_spec_val;
+	u16 port_ts_msg_types;
+
 	u16 val;
 	int ret;
 
 	mutex_lock(&pps->ptp_mutex);
 
-	pps->ts_enable = true;
-	pps->check_trans_spec = false;
-	pps->check_trans_spec_val = PTP_PORT_CONFIG_0_TRANS_1588;
-	pps->ts_msg_types = 0;
+	/* Prevent the TX/RX paths from trying to interact with
+	 * timestamp hardware while we reconfigure it
+	 */
+	spin_lock_bh(&pps->ptp_lock);
+	pps->ts_enable = false;
+	spin_unlock_bh(&pps->ptp_lock);
+
+	port_ts_enable = true;
+	port_check_trans_spec = false;
+	port_check_trans_spec_val = PTP_PORT_CONFIG_0_TRANS_1588;
+	port_ts_msg_types = 0;
 
 	/* In default hardware configuration, 1588 SYNC frames are
 	 * forwarded through the switch and thus condidates for
@@ -952,8 +964,8 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	 * 802.1AS frames as default. The rx_filter can override
 	 * this.
 	 */
-	pps->check_trans_spec = true;
-	pps->check_trans_spec_val = PTP_PORT_CONFIG_0_TRANS_8021AS;
+	port_check_trans_spec = true;
+	port_check_trans_spec_val = PTP_PORT_CONFIG_0_TRANS_8021AS;
 #endif
 
 	/* reserved for future extensions */
@@ -964,12 +976,13 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 
 	switch (config->tx_type) {
 	case HWTSTAMP_TX_OFF:
-		pps->ts_enable = false;
+		port_ts_enable = false;
 		break;
 	case HWTSTAMP_TX_ON:
 		break;
 	default:
-		return -ERANGE;
+		ret = -ERANGE;
+		goto out;
 	}
 
 	/* The switch supports timestamping both L2 and L4; one cannot be
@@ -977,34 +990,35 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	 */
 	switch (config->rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
-		pps->ts_enable = false;
+		port_ts_enable = false;
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_SYNC:
 	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
 	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
 	case HWTSTAMP_FILTER_PTP_V2_SYNC:
-		pps->ts_msg_types = (1 << 0);
+		port_ts_msg_types = (1 << 0);
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ:
 	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
 	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
 	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
-		pps->ts_msg_types = (1 << 1);
+		port_ts_msg_types = (1 << 1);
 		break;
 	case HWTSTAMP_FILTER_PTP_V1_L4_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_EVENT:
-		pps->ts_msg_types = 0xf;
+		port_ts_msg_types = 0xf;
 		break;
 	case HWTSTAMP_FILTER_ALL:
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
-		pps->check_trans_spec = false;
-		pps->ts_msg_types = 0xf;
+		port_check_trans_spec = false;
+		port_ts_msg_types = 0xf;
 		break;
 	default:
 		config->rx_filter = HWTSTAMP_FILTER_NONE;
-		return -ERANGE;
+		ret = -ERANGE;
+		goto out;
 	}
 
 	/* Disable timestamping during configuration */
@@ -1015,7 +1029,7 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	if (ret < 0)
 		goto out;
 
-	if (!pps->ts_enable) {
+	if (!port_ts_enable) {
 		/* We're done here */
 		ret = 0;
 		goto out;
@@ -1024,7 +1038,7 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 	/* Configure PTP message types to be timestamped */
 	ret = mv88e6xxx_write_ptp_word(ds, GLOBAL2_PTP_AVB_OP_PORT_PTP_GLOBAL,
 				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
-				       PTP_GLOBAL_MSG_TYPE, pps->ts_msg_types);
+				       PTP_GLOBAL_MSG_TYPE, port_ts_msg_types);
 	if (ret < 0)
 		goto out;
 
@@ -1064,11 +1078,11 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 
 	/* Final port configuration and enable timestamping */
 	val = PTP_PORT_CONFIG_0_ENABLE_OVERWRITE;
-	val |= pps->check_trans_spec ?
+	val |= port_check_trans_spec ?
 			PTP_PORT_CONFIG_0_ENABLE_TRANS_CHECK :
 			PTP_PORT_CONFIG_0_DISABLE_TRANS_CHECK;
-	val |= pps->check_trans_spec_val;
-	val |= pps->ts_enable ?
+	val |= port_check_trans_spec_val;
+	val |= port_ts_enable ?
 			PTP_PORT_CONFIG_0_ENABLE_TS :
 			PTP_PORT_CONFIG_0_DISABLE_TS;
 	ret = mv88e6xxx_write_ptp_word(ds, port,
@@ -1076,6 +1090,17 @@ int mv88e6xxx_set_timestamp_mode(struct dsa_switch *ds, int port,
 				       PTP_PORT_CONFIG_0, val);
 	if (ret < 0)
 		goto out;
+
+	/* Once hardware configuration is settled, enable timestamp
+	 *	checking in the RX/TX paths
+	 */
+
+	spin_lock_bh(&pps->ptp_lock);
+	pps->ts_enable = port_ts_enable;
+	pps->check_trans_spec = port_check_trans_spec;
+	pps->check_trans_spec_val = port_check_trans_spec_val;
+	pps->ts_msg_types = port_ts_msg_types;
+	spin_unlock_bh(&pps->ptp_lock);
 
 	netdev_dbg(ds->ports[port], "HWTStamp %s msg types %x transcheck %s val %d\n",
 		   pps->ts_enable ? "enabled" : "disabled",
@@ -1281,11 +1306,11 @@ static bool mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
 	msg_mask = 1 << (*msgtype & 0xf);
 	trans_spec = (*msgtype >> 4);
 
-	mutex_lock(&pps->ptp_mutex);
+	spin_lock_bh(&pps->ptp_lock);
 	ret = !pps->check_trans_spec ||
 		(PTP_PORT_CONFIG_0_TRANS_TO_VAL(pps->check_trans_spec_val) == trans_spec);
 	ret &= pps->ts_enable && ((pps->ts_msg_types & msg_mask) != 0);
-	mutex_unlock(&pps->ptp_mutex);
+	spin_unlock_bh(&pps->ptp_lock);
 
 	netdev_dbg(ds->ports[port],
 		   "PTP message classification 0x%x type 0x%x should ts %d",
@@ -1327,30 +1352,29 @@ bool mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 
 static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 {
-	struct mv88e6xxx_port_priv_state *pps =
-		container_of(ugly, struct mv88e6xxx_port_priv_state,
-			     tx_tstamp_work);
-	struct mv88e6xxx_priv_state *ps;
-	struct dsa_switch *ds;
+	struct mv88e6xxx_port_priv_state *pps = container_of(
+		ugly, struct mv88e6xxx_port_priv_state, tx_tstamp_work);
+	struct mv88e6xxx_priv_state *ps = container_of(
+		pps, struct mv88e6xxx_priv_state, port_priv[pps->port_id]);
+	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
+
+	struct sk_buff *tmp_skb;
+	u16 tmp_seq_id;
+	unsigned long tmp_tstamp_start;
 
 	u16 departure_block[4];
 	int ret;
 
-	/* There has to be a better way... */
-	ps = container_of(pps, struct mv88e6xxx_priv_state,
-			  port_priv[pps->port_id]);
-	ds = ((struct dsa_switch *)ps) - 1;
+	spin_lock_bh(&pps->tx_tstamp_lock);
 
-	mutex_lock(&pps->tx_tstamp_mutex);
+	tmp_skb = pps->tx_skb;
+	tmp_seq_id = pps->tx_seq_id;
+	tmp_tstamp_start = pps->tx_tstamp_start;
 
-	if (!pps->tx_skb)
-		goto abort;
+	spin_unlock_bh(&pps->tx_tstamp_lock);
 
-	if (time_is_before_jiffies(pps->tx_tstamp_start +
-				   TX_TSTAMP_TIMEOUT)) {
-		netdev_warn(ds->ports[pps->port_id], "clearing tx timestamp hang\n");
-		goto free_skb;
-	}
+	if (!tmp_skb)
+		return;
 
 	ret = mv88e6xxx_read_ptp_block(ds, pps->port_id,
 				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
@@ -1358,7 +1382,7 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 				       departure_block);
 
 	if (ret < 0)
-		goto free_skb;
+		goto free_and_clear_skb;
 
 	if (departure_block[0] & PTP_PORT_DEPARTURE_STATUS_VALID) {
 		u16 status;
@@ -1374,12 +1398,12 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 				PTP_PORT_DEPARTURE_STATUS_STATUS_MASK;
 		if (status != PTP_PORT_DEPARTURE_STATUS_STATUS_NORMAL) {
 			netdev_warn(ds->ports[pps->port_id], "tx timestamp overrun\n");
-			goto free_skb;
+			goto free_and_clear_skb;
 		}
 
-		if (departure_block[3] != pps->tx_seq_id) {
+		if (departure_block[3] != tmp_seq_id) {
 			netdev_warn(ds->ports[pps->port_id], "unexpected sequence id\n");
-			goto free_skb;
+			goto free_and_clear_skb;
 		}
 
 		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
@@ -1387,31 +1411,51 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 			      departure_block[1];
 		mv88e6xxx_augment_phc_count(ds, tx_low_word,
 					    &shhwtstamps.hwtstamp);
-		skb_complete_tx_timestamp(pps->tx_skb, &shhwtstamps);
 
-		/* No free required after skb_complete_tx_timestamp, but we do
-		 * need to clean up our state so we can timestamp the next
-		 * packet.
+		netdev_dbg(ds->ports[pps->port_id],
+			   "txtstamp %llx status 0x%04x skb ID 0x%04x hw ID 0x%04x\n",
+			   ktime_to_ns(shhwtstamps.hwtstamp),
+			   departure_block[0], tmp_seq_id,
+			   departure_block[3]);
+
+		/* skb_complete_tx_timestamp() will free up the client to make
+		 * another timestamp-able transmit. We have to be ready for it
+		 * -- by clearing the pps->tx_skb "flag" -- beforehand.
 		 */
+
+		spin_lock_bh(&pps->tx_tstamp_lock);
+
 		pps->tx_skb = NULL;
 
-		netdev_dbg(ds->ports[pps->port_id], "txtstamp %llx status 0x%04x skb ID 0x%04x hw ID 0x%04x\n",
-			   ktime_to_ns(shhwtstamps.hwtstamp),
-			   departure_block[0], pps->tx_seq_id,
-			   departure_block[3]);
+		spin_unlock_bh(&pps->tx_tstamp_lock);
+
+		skb_complete_tx_timestamp(tmp_skb, &shhwtstamps);
+
 	} else {
-		/* reschedule to check later */
-		schedule_work(&pps->tx_tstamp_work);
+		if (time_is_before_jiffies(
+			    tmp_tstamp_start + TX_TSTAMP_TIMEOUT)) {
+			netdev_warn(ds->ports[pps->port_id],
+				    "clearing tx timestamp hang\n");
+			goto free_and_clear_skb;
+		}
+
+		/* The timestamp should be available quickly, while getting it
+		 * is high priority and time bounded to only 10ms. A poll is
+		 * warranted and this is the nicest way to realize it in a work
+		 * item.
+		 */
+
+		queue_work(system_highpri_wq, &pps->tx_tstamp_work);
 	}
 
-	mutex_unlock(&pps->tx_tstamp_mutex);
 	return;
 
-free_skb:
-	dev_kfree_skb_any(pps->tx_skb);
+free_and_clear_skb:
+	spin_lock_bh(&pps->tx_tstamp_lock);
 	pps->tx_skb = NULL;
-abort:
-	mutex_unlock(&pps->tx_tstamp_mutex);
+	spin_unlock_bh(&pps->tx_tstamp_lock);
+
+	dev_kfree_skb_any(tmp_skb);
 }
 
 void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
@@ -1425,24 +1469,39 @@ void mv88e6xxx_port_txtstamp(struct dsa_switch *ds, int port,
 	if (unlikely(skb_shinfo(clone)->tx_flags & SKBTX_HW_TSTAMP) &&
 	    mv88e6xxx_should_timestamp(ds, port, clone, type)) {
 		struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
+		bool collision = false;
 
-		mutex_lock(&pps->tx_tstamp_mutex);
+		__be16 *seq_ptr = (__be16 *)(_get_ptp_header(clone, type) +
+					     OFF_PTP_SEQUENCE_ID);
+
+		spin_lock(&pps->tx_tstamp_lock);
 
 		if (pps->tx_skb) {
+			collision = true;
+		} else {
+			pps->tx_skb = clone;
+			pps->tx_tstamp_start = jiffies;
+			pps->tx_seq_id = be16_to_cpup(seq_ptr);
+		}
+
+		spin_unlock(&pps->tx_tstamp_lock);
+
+		if (collision) {
 			netdev_dbg(ds->ports[port], "Tx timestamp already in progress, discarding");
 			kfree_skb(clone);
 		} else {
-			__be16 *seq_ptr = (__be16 *)(_get_ptp_header(clone, type) +
-						     OFF_PTP_SEQUENCE_ID);
+			/* Fetching the timestamp is high-priority work because
+			 * 802.1AS bounds the time foir a response.
+			 */
 
-			pps->tx_skb = clone;
-			pps->tx_tstamp_start = jiffies;
-			pps->tx_seq_id = __be16_to_cpu(*seq_ptr);
+			/* No need to check result of queue_work(). pps->tx_skb
+			 * check ensures work item is not pending (it may be
+			 * waiting to exit).
+			 */
 
-			schedule_work(&pps->tx_tstamp_work);
+			queue_work(system_highpri_wq, &pps->tx_tstamp_work);
 		}
 
-		mutex_unlock(&pps->tx_tstamp_mutex);
 		return;
 	}
 
@@ -1938,7 +1997,8 @@ int mv88e6xxx_setup_port_common(struct dsa_switch *ds, int port)
 	pps->ts_enable = false;
 
 	mutex_init(&pps->ptp_mutex);
-	mutex_init(&pps->tx_tstamp_mutex);
+	spin_lock_init(&pps->ptp_lock);
+	spin_lock_init(&pps->tx_tstamp_lock);
 
 	INIT_WORK(&pps->tx_tstamp_work, mv88e6xxx_tx_tstamp_work);
 
