@@ -162,6 +162,9 @@ config X86
 	select ARCH_HAS_PKEYS			if X86_INTEL_MEMORY_PROTECTION_KEYS
 	select NI_COLD_BOOT_SUPPORT
 
+config NI_COLD_BOOT_SUPPORT
+	def_bool n
+
 config INSTRUCTION_DECODER
 	def_bool y
 	depends on KPROBES || PERF_EVENTS || UPROBES
