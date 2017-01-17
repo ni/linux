@@ -2526,6 +2526,13 @@ int mv88e6xxx_setup_common(struct dsa_switch *ds)
 
 	ps->fid_mask = (1 << DSA_MAX_PORTS) - 1;
 
+	/* The actual value of the rollovers doesn't matter, but starting at once
+	 * avoids making it look like the 64-bit PHC clock rolls over right away
+	 */
+
+	ps->phc_rollovers = 1;
+	ps->latest_phc_counter = 0;
+
 	INIT_WORK(&ps->bridge_work, mv88e6xxx_bridge_work);
 	INIT_DELAYED_WORK(&ps->tai_work, mv88e6xxx_tai_work);
 
