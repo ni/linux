@@ -78,7 +78,7 @@ static int interrupts_release(struct inode *inode, struct file *filp)
 static unsigned int interrupts_poll(struct file *filp,
 	struct poll_table_struct *pt)
 {
-	unsigned int mask = 0;
+	unsigned int mask = POLLIN | POLLRDNORM;
 	long newcount, oldcount;
 	struct seq_file *sf = filp->private_data;
 	struct interrupts_fd_state *fds = sf->private;
@@ -92,7 +92,7 @@ static unsigned int interrupts_poll(struct file *filp,
 		&(fds->last_irq_change_count), newcount);
 
 	if (newcount != oldcount)
-		mask = POLLIN | POLLRDNORM;
+		mask |= POLLERR | POLLPRI;
 
 	return mask;
 }
