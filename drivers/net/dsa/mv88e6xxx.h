@@ -396,12 +396,12 @@
 #define MV88E6XXX_NUM_PEROUT	1
 #define MV88E6XXX_NUM_GPIO	11
 
-/* TX_TSTAMP_TIMEOUT: 802.1AS requires that a follow-up to a peer
- * delay happen within 10ms. If the Tx timestamp isn't ready within
- * 10ms we can't meet that goal, and the hardware and/or software
- * should be considered faulty.
+/* TX_TSTAMP_TIMEOUT: This limits the time spent polling for a TX
+ * timestamp. When working properly, hardware will produce a timestamp
+ * within 1ms. Software may enounter delays due to MDIO contention, so
+ * the timeout is set accordingly.
  */
-#define TX_TSTAMP_TIMEOUT	msecs_to_jiffies(10)
+#define TX_TSTAMP_TIMEOUT	msecs_to_jiffies(20)
 #define TAI_WORK_INTERVAL	msecs_to_jiffies(100)
 
 struct mv88e6xxx_port_priv_state {
