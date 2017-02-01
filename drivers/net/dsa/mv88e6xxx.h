@@ -396,6 +396,15 @@
 #define MV88E6XXX_NUM_PEROUT	1
 #define MV88E6XXX_NUM_GPIO	11
 
+/* 6341-specific configuration indices and macros */
+#define MONITOR_MGMT_CTRL	0x1a
+#define MGMT_UPDATE_DATA	(1 << 15)
+#define RSVD2CPU_ENA_0x_LOW_IDX	0x00
+#define RSVD2CPU_ENA_0x_HIGH_IDX	0x01
+#define CPU_DEST_IDX	0x30
+#define MGMT_PTR_WRITE(index, value) (MGMT_UPDATE_DATA \
+				| ((index) & 0x03F) << 8 | ((value) & 0x0FF))
+
 /* TX_TSTAMP_TIMEOUT: This limits the time spent polling for a TX
  * timestamp. When working properly, hardware will produce a timestamp
  * within 1ms. Software may enounter delays due to MDIO contention, so

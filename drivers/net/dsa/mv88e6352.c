@@ -82,15 +82,35 @@ static int mv88e6352_setup_global(struct dsa_switch *ds)
 	 */
 	REG_WRITE(REG_GLOBAL, 0x1c, ds->index & 0x1f);
 
-	/* Send all frames with destination addresses matching
-	 * 01:80:c2:00:00:2x to the CPU port.
+	/* 6341 differs from 6352-family devices for configuring
+	 * management frames
 	 */
-	REG_WRITE(REG_GLOBAL2, 0x02, 0xffff);
+	switch (ps->id) {
+	case PORT_SWITCH_ID_6341:
+		/* Mark all multicast frames for 01:C2:80:00:00:0x
+		 * to be MGMT frames
+		 */
+		REG_WRITE(REG_GLOBAL, MONITOR_MGMT_CTRL,
+			MGMT_PTR_WRITE(RSVD2CPU_ENA_0x_LOW_IDX, 0xFF));
+		REG_WRITE(REG_GLOBAL, MONITOR_MGMT_CTRL,
+			MGMT_PTR_WRITE(RSVD2CPU_ENA_0x_HIGH_IDX, 0xFF));
 
-	/* Send all frames with destination addresses matching
-	 * 01:80:c2:00:00:0x to the CPU port.
-	 */
-	REG_WRITE(REG_GLOBAL2, 0x03, 0xffff);
+		/* Set CPU destination port (for MGMT frames to go) */
+		REG_WRITE(REG_GLOBAL, MONITOR_MGMT_CTRL,
+			  MGMT_PTR_WRITE(CPU_DEST_IDX,
+					 dsa_upstream_port(ds)));
+		break;
+	default:
+		/* Send all frames with destination addresses matching
+		 * 01:80:c2:00:00:2x to the CPU port.
+		 */
+		REG_WRITE(REG_GLOBAL2, 0x02, 0xffff);
+
+		/* Send all frames with destination addresses matching
+		 * 01:80:c2:00:00:0x to the CPU port.
+		 */
+		REG_WRITE(REG_GLOBAL2, 0x03, 0xffff);
+	}
 
 	/* Disable the loopback filter, disable flow control
 	 * messages, disable flood broadcast override, disable
