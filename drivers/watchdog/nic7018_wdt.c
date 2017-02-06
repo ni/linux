@@ -8,7 +8,9 @@
 #include <linux/device.h>
 #include <linux/io.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
+#include <linux/sysfs.h>
 #include <linux/watchdog.h>
 
 #define LOCK			0xA5
@@ -16,6 +18,8 @@
 
 #define WDT_CTRL_RESET_EN	BIT(7)
 #define WDT_RELOAD_PORT_EN	BIT(7)
+#define WDT_CTRL_TRIG_POL	BIT(4)
+#define WDT_RELOAD_TRIG_POL	BIT(6)
 
 #define WDT_CTRL		1
 #define WDT_RELOAD_CTRL		2
@@ -46,6 +50,7 @@ struct nic7018_wdt {
 	u16 io_base;
 	u32 period;
 	struct watchdog_device wdd;
+	struct mutex lock;
 };
 
 struct nic7018_config {
@@ -165,6 +170,166 @@ static const struct watchdog_ops nic7018_wdd_ops = {
 	.get_timeleft = nic7018_get_timeleft,
 };
 
+struct nic7018_attr {
+	struct device_attribute dev_attr;
+	u8 offset;
+	u8 bit;
+};
+#define to_nic7018_attr(_attr) \
+	container_of((_attr), struct nic7018_attr, dev_attr)
+
+static ssize_t wdt_attr_show(struct device *dev,
+			     struct device_attribute *da,
+			     char *buf)
+{
+	struct watchdog_device *wdd = dev_get_drvdata(dev);
+	struct nic7018_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct nic7018_attr *attr = to_nic7018_attr(da);
+	u8 control;
+
+	mutex_lock(&wdt->lock);
+
+	control = inb(wdt->io_base + attr->offset);
+
+	mutex_unlock(&wdt->lock);
+	return sprintf(buf, "%u\n", !!(control & attr->bit));
+}
+
+static ssize_t wdt_attr_store(struct device *dev,
+			      struct device_attribute *da,
+			      const char *buf,
+			      size_t size)
+{
+	struct watchdog_device *wdd = dev_get_drvdata(dev);
+	struct nic7018_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct nic7018_attr *attr = to_nic7018_attr(da);
+	unsigned long val;
+	u8 control;
+
+	int ret = kstrtoul(buf, 10, &val);
+
+	if (ret)
+		return ret;
+
+	if (val > 1)
+		return -EINVAL;
+
+	mutex_lock(&wdt->lock);
+
+	control = inb(wdt->io_base + attr->offset);
+	if (val)
+		outb(control | attr->bit, wdt->io_base + attr->offset);
+	else
+		outb(control & ~attr->bit, wdt->io_base + attr->offset);
+
+	mutex_unlock(&wdt->lock);
+	return size;
+}
+
+#define WDT_ATTR(_name, _offset, _bit) \
+	struct nic7018_attr dev_attr_##_name = { \
+		.offset = _offset, \
+		.bit = _bit, \
+		.dev_attr = \
+			__ATTR(_name, S_IWUSR | S_IRUGO, \
+			       wdt_attr_show, wdt_attr_store), \
+	}
+
+static WDT_ATTR(enable_reset, WDT_CTRL, WDT_CTRL_RESET_EN);
+static WDT_ATTR(enable_soft_ping, WDT_RELOAD_CTRL, WDT_RELOAD_PORT_EN);
+static WDT_ATTR(trigger_polarity, WDT_CTRL, WDT_CTRL_TRIG_POL);
+static WDT_ATTR(keepalive_trigger_polarity, WDT_RELOAD_CTRL,
+		WDT_RELOAD_TRIG_POL);
+
+static ssize_t wdt_trig_show(struct device *dev,
+			     struct device_attribute *da,
+			     char *buf)
+{
+	struct watchdog_device *wdd = dev_get_drvdata(dev);
+	struct nic7018_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct nic7018_attr *attr = to_nic7018_attr(da);
+	u8 control;
+
+	mutex_lock(&wdt->lock);
+
+	control = inb(wdt->io_base + attr->offset);
+
+	mutex_unlock(&wdt->lock);
+
+	if (control & 0x0F)
+		return sprintf(buf, "trig%u\n", (control & 0x0F) - 1);
+	else
+		return sprintf(buf, "none\n");
+}
+
+static ssize_t wdt_trig_store(struct device *dev,
+			      struct device_attribute *da,
+			      const char *buf,
+			      size_t size)
+{
+	struct watchdog_device *wdd = dev_get_drvdata(dev);
+	struct nic7018_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct nic7018_attr *attr = to_nic7018_attr(da);
+	u8 control;
+
+	char *p = memchr(buf, '\n', size);
+	size_t count = p ? p - buf : size;
+
+	if (count == 5 && !strncmp(buf, "trig", 4)) {
+		unsigned long val;
+		int ret;
+
+		ret = kstrtoul(buf + 4, 10, &val);
+		if (ret)
+			return ret;
+
+		if (val > 8)
+			return -EINVAL;
+
+		mutex_lock(&wdt->lock);
+
+		control = inb(wdt->io_base + attr->offset);
+		outb((control & 0xF0) | (val + 1),
+		     wdt->io_base + attr->offset);
+
+		mutex_unlock(&wdt->lock);
+
+	} else if (count == 4 && !strncmp(buf, "none", 4)) {
+		mutex_lock(&wdt->lock);
+
+		control = inb(wdt->io_base + attr->offset);
+		outb(control & 0xF0, wdt->io_base + attr->offset);
+
+		mutex_unlock(&wdt->lock);
+	} else {
+		return -EINVAL;
+	}
+
+	return size;
+}
+
+#define WDT_TRIG_ATTR(_name, _offset) \
+	struct nic7018_attr dev_attr_##_name = { \
+		.offset = _offset, \
+		.dev_attr = \
+			__ATTR(_name, S_IWUSR | S_IRUGO, \
+			       wdt_trig_show, wdt_trig_store), \
+	}
+
+static WDT_TRIG_ATTR(trigger, WDT_CTRL);
+static WDT_TRIG_ATTR(keepalive_trigger, WDT_RELOAD_CTRL);
+
+static struct attribute *nic7018_wdt_attrs[] = {
+	&dev_attr_enable_reset.dev_attr.attr,
+	&dev_attr_enable_soft_ping.dev_attr.attr,
+	&dev_attr_trigger_polarity.dev_attr.attr,
+	&dev_attr_keepalive_trigger_polarity.dev_attr.attr,
+	&dev_attr_trigger.dev_attr.attr,
+	&dev_attr_keepalive_trigger.dev_attr.attr,
+	NULL
+};
+ATTRIBUTE_GROUPS(nic7018_wdt);
+
 static int nic7018_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -191,6 +356,8 @@ static int nic7018_probe(struct platform_device *pdev)
 		return -EBUSY;
 	}
 
+	mutex_init(&wdt->lock);
+
 	wdt->io_base = io_rc->start;
 	wdd = &wdt->wdd;
 	wdd->info = &nic7018_wdd_info;
@@ -199,6 +366,7 @@ static int nic7018_probe(struct platform_device *pdev)
 	wdd->max_timeout = WDT_MAX_TIMEOUT;
 	wdd->timeout = WDT_DEFAULT_TIMEOUT;
 	wdd->parent = dev;
+	wdd->groups = nic7018_wdt_groups;
 
 	watchdog_set_drvdata(wdd, wdt);
 	watchdog_set_nowayout(wdd, nowayout);
