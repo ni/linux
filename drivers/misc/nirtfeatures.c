@@ -219,7 +219,7 @@ static ssize_t nirtfeatures_backplane_id_get(struct device *dev,
 static DEVICE_ATTR(backplane_id, S_IRUGO, nirtfeatures_backplane_id_get, NULL);
 
 static const char * const nirtfeatures_reset_source_strings[] = {
-	"button", "processor", "fpga", "watchdog", "software",
+	"button", "processor", "fpga", "watchdog", "software", "ironclad",
 };
 
 static ssize_t nirtfeatures_reset_source_get(struct device *dev,
