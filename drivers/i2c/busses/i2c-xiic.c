@@ -1480,10 +1480,16 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 	spin_lock_init(&i2c->atomic_lock);
 
 	i2c->clk = devm_clk_get_enabled(&pdev->dev, NULL);
-	if (IS_ERR(i2c->clk))
-		return dev_err_probe(&pdev->dev, PTR_ERR(i2c->clk),
-				     "failed to enable input clock.\n");
-
+	if (IS_ERR(i2c->clk)) {
+		if (PTR_ERR(i2c->clk) != -ENOENT) {
+			dev_err(&pdev->dev,
+				"error while finding input clock. %ld\n",
+				PTR_ERR(i2c->clk));
+			return PTR_ERR(i2c->clk);
+		}
+		dev_err(&pdev->dev, "Optional input clock not found.\n");
+		i2c->clk = NULL;
+	}
 	i2c->dev = &pdev->dev;
 	pm_runtime_set_autosuspend_delay(i2c->dev, XIIC_PM_TIMEOUT);
 	pm_runtime_use_autosuspend(i2c->dev);
