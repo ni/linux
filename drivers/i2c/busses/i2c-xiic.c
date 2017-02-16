@@ -780,8 +780,14 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 
 	i2c->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(i2c->clk)) {
-		dev_err(&pdev->dev, "input clock not found.\n");
-		return PTR_ERR(i2c->clk);
+		if (PTR_ERR(i2c->clk) != -ENOENT) {
+			dev_err(&pdev->dev,
+				"error while finding input clock. %ld\n",
+				PTR_ERR(i2c->clk));
+			return PTR_ERR(i2c->clk);
+		}
+		dev_err(&pdev->dev, "Optional input clock not found.\n");
+		i2c->clk = NULL;
 	}
 	ret = clk_prepare_enable(i2c->clk);
 	if (ret) {
