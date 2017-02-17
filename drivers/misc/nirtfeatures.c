@@ -13,6 +13,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/leds.h>
 #include <linux/input.h>
@@ -73,7 +74,9 @@
 #define MAX_NAMELEN	64
 #define MAX_NODELEN	128
 #define MIN_PIE_CAPS_VERSION	2
-#define MAX_PIE_CAPS_VERSION	2
+#define MAX_PIE_CAPS_VERSION	3
+#define NOTIFY_METHOD_INTERRUPT	1
+#define NOTIFY_METHOD_GPIO	0
 
 enum nirtfeatures_pie_class {
 	PIE_CLASS_INPUT  = 0,
@@ -92,6 +95,8 @@ struct nirtfeatures_pie_descriptor {
 	enum nirtfeatures_pie_type  pie_type;
 	bool                        is_user_visible;
 	unsigned int                notification_value;
+	/* notification_method applicable only for caps version 3 & above */
+	unsigned int                notification_method;
 };
 
 struct nirtfeatures_pie_descriptor_led_color {
@@ -122,6 +127,7 @@ struct nirtfeatures {
 	const char *bpstring;
 	bool has_wifi;
 	struct regulator_dev *reg_dev;
+	unsigned int irq;
 };
 
 struct nirtfeatures_led {
@@ -961,9 +967,14 @@ static int nirtfeatures_parse_one_pie(struct nirtfeatures *nirtfeatures,
 	if (nirtfeatures == NULL || acpi_buffer == NULL)
 		return -EINVAL;
 
-	/* check for proper type and number of elements */
+	/*
+	 * check for proper type and number of elements
+	 * caps_version 2 or less, support only 6 elements in package
+	 * caps_version 3 or more, support only up to 7 elements in package
+	 */
 	if (acpi_buffer->type != ACPI_TYPE_PACKAGE ||
-	   acpi_buffer->package.count != 6)
+	    (acpi_buffer->package.count != 6 && pie_caps_version < 3) ||
+	    (acpi_buffer->package.count > 7 && pie_caps_version >= 3))
 		return -EINVAL;
 
 	/* element 0 of the package is the name */
@@ -1005,9 +1016,22 @@ static int nirtfeatures_parse_one_pie(struct nirtfeatures *nirtfeatures,
 	/* element 5 of the package is the notification value */
 	if (acpi_buffer->package.elements[5].type == ACPI_TYPE_INTEGER)
 		pie.notification_value =
-		   acpi_buffer->package.elements[5].integer.value;
+			acpi_buffer->package.elements[5].integer.value;
 	else
 		return -EINVAL;
+
+	/*
+	 * element 6 of the package is notification method
+	 * used only for pie type switch and caps_Version >= 3
+	 * don't worry about it for lower caps versions.
+	 */
+	if (pie_caps_version >= 3 && pie.pie_type == PIE_TYPE_SWITCH) {
+		if (acpi_buffer->package.elements[6].type == ACPI_TYPE_INTEGER)
+			pie.notification_method =
+				acpi_buffer->package.elements[6].integer.value;
+		else
+			return -EINVAL;
+	}
 
 	/* parse the type-specific descriptor in element 3 */
 	switch (pie.pie_type) {
@@ -1175,13 +1199,64 @@ static void nirtfeatures_remove_switch_pies(struct nirtfeatures *nirtfeatures)
 	spin_unlock(&nirtfeatures->lock);
 }
 
+/* IRQ Handler for User push button */
+static irqreturn_t pushbutton_interrupt_handler(int irq, void *data)
+{
+	/* find the switch PIE for which this interrupt was generated */
+	struct nirtfeatures_switch *iter;
+	struct nirtfeatures        *nirtfeatures = (struct nirtfeatures *)data;
+	int                         state = 0;
+
+	spin_lock(&nirtfeatures->lock);
+	list_for_each_entry(iter, &nirtfeatures_switch_pie_list, node) {
+		if (iter->pie_descriptor.notification_method == NOTIFY_METHOD_INTERRUPT &&
+		    iter->pie_descriptor.notification_value == irq) {
+			/* query instantaneous switch state */
+			if (!nirtfeatures_pie_get_state(iter->nirtfeatures,
+							iter->pie_location.element,
+							iter->pie_location.subelement,
+							&state)) {
+				/* push current state of switch */
+				input_report_key(iter->cdev, BTN_0, !!state);
+				input_sync(iter->cdev);
+			}
+			spin_unlock(&nirtfeatures->lock);
+			return IRQ_HANDLED;
+		}
+	}
+	spin_unlock(&nirtfeatures->lock);
+	return IRQ_NONE;
+}
+
 /* ACPI driver */
 
 static acpi_status nirtfeatures_resources(struct acpi_resource *res, void *data)
 {
 	struct nirtfeatures *nirtfeatures = data;
+	int err;
 
 	switch (res->type) {
+	case ACPI_RESOURCE_TYPE_IRQ:
+		if (nirtfeatures->irq != 0) {
+			dev_err(&nirtfeatures->acpi_device->dev,
+				"too many IRQ resources\n");
+			return AE_ERROR;
+		}
+
+		nirtfeatures->irq = res->data.irq.interrupts[0];
+
+		err = devm_request_irq(&nirtfeatures->acpi_device->dev,
+				       nirtfeatures->irq,
+				       pushbutton_interrupt_handler,
+				       0 /*irq_flags*/, MODULE_NAME,
+				       nirtfeatures);
+		if (err) {
+			dev_err(&nirtfeatures->acpi_device->dev,
+				"failed to request IRQ (err %d)\n", err);
+			return AE_ERROR;
+		}
+		return AE_OK;
+
 	case ACPI_RESOURCE_TYPE_IO:
 		if ((nirtfeatures->io_base != 0) ||
 		    (nirtfeatures->io_size != 0)) {
@@ -1385,7 +1460,7 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	nirtfeatures->acpi_device = device;
 
 	acpi_ret = acpi_walk_resources(device->handle, METHOD_NAME__CRS,
-				       nirtfeatures_resources, nirtfeatures);
+			nirtfeatures_resources, nirtfeatures);
 
 	if (ACPI_FAILURE(acpi_ret) ||
 	    (nirtfeatures->io_base == 0) ||
