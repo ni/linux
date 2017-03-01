@@ -1446,11 +1446,6 @@ int do_settimeofday64(const struct timespec64 *ts)
 		xt = tk_xtime(tks);
 		ts_delta = timespec64_sub(*ts, xt);
 
-		if (timespec64_compare(&tks->wall_to_monotonic, &ts_delta) > 0) {
-			timekeeping_restore_shadow(&tk_core);
-			return -EINVAL;
-		}
-
 		tk_set_wall_to_mono(tks, timespec64_sub(tks->wall_to_monotonic, ts_delta));
 		tk_set_xtime(tks, ts);
 		timekeeping_update_from_shadow(&tk_core, TK_UPDATE_ALL);
@@ -1490,8 +1485,7 @@ static int __timekeeping_inject_offset(struct tk_data *tkd, const struct timespe
 	if (timekeeper_is_core_tk(tks)) {
 		/* Make sure the proposed value is valid */
 		tmp = timespec64_add(tk_xtime(tks), *ts);
-		if (timespec64_compare(&tks->wall_to_monotonic, ts) > 0 ||
-		    !timespec64_valid_settod(&tmp)) {
+		if (!timespec64_valid_settod(&tmp)) {
 			timekeeping_restore_shadow(tkd);
 			return -EINVAL;
 		}
