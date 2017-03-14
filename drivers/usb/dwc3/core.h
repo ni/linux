@@ -829,6 +829,7 @@ struct dwc3_scratchpad_array {
  * 	1	- -3.5dB de-emphasis
  * 	2	- No de-emphasis
  * 	3	- Reserved
+ * @has_dsm_for_softreset: set if we want to use BIOS to do core soft reset
  */
 struct dwc3 {
 	struct usb_ctrlrequest	*ctrl_req;
@@ -974,6 +975,8 @@ struct dwc3 {
 
 	unsigned		tx_de_emphasis_quirk:1;
 	unsigned		tx_de_emphasis:2;
+
+	unsigned		has_dsm_for_softreset:1;
 };
 
 /* -------------------------------------------------------------------------- */

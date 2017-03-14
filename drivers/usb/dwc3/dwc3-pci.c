@@ -78,6 +78,17 @@ static int dwc3_pci_quirks(struct pci_dev *pdev, struct platform_device *dwc3)
 		return platform_device_add_properties(dwc3, properties);
 	}
 
+	if (pdev->vendor == PCI_VENDOR_ID_INTEL &&
+	    (pdev->device == PCI_DEVICE_ID_INTEL_BXT ||
+	     pdev->device == PCI_DEVICE_ID_INTEL_BXT_M ||
+	     pdev->device == PCI_DEVICE_ID_INTEL_APL)) {
+		struct property_entry properties[] = {
+			PROPERTY_ENTRY_BOOL("snps,has_dsm_for_softreset"),
+			{ }
+		};
+		return platform_device_add_properties(dwc3, properties);
+	}
+
 	if (pdev->vendor == PCI_VENDOR_ID_INTEL) {
 		int ret;
 
