@@ -135,6 +135,13 @@ static const struct property_entry dwc3_pci_intel_phy_charger_detect_properties[
 	{}
 };
 
+static const struct property_entry dwc3_pci_intel_bxt_properties[] = {
+	PROPERTY_ENTRY_STRING("dr_mode", "peripheral"),
+	PROPERTY_ENTRY_BOOL("snps,has_dsm_for_softreset"),
+	PROPERTY_ENTRY_BOOL("linux,sysdev_is_parent"),
+	{}
+};
+
 static const struct property_entry dwc3_pci_intel_byt_properties[] = {
 	PROPERTY_ENTRY_STRING("dr_mode", "peripheral"),
 	PROPERTY_ENTRY_BOOL("snps,dis_u2_susphy_quirk"),
@@ -186,6 +193,10 @@ static const struct software_node dwc3_pci_intel_swnode = {
 
 static const struct software_node dwc3_pci_intel_phy_charger_detect_swnode = {
 	.properties = dwc3_pci_intel_phy_charger_detect_properties,
+};
+
+static const struct software_node dwc3_pci_intel_bxt_swnode = {
+	.properties = dwc3_pci_intel_bxt_properties,
 };
 
 static const struct software_node dwc3_pci_intel_byt_swnode = {
@@ -399,9 +410,9 @@ static const struct pci_device_id dwc3_pci_id_table[] = {
 	{ PCI_DEVICE_DATA(INTEL, CMLH, &dwc3_pci_intel_swnode) },
 	{ PCI_DEVICE_DATA(INTEL, SPTLP, &dwc3_pci_intel_swnode) },
 	{ PCI_DEVICE_DATA(INTEL, SPTH, &dwc3_pci_intel_swnode) },
-	{ PCI_DEVICE_DATA(INTEL, BXT, &dwc3_pci_intel_swnode) },
-	{ PCI_DEVICE_DATA(INTEL, BXT_M, &dwc3_pci_intel_swnode) },
-	{ PCI_DEVICE_DATA(INTEL, APL, &dwc3_pci_intel_swnode) },
+	{ PCI_DEVICE_DATA(INTEL, BXT, &dwc3_pci_intel_bxt_swnode) },
+	{ PCI_DEVICE_DATA(INTEL, BXT_M, &dwc3_pci_intel_bxt_swnode) },
+	{ PCI_DEVICE_DATA(INTEL, APL, &dwc3_pci_intel_bxt_swnode) },
 	{ PCI_DEVICE_DATA(INTEL, KBP, &dwc3_pci_intel_swnode) },
 	{ PCI_DEVICE_DATA(INTEL, GLK, &dwc3_pci_intel_swnode) },
 	{ PCI_DEVICE_DATA(INTEL, CNPLP, &dwc3_pci_intel_swnode) },
