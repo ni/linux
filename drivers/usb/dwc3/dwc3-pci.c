@@ -114,6 +114,7 @@ unmap:
 
 static const struct property_entry dwc3_pci_intel_properties[] = {
 	PROPERTY_ENTRY_STRING("dr_mode", "peripheral"),
+	PROPERTY_ENTRY_BOOL("snps,has_dsm_for_softreset"),
 	PROPERTY_ENTRY_BOOL("linux,sysdev_is_parent"),
 	{}
 };
