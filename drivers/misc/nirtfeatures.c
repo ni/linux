@@ -776,7 +776,9 @@ static int nirtfeatures_parse_led_pie(
 			return -EINVAL;
 
 		/* create an LED class device for this LED */
-		led_dev = kzalloc(sizeof(struct nirtfeatures_led), GFP_KERNEL);
+		led_dev = devm_kzalloc(&nirtfeatures->acpi_device->dev,
+				       sizeof(struct nirtfeatures_led),
+				       GFP_KERNEL);
 		if (led_dev == NULL)
 			return -ENOMEM;
 
@@ -817,12 +819,10 @@ static int nirtfeatures_parse_led_pie(
 		led_dev->pie_location.element = pie_element;
 		led_dev->pie_location.subelement = i;
 
-		err = led_classdev_register(&nirtfeatures->acpi_device->dev,
-		   &led_dev->cdev);
-		if (err != 0) {
-			kfree(led_dev);
+		err = devm_led_classdev_register(&nirtfeatures->acpi_device->dev,
+						 &led_dev->cdev);
+		if (err)
 			return err;
-		}
 
 		list_add_tail(&led_dev->node, &nirtfeatures_led_pie_list);
 	}
@@ -844,6 +844,7 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 	struct nirtfeatures_pie_descriptor_switch *switch_descriptor = NULL;
 	struct nirtfeatures_switch                *switch_dev = NULL;
 	int                                        err = 0;
+	struct device *dev = &nirtfeatures->acpi_device->dev;
 
 	if (nirtfeatures == NULL || pie == NULL || acpi_buffer == NULL)
 		return -EINVAL;
@@ -859,9 +860,9 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 		return -EINVAL;
 
 	/* allocate storage for switch descriptor */
-	switch_descriptor = kzalloc(
-	   sizeof(struct nirtfeatures_pie_descriptor_switch) +
-	   sizeof(int) * (num_states - 1), GFP_KERNEL);
+	switch_descriptor = devm_kzalloc(dev, sizeof(*switch_descriptor) +
+					 sizeof(int) * (num_states - 1),
+					 GFP_KERNEL);
 	if (switch_descriptor == NULL)
 		return -ENOMEM;
 
@@ -869,28 +870,23 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 
 	/* parse individual states in elements 1..N-1 */
 	for (i = 0; i < num_states; i++) {
-		if (acpi_buffer->package.elements[i + 1].type
-		   != ACPI_TYPE_INTEGER) {
-			err = -EINVAL;
-			goto exit;
-		}
+		if (acpi_buffer->package.elements[i + 1].type !=
+		    ACPI_TYPE_INTEGER)
+			return -EINVAL;
 
 		switch_descriptor->state_value[i] =
 		   (int) acpi_buffer->package.elements[i + 1].integer.value;
 	}
 
 	/* create an input class device for this switch */
-	switch_dev = kzalloc(sizeof(struct nirtfeatures_switch), GFP_KERNEL);
-	if (switch_dev == NULL) {
-		err = -ENOMEM;
-		goto exit;
-	}
+	switch_dev = devm_kzalloc(dev, sizeof(struct nirtfeatures_switch),
+				  GFP_KERNEL);
+	if (switch_dev == NULL)
+		return -ENOMEM;
 
-	switch_dev->cdev = input_allocate_device();
-	if (switch_dev->cdev == NULL) {
-		err = -ENOMEM;
-		goto exit_dealloc_switch_dev;
-	}
+	switch_dev->cdev = devm_input_allocate_device(dev);
+	if (switch_dev->cdev == NULL)
+		return -ENOMEM;
 
 	switch_dev->nirtfeatures = nirtfeatures;
 	switch_dev->pie_location.element = pie_element;
@@ -924,32 +920,21 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 	set_bit(BTN_0, switch_dev->cdev->keybit);
 
 	err = input_register_device(switch_dev->cdev);
-	if (err != 0) {
-		input_free_device(switch_dev->cdev);
-		goto exit_dealloc_switch_dev;
-	}
+	if (err)
+		return err;
 
 	/* if this PIE supports notifications, enable them now */
 	if (pie->notification_value != 0) {
 		err = nirtfeatures_pie_enable_notifications(nirtfeatures,
-		   pie_element, 0, 1);
-		if (err != 0) {
-			input_unregister_device(switch_dev->cdev);
-			input_free_device(switch_dev->cdev);
-			goto exit_dealloc_switch_dev;
-		}
+							    pie_element, 0, 1);
+		if (err)
+			return err;
 	}
 
 	/* add the new device to our list of switch PIEs */
 	list_add_tail(&switch_dev->node, &nirtfeatures_switch_pie_list);
-	goto exit;
 
-exit_dealloc_switch_dev:
-	kfree(switch_dev);
-
-exit:
-	kfree(switch_descriptor);
-	return err;
+	return 0;
 }
 
 
@@ -1140,63 +1125,13 @@ static int nirtfeatures_create_leds(struct nirtfeatures *nirtfeatures)
 		nirtfeatures_leds_common[i].cdev.brightness_get =
 			nirtfeatures_led_brightness_get;
 
-		err = led_classdev_register(&nirtfeatures->acpi_device->dev,
-					    &nirtfeatures_leds_common[i].cdev);
+		err = devm_led_classdev_register(&nirtfeatures->acpi_device->dev,
+						 &nirtfeatures_leds_common[i].cdev);
 		if (err)
 			return err;
 	}
 
 	return 0;
-}
-
-static void nirtfeatures_remove_leds(struct nirtfeatures *nirtfeatures)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(nirtfeatures_leds_common); ++i)
-		led_classdev_unregister(&nirtfeatures_leds_common[i].cdev);
-}
-
-static void nirtfeatures_remove_led_pies(struct nirtfeatures *nirtfeatures)
-{
-	struct nirtfeatures_led *cdev_iter;
-	struct nirtfeatures_led *temp;
-
-	spin_lock(&nirtfeatures->lock);
-
-	/* walk the list of non-fixed LEDs and unregister/free their devices */
-	list_for_each_entry_safe(
-	   cdev_iter, temp, &nirtfeatures_led_pie_list, node) {
-		led_classdev_unregister(&cdev_iter->cdev);
-		kfree(cdev_iter);
-	}
-
-	spin_unlock(&nirtfeatures->lock);
-}
-
-static void nirtfeatures_remove_switch_pies(struct nirtfeatures *nirtfeatures)
-{
-	struct nirtfeatures_switch *cdev_iter;
-	struct nirtfeatures_switch *temp;
-
-	spin_lock(&nirtfeatures->lock);
-
-	/* walk the list of switch devices and unregister/free each one */
-	list_for_each_entry_safe(
-	   cdev_iter, temp, &nirtfeatures_switch_pie_list, node) {
-		/* disable notifications for this PIE if supported */
-		if (cdev_iter->pie_descriptor.notification_value != 0) {
-			nirtfeatures_pie_enable_notifications(nirtfeatures,
-			   cdev_iter->pie_location.element,
-				cdev_iter->pie_location.subelement,
-			   0);
-		}
-		input_unregister_device(cdev_iter->cdev);
-		input_free_device(cdev_iter->cdev);
-		kfree(cdev_iter);
-	}
-
-	spin_unlock(&nirtfeatures->lock);
 }
 
 /* IRQ Handler for User push button */
@@ -1323,26 +1258,7 @@ static void nirtfeatures_acpi_notify(struct acpi_device *device, u32 event)
 
 static int nirtfeatures_acpi_remove(struct acpi_device *device)
 {
-	struct nirtfeatures *nirtfeatures = device->driver_data;
-
-	nirtfeatures_remove_leds(nirtfeatures);
-
-	nirtfeatures_remove_led_pies(nirtfeatures);
-	nirtfeatures_remove_switch_pies(nirtfeatures);
-
-	sysfs_remove_files(&nirtfeatures->acpi_device->dev.kobj,
-			   nirtfeatures_attrs);
-
-	if (nirtfeatures->reg_dev)
-		regulator_unregister(nirtfeatures->reg_dev);
-
-	if ((nirtfeatures->io_base != 0) &&
-	    (nirtfeatures->io_size == NIRTF_IO_SIZE))
-		release_region(nirtfeatures->io_base, nirtfeatures->io_size);
-
-	device->driver_data = NULL;
-
-	kfree(nirtfeatures);
+	sysfs_remove_files(&device->dev.kobj, nirtfeatures_attrs);
 
 	return 0;
 }
@@ -1433,8 +1349,9 @@ static int nirtfeatures_wifi_regulator_init(struct device *dev,
 	cfg.dev = dev;
 	cfg.init_data = &wifi_reset_init_data;
 	cfg.driver_data = nirtfeatures;
-	reg_dev = regulator_register(&nirtfeatures_wifi_regulator_desc,
-				     &cfg);
+	reg_dev = devm_regulator_register(dev,
+					  &nirtfeatures_wifi_regulator_desc,
+					  &cfg);
 	if (IS_ERR(reg_dev)) {
 		pr_err("Failed to register vmmc regulator for wifi\n");
 		return -ENODEV;
@@ -1450,7 +1367,8 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	u8 bpinfo;
 	int err;
 
-	nirtfeatures = kzalloc(sizeof(*nirtfeatures), GFP_KERNEL);
+	nirtfeatures = devm_kzalloc(&device->dev, sizeof(*nirtfeatures),
+				    GFP_KERNEL);
 
 	if (!nirtfeatures)
 		return -ENOMEM;
@@ -1464,16 +1382,12 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 
 	if (ACPI_FAILURE(acpi_ret) ||
 	    (nirtfeatures->io_base == 0) ||
-	    (nirtfeatures->io_size != NIRTF_IO_SIZE)) {
-		nirtfeatures_acpi_remove(device);
+	    (nirtfeatures->io_size != NIRTF_IO_SIZE))
 		return -ENODEV;
-	}
 
-	if (!request_region(nirtfeatures->io_base, nirtfeatures->io_size,
-	    MODULE_NAME)) {
-		nirtfeatures_acpi_remove(device);
+	if (!devm_request_region(&device->dev, nirtfeatures->io_base,
+				 nirtfeatures->io_size, MODULE_NAME))
 		return -EBUSY;
-	}
 
 	bpinfo = inb(nirtfeatures->io_base + NIRTF_PLATFORM_MISC);
 
@@ -1503,10 +1417,8 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	spin_lock_init(&nirtfeatures->lock);
 
 	err = nirtfeatures_populate_pies(nirtfeatures);
-	if (err != 0) {
-		nirtfeatures_acpi_remove(device);
+	if (err)
 		return err;
-	}
 
 	nirtfeatures->revision[0] = inb(nirtfeatures->io_base + NIRTF_YEAR);
 	nirtfeatures->revision[1] = inb(nirtfeatures->io_base + NIRTF_MONTH);
@@ -1514,32 +1426,25 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	nirtfeatures->revision[3] = inb(nirtfeatures->io_base + NIRTF_HOUR);
 	nirtfeatures->revision[4] = inb(nirtfeatures->io_base + NIRTF_MINUTE);
 
-	err = sysfs_create_files(&nirtfeatures->acpi_device->dev.kobj,
-				 nirtfeatures_attrs);
-	if (err != 0) {
-		nirtfeatures_acpi_remove(device);
+	err = nirtfeatures_create_leds(nirtfeatures);
+	if (err)
 		return err;
+
+	if (nirtfeatures->has_wifi) {
+		err = nirtfeatures_wifi_regulator_init(&device->dev,
+						       nirtfeatures);
+		if (err)
+			return err;
 	}
 
-	err = nirtfeatures_create_leds(nirtfeatures);
-	if (err != 0) {
-		nirtfeatures_acpi_remove(device);
+	err = sysfs_create_files(&device->dev.kobj, nirtfeatures_attrs);
+	if (err)
 		return err;
-	}
 
 	dev_info(&nirtfeatures->acpi_device->dev,
 		 "IO range 0x%04X-0x%04X\n",
 		 nirtfeatures->io_base,
 		 nirtfeatures->io_base + nirtfeatures->io_size - 1);
-
-	if (nirtfeatures->has_wifi) {
-		err = nirtfeatures_wifi_regulator_init(&device->dev,
-						       nirtfeatures);
-		if (err != 0) {
-			nirtfeatures_acpi_remove(device);
-			return err;
-		}
-	}
 
 	return 0;
 }
