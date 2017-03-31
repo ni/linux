@@ -902,6 +902,7 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	zynq-zc702.dtb \
 	zynq-zc706.dtb \
 	zynq-zed.dtb \
+	zynq-ni-sulfur-rev3.dtb \
 	zynq-zybo.dtb \
 	ni-7931.dtb \
 	ni-7932.dtb \

@@ -1,0 +1,317 @@
+/*
+ * National Instruments Ettus Research Project Sulfur SDR Revision 2
+ * devicetree source.
+ *
+ * Copyright (c) 2016 National Instruments Corp.
+ *
+ * This file is dual-licensed: you can use it either under the terms
+ * of the GPL or the X11 license, at your option. Note that this dual
+ * licensing only applies to this file, and not this project as a
+ * whole.
+ *
+ *  a) This file is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU General Public License as
+ *     published by the Free Software Foundation; either version 2 of the
+ *     License, or (at your option) any later version.
+ *
+ *     This file is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ *  Or, alternatively,
+ *
+ *  b) Permission is hereby granted, free of charge, to any person
+ *     obtaining a copy of this software and associated documentation
+ *     files (the "Software"), to deal in the Software without
+ *     restriction, including without limitation the rights to use,
+ *     copy, modify, merge, publish, distribute, sublicense, and/or
+ *     sell copies of the Software, and to permit persons to whom the
+ *     Software is furnished to do so, subject to the following
+ *     conditions:
+ *
+ *     The above copyright notice and this permission notice shall be
+ *     included in all copies or substantial portions of the Software.
+ *
+ *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ *     OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/gpio/gpio.h>
+#include "zynq-7000.dtsi"
+
+/ {
+	model = "NI Ettus Research Project Sulfur SDR Rev3";
+	compatible = "ettus,zynq-sulfur-rev3", "xlnx,zynq-7000";
+
+	aliases {
+		ethernet0 = &gem0;
+		serial0 = &uart0;
+		serial1 = &uart1;
+		spi0 = &spi0;
+		spi1 = &spi1;
+		i2c0 = &i2c0;
+		i2c1 = &i2c1;
+		i2c2 = &tun;
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x40000000>;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		power-button {
+			label = "Power Button";
+			linux,code = <KEY_POWER>;
+			gpios = <&gpio0 1 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	gpio-poweroff {
+		compatible = "gpio-poweroff";
+		gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0 {
+			label = "sulfur:ledp";
+			gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			default-state = "keep";
+		};
+	};
+
+	usb_phy0: phy0 {
+		compatible = "usb-nop-xceiv";
+		#phy-cells = <0>;
+		reset-gpios = <&gpio0 51 GPIO_ACTIVE_LOW>;
+	};
+
+};
+
+&cpu0 {
+	operating-points = <800000 1000000>;
+};
+
+&sdhci0 {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+/* we use the ARM global timer */
+&ttc0 {
+	status = "disabled";
+};
+
+/* we use the ARM global timer */
+&ttc1 {
+	status = "disabled";
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+	i2cswitch@70 {
+		compatible = "ti,pca9548";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x70>;
+
+		reset-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>;
+
+		i2c@0 {
+			reg = <0>;
+			status = "disabled";
+		};
+
+		i2c@1 {
+			reg = <1>;
+			status = "disabled";
+		};
+
+		i2c@2 {
+			reg = <2>;
+			status = "disabled";
+		};
+
+		i2c@3 {
+			reg = <3>;
+			status = "okay";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			gpio1: gpio@22 {
+				compatible = "ti,tca6424";
+				reg = <0x22>;
+				gpio-controller;
+				#gpio-cells = <2>;
+			};
+		};
+
+		i2c@4 {
+			reg = <4>;
+			status = "disabled";
+		};
+
+		i2c@5 {
+			reg = <5>;
+			status = "okay";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			rtc0: rtc@68 {
+				compatible = "dallas,ds1374";
+				reg = <0x68>;
+				reset-on-timeout;
+				trickle-resistor-ohms = <250>;
+				trickle-diode-disable;
+				timeout-sec = <10>;
+			};
+		};
+
+		usrpio_i2c0: i2c@6 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			reg = <6>;
+		};
+
+		usrpio_i2c1: i2c@7 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			reg = <6>;
+		};
+	};
+};
+
+&i2c1 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+	embedded-controller@1e {
+		reg = <0x1e>;
+		compatible = "ni,embedded-controller-i2c",
+			     "google,cros-ec-i2c";
+		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-parent = <&gpio0>;
+		google,has-vbc-nvram;
+
+		wakeup-source;
+
+		tun: i2c-tunnel {
+			compatible = "google,cros-ec-i2c-tunnel";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			google,remote-bus = <0>;
+			clock-frequency = <100000>;
+
+			eeprom@50 {
+				compatible = "at24,24c02";
+				reg = <0x50>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				read-only;
+
+				eth0_addr: eth-addr@24 {
+					reg = <0x24 0x6>;
+				};
+
+				eth1_addr: eth-addr@2c {
+					reg = <0x2c 0x6>;
+				};
+
+				eth2_addr: eth-addr@34 {
+					reg = <0x34 0x6>;
+				};
+			};
+		};
+	};
+
+};
+
+&gpio0 {
+	status = "okay";
+
+	ledn {
+		gpio-hog;
+		gpios = <4 GPIO_ACTIVE_LOW>;
+		output-high;
+	};
+};
+
+&clkc {
+	ps-clk-frequency = <33333333>;
+	fclk-enable = <0xf>;
+};
+
+&spi0 {
+	status = "disabled";
+};
+
+&spi1 {
+	status = "disabled";
+};
+
+&gem0 {
+	status = "okay";
+	phy-mode = "rgmii-id";
+	phy-handle = <&ethernet_phy0>;
+
+	nvmem-cells = <&eth0_addr>;
+	nvmem-cell-names = "address";
+
+	ethernet_phy0: ethernet-phy@0 {
+		reg = <0>;
+		reset-gpios = <&gpio0 50 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+	usb-phy = <&usb_phy0>;
+};
+
+&amba {
+	fpga_region0: fpga-region@40000000 {
+		compatible = "fpga-region";
+		fpga-mgr = <&devcfg>;
+		#address-cells = <0x1>;
+		#size-cells = <0x1>;
+		ranges;
+	};
+
+	ocm: sram@fffc0000 {
+		compatible = "mmio-sram";
+		reg = <0xfffc0000 0x10000>;
+	};
+};
