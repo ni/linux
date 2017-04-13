@@ -243,14 +243,13 @@ static int _mv88e6xxx_phy_write(struct dsa_switch *ds, int addr, int regnum,
 static int mv88e6xxx_ppu_disable(struct dsa_switch *ds)
 {
 	int ret;
-	unsigned long timeout;
+	int i;
 
 	ret = REG_READ(REG_GLOBAL, GLOBAL_CONTROL);
 	REG_WRITE(REG_GLOBAL, GLOBAL_CONTROL,
 		  ret & ~GLOBAL_CONTROL_PPU_ENABLE);
 
-	timeout = jiffies + 1 * HZ;
-	while (time_before(jiffies, timeout)) {
+	for (i = 0; i < 16; i++) {
 		ret = REG_READ(REG_GLOBAL, GLOBAL_STATUS);
 		usleep_range(1000, 2000);
 		if ((ret & GLOBAL_STATUS_PPU_MASK) !=
@@ -784,9 +783,9 @@ error:
 
 static int mv88e6xxx_wait(struct dsa_switch *ds, int reg, int offset, u16 mask)
 {
-	unsigned long timeout = jiffies + HZ / 10;
+	int i;
 
-	while (time_before(jiffies, timeout)) {
+	for (i = 0; i < 16; i++) {
 		int ret;
 
 		ret = REG_READ(reg, offset);
@@ -1513,9 +1512,9 @@ out:
 /* Must be called with SMI lock held */
 static int _mv88e6xxx_wait(struct dsa_switch *ds, int reg, int offset, u16 mask)
 {
-	unsigned long timeout = jiffies + HZ / 10;
+	int i;
 
-	while (time_before(jiffies, timeout)) {
+	for (i = 0; i < 16; i++) {
 		int ret;
 
 		ret = _mv88e6xxx_reg_read(ds, reg, offset);
