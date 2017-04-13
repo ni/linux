@@ -794,6 +794,8 @@ static int mv88e6xxx_wait(struct dsa_switch *ds, int reg, int offset, u16 mask)
 
 		usleep_range(1000, 2000);
 	}
+
+	dev_err(ds->master_dev, "Timeout while waiting for switch\n");
 	return -ETIMEDOUT;
 }
 
@@ -1525,6 +1527,8 @@ static int _mv88e6xxx_wait(struct dsa_switch *ds, int reg, int offset, u16 mask)
 
 		usleep_range(1000, 2000);
 	}
+
+	dev_err(ds->master_dev, "Timeout while waiting for switch\n");
 	return -ETIMEDOUT;
 }
 
