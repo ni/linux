@@ -181,7 +181,7 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	 */
 	region_board_file = devm_kzalloc(ar->dev, 64, GFP_KERNEL);
 
-	snprintf(region_board_file, 64, AR6004_HW_3_0_FW_DIR "/bdata%c%c.bin",
+	snprintf(region_board_file, 64, AR6004_HW_3_0_FW_DIR "/bdata.%c%c.bin",
 		 region[0], region[1]);
 
 	ar->hw.fw_board = region_board_file;
