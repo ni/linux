@@ -1181,6 +1181,16 @@ static int pl353_nand_probe(struct platform_device *pdev)
 				TIMING_MODE_FEATURE_ADDR, -1);
 		get_feature = nand_chip->read_byte(mtd);
 
+		/*
+		 * HACK: timings in device tree appear to be wrong for mode 5.
+		 * As a workaround, restrict ourselves to mode 4.
+		 */
+		if (timing_mode == 5) {
+			pr_info("Forcibly downgrading from ONFI timing mode %u\n",
+				timing_mode);
+			timing_mode = 4;
+		}
+
 		if (timing_mode > get_feature) {
 			nand_chip->cmdfunc(mtd, NAND_CMD_SET_FEATURES,
 					TIMING_MODE_FEATURE_ADDR, -1);
