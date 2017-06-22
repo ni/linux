@@ -17,6 +17,10 @@ void phy_led_trigger_change_speed(struct phy_device *phy)
 {
 	struct phy_led_trigger *plt;
 
+	/* 5 is "link" */
+	led_trigger_event(&phy->phy_led_trigger[5].trigger,
+			  (phy->link ? LED_FULL : LED_OFF));
+
 	if (!phy->link) {
 		if (phy->last_triggered) {
 			led_trigger_event(&phy->last_triggered->trigger,
@@ -64,6 +68,7 @@ static int phy_led_trigger_register(struct phy_device *phy,
 		"Gb",
 		"2.5Gb",
 		"10GbE",
+		"link",
 	};
 	snprintf(plt->name, sizeof(plt->name), PHY_ID_FMT ":%s", phy->bus->id,
 			phy->addr, name_suffix[i]);

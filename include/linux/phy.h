@@ -405,9 +405,9 @@ struct phy_device {
 
 #ifdef CONFIG_LED_TRIGGER_PHY
 	/*
-	 * A led_trigger per SPEED_*
+	 * A led_trigger per SPEED_*, plus one for "link"
 	 */
-	struct phy_led_trigger phy_led_trigger[5];
+	struct phy_led_trigger phy_led_trigger[6];
 	struct phy_led_trigger *last_triggered;
 #endif
 
