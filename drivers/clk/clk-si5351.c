@@ -1178,6 +1178,27 @@ static int si5351_dt_parse(struct i2c_client *client,
 		}
 	}
 
+	/*
+	 * property silabs,pll-frequency : <num freq>, [<..>]
+	 * allow to configure pll frequencies
+	 */
+	of_property_for_each_u32(np, "silabs,pll-frequency", prop, p, num) {
+		if (num >= 2) {
+			dev_err(&client->dev,
+				"invalid pll %d on pll-frequency prop\n", num);
+			return -EINVAL;
+		}
+
+		p = of_prop_next_u32(prop, p, &val);
+		if (!p) {
+			dev_err(&client->dev,
+				"missing pll-frequency for pll %d\n", num);
+			return -EINVAL;
+		}
+
+		pdata->pll_rate[num] = val;
+	}
+
 	/* per clkout properties */
 	for_each_child_of_node(np, child) {
 		if (of_property_read_u32(child, "reg", &num)) {
@@ -1476,6 +1497,12 @@ static int si5351_i2c_probe(struct i2c_client *client,
 		ret = PTR_ERR(clk);
 		goto err_clk;
 	}
+	/* set initial pll rate */
+	if (pdata->pll_rate[0] != 0) {
+		ret = clk_set_rate(clk, pdata->pll_rate[0]);
+		if (ret != 0)
+			dev_err(&client->dev, "Cannot set rate : %d\n", ret);
+	}
 
 	/* register PLLB or VXCO (Si5351B) */
 	drvdata->pll[1].num = 1;
@@ -1500,6 +1527,12 @@ static int si5351_i2c_probe(struct i2c_client *client,
 		dev_err(&client->dev, "unable to register %s\n", init.name);
 		ret = PTR_ERR(clk);
 		goto err_clk;
+	}
+	/* set initial pll rate */
+	if (pdata->pll_rate[1] != 0) {
+		ret = clk_set_rate(clk, pdata->pll_rate[1]);
+		if (ret != 0)
+			dev_err(&client->dev, "Cannot set rate : %d\n", ret);
 	}
 
 	/* register clk multisync and clk out divider */

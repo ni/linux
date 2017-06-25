@@ -25,6 +25,8 @@ Required properties:
 Optional properties:
 - silabs,pll-source: pair of (number, source) for each pll. Allows
   to overwrite clock source of pll A (number=0) or B (number=1).
+- silabs,pll-frequency: pair of (number, frequency) for each pll. Allows
+  to overwrite frequency of pll A (number=0) or B (number=1).
 
 ==Child nodes==
 

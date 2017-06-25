@@ -106,6 +106,7 @@ struct si5351_clkout_config {
  */
 struct si5351_platform_data {
 	enum si5351_pll_src pll_src[2];
+	unsigned long pll_rate[2];
 	struct si5351_clkout_config clkout[8];
 };
 
