@@ -5,6 +5,18 @@
 	model = "NI FieldDAQ";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
 
+	/*
+	 * This 100MHz reference clock is actually the output of a Si514;
+	 * However, we do not declare it in the device tree because it is
+	 * steered in usermode, and therefore we don't want a kernel driver
+	 * to attach to it.
+	 */
+	ref100: oscillator {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <100000000>;
+	};
+
 	amba@0 {
 		i2c0: i2c@e0004000 {
 			/* Override ni-zynq.dtsi; we do not have a CPLD at 0x40. */
@@ -16,6 +28,65 @@
 				compatible = "ti,tmp451";
 				reg = <0x4C>;
 				vcc-supply = <&regulator_vccpint>;
+			};
+
+			si5351c: clock-generator@60 {
+				compatible = "silabs,si5351c";
+				reg = <0x60>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				#clock-cells = <1>;
+
+				clocks = <&ref100>;
+				clock-names = "clkin";
+
+				silabs,pll-source = <0 1>, <1 0>;
+				silabs,pll-frequency = <0 737280000>;
+
+				umber-btsi0 {
+					reg = <0>;
+					silabs,drive-strength = <8>;
+					silabs,multisynth-source = <0>;
+					silabs,clock-source = <0>;
+					silabs,disable-state = <0>;
+					clock-frequency = <12800000>;
+				};
+
+				umber-sysclk {
+					reg = <1>;
+					silabs,drive-strength = <8>;
+					silabs,multisynth-source = <0>;
+					silabs,clock-source = <0>;
+					silabs,disable-state = <0>;
+					clock-frequency = <80000000>;
+				};
+
+				umber-btsi1 {
+					reg = <2>;
+					silabs,drive-strength = <8>;
+					silabs,multisynth-source = <0>;
+					silabs,clock-source = <0>;
+					silabs,disable-state = <0>;
+					clock-frequency = <13107200>;
+				};
+
+				umber-btsi3 {
+					reg = <4>;
+					silabs,drive-strength = <8>;
+					silabs,multisynth-source = <0>;
+					silabs,clock-source = <0>;
+					silabs,disable-state = <0>;
+					clock-frequency = <10240000>;
+				};
+
+				umber-btsi4 {
+					reg = <7>;
+					silabs,drive-strength = <8>;
+					silabs,multisynth-source = <0>;
+					silabs,clock-source = <0>;
+					silabs,disable-state = <0>;
+					clock-frequency = <12288000>;
+				};
 			};
 		};
 	};
