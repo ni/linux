@@ -34,5 +34,3 @@ fi
 cp -a "$SOURCEDIR"/include "$OUTDIR"/include
 cp -a "$OBJDIR"/include/* "$OUTDIR"/include
 cp "$OBJDIR"/.config "$OUTDIR"/.config
-touch -r "$OUTDIR"/Makefile "$OUTDIR"/include/linux/version.h
-touch -r "$OUTDIR"/.config "$OUTDIR"/include/linux/autoconf.h
