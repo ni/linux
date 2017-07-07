@@ -103,9 +103,9 @@
 
 		/* "LED_USER_GREEN" is on GPIO15 */
 		active {
-			label = "nilrt:active:green";
+			label = "nilrt:status:green";
 			gpios = <&gpio 15 0>;
-			default-state = "off";
+			default-state = "on";
 		};
 
 		/* "ZYNQ_LED0_P1" is on GPIO46 */
