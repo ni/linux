@@ -15,6 +15,7 @@
 #include <linux/acpi.h>
 #include <linux/bitops.h>
 #include <linux/device.h>
+#include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -29,7 +30,9 @@
 #define WDT_RELOAD_PORT_EN	BIT(7)
 #define WDT_CTRL_TRIG_POL	BIT(4)
 #define WDT_RELOAD_TRIG_POL	BIT(6)
+#define WDT_CTRL_INTERRUPT_EN	BIT(5)
 
+#define WDT_STATUS		0
 #define WDT_CTRL		1
 #define WDT_RELOAD_CTRL		2
 #define WDT_PRESET_PRESCALE	4
@@ -113,6 +116,31 @@ static int nic7018_set_timeout(struct watchdog_device *wdd,
 	wdt->period = config->period;
 
 	return 0;
+}
+
+static irqreturn_t nic7018_thread_isr(int irq, void *wdt_arg)
+{
+	struct nic7018_wdt *wdt = wdt_arg;
+	struct watchdog_device *wdd = &wdt->wdd;
+	u8 status, control;
+
+	status = inb(wdt->io_base + WDT_STATUS);
+
+	/* IRQ line asserted */
+	if (status & 0x20) {
+
+		mutex_lock(&wdt->lock);
+
+		control = inb(wdt->io_base + WDT_CTRL);
+		/* Disable IRQ line */
+		outb(control & ~WDT_CTRL_INTERRUPT_EN,
+		     wdt->io_base + WDT_CTRL);
+
+		mutex_unlock(&wdt->lock);
+
+		kobject_uevent(&wdd->parent->kobj, KOBJ_CHANGE);
+	}
+	return IRQ_HANDLED;
 }
 
 static int nic7018_start(struct watchdog_device *wdd)
@@ -249,6 +277,7 @@ static WDT_ATTR(enable_soft_ping, WDT_RELOAD_CTRL, WDT_RELOAD_PORT_EN);
 static WDT_ATTR(trigger_polarity, WDT_CTRL, WDT_CTRL_TRIG_POL);
 static WDT_ATTR(keepalive_trigger_polarity, WDT_RELOAD_CTRL,
 		WDT_RELOAD_TRIG_POL);
+static WDT_ATTR(enable_interrupt, WDT_CTRL, WDT_CTRL_INTERRUPT_EN);
 
 static ssize_t wdt_trig_show(struct device *dev,
 			     struct device_attribute *da,
@@ -333,6 +362,7 @@ static struct attribute *nic7018_wdt_attrs[] = {
 	&dev_attr_enable_soft_ping.dev_attr.attr,
 	&dev_attr_trigger_polarity.dev_attr.attr,
 	&dev_attr_keepalive_trigger_polarity.dev_attr.attr,
+	&dev_attr_enable_interrupt.dev_attr.attr,
 	&dev_attr_trigger.dev_attr.attr,
 	&dev_attr_keepalive_trigger.dev_attr.attr,
 	NULL
@@ -345,7 +375,7 @@ static int nic7018_probe(struct platform_device *pdev)
 	struct watchdog_device *wdd;
 	struct nic7018_wdt *wdt;
 	struct resource *io_rc;
-	int ret;
+	int ret, irq;
 
 	wdt = devm_kzalloc(dev, sizeof(*wdt), GFP_KERNEL);
 	if (!wdt)
@@ -365,6 +395,10 @@ static int nic7018_probe(struct platform_device *pdev)
 		return -EBUSY;
 	}
 
+	irq = platform_get_irq(pdev, 0);
+	if (!irq)
+		return -EINVAL;
+
 	mutex_init(&wdt->lock);
 
 	wdt->io_base = io_rc->start;
@@ -383,6 +417,15 @@ static int nic7018_probe(struct platform_device *pdev)
 	ret = watchdog_init_timeout(wdd, timeout, dev);
 	if (ret)
 		dev_warn(dev, "unable to set timeout value, using default\n");
+
+	ret = devm_request_threaded_irq(dev, irq, NULL,
+					nic7018_thread_isr,
+					IRQF_ONESHOT,
+					KBUILD_MODNAME, wdt);
+	if (ret) {
+		dev_err(dev, "failed to register interrupt handler\n");
+		return ret;
+	}
 
 	/* Unlock WDT register */
 	outb(UNLOCK, wdt->io_base + WDT_REG_LOCK);
