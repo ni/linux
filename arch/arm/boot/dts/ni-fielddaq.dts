@@ -108,17 +108,17 @@
 			default-state = "on";
 		};
 
-		/* "ZYNQ_LED0_P1" is on GPIO46 */
+		/* "ZYNQ_LED0_P1" is on GPIO47 */
 		port1 {
 			label = "nilrt:port1:green";
-			gpios = <&gpio 46 0>;
+			gpios = <&gpio 47 0>;
 			linux,default-trigger = "dsa-0:00:01:link";
 		};
 
-		/* "ZYNQ_LED0_P2" is on GPIO47 */
+		/* "ZYNQ_LED0_P2" is on GPIO46 */
 		port2 {
 			label = "nilrt:port2:green";
-			gpios = <&gpio 47 0>;
+			gpios = <&gpio 46 0>;
 			linux,default-trigger = "dsa-0:00:02:link";
 		};
 	};
