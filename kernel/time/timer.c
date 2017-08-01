@@ -197,6 +197,7 @@ EXPORT_SYMBOL(jiffies_64);
 
 struct timer_base {
 	raw_spinlock_t		lock;
+	int					expired_levels;
 	struct timer_list	*running_timer;
 #ifdef CONFIG_PREEMPT_RT_FULL
 	struct swait_queue_head	wait_for_running_timer;
@@ -208,6 +209,7 @@ struct timer_base {
 	bool			must_forward_clk;
 	DECLARE_BITMAP(pending_map, WHEEL_SIZE);
 	struct hlist_head	vectors[WHEEL_SIZE];
+	struct hlist_head	expired_lists[LVL_DEPTH];
 } ____cacheline_aligned;
 
 static DEFINE_PER_CPU(struct timer_base, timer_bases[NR_BASES]);
@@ -1342,7 +1344,8 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
 	}
 }
 
-static void expire_timers(struct timer_base *base, struct hlist_head *head)
+static void __expire_timers(struct timer_base *base,
+				   struct hlist_head *head)
 {
 	while (!hlist_empty(head)) {
 		struct timer_list *timer;
@@ -1372,21 +1375,49 @@ static void expire_timers(struct timer_base *base, struct hlist_head *head)
 	}
 }
 
-static int __collect_expired_timers(struct timer_base *base,
-				    struct hlist_head *heads)
+static void expire_timers(struct timer_base *base)
 {
-	unsigned long clk = base->clk;
+	struct hlist_head *head;
+	int levels = base->expired_levels;
+
+	while (levels--) {
+		head = base->expired_lists + levels;
+		__expire_timers(base, head);
+	}
+
+	/*
+	 * Zero base->expired_levels after processing all base->expired_lists
+	 * to signal it's ready to get re-populated. Otherwise, we race with
+	 * tick_find_expired() when base->lock is temporarily dropped in
+	 * __expire_timers()
+	 */
+	base->expired_levels = 0;
+}
+
+static int __collect_expired_timers(struct timer_base *base)
+{
 	struct hlist_head *vec;
-	int i, levels = 0;
+	struct hlist_head *expired_list = base->expired_lists;
+	unsigned long clk;
+	int i;
 	unsigned int idx;
 
+	/*
+	 * expire_timers() must be called at least once before we can
+	 * collect more timers.
+	 */
+	if (base->expired_levels)
+		return base->expired_levels;
+
+	clk = base->clk;
 	for (i = 0; i < LVL_DEPTH; i++) {
 		idx = (clk & LVL_MASK) + i * LVL_SIZE;
 
 		if (__test_and_clear_bit(idx, base->pending_map)) {
 			vec = base->vectors + idx;
-			hlist_move_list(vec, heads++);
-			levels++;
+			hlist_move_list(vec, expired_list);
+			base->expired_levels++;
+			expired_list++;
 		}
 		/* Is it time to look at the next level? */
 		if (clk & LVL_CLK_MASK)
@@ -1394,7 +1425,8 @@ static int __collect_expired_timers(struct timer_base *base,
 		/* Shift clock for the next level granularity */
 		clk >>= LVL_CLK_SHIFT;
 	}
-	return levels;
+
+	return base->expired_levels;
 }
 
 #ifdef CONFIG_NO_HZ_COMMON
@@ -1593,8 +1625,7 @@ void timer_clear_idle(void)
 	base->is_idle = false;
 }
 
-static int collect_expired_timers(struct timer_base *base,
-				  struct hlist_head *heads)
+static int collect_expired_timers(struct timer_base *base)
 {
 	/*
 	 * NOHZ optimization. After a long idle sleep we need to forward the
@@ -1615,15 +1646,46 @@ static int collect_expired_timers(struct timer_base *base,
 		}
 		base->clk = next;
 	}
-	return __collect_expired_timers(base, heads);
+	return __collect_expired_timers(base);
 }
 #else
-static inline int collect_expired_timers(struct timer_base *base,
-					 struct hlist_head *heads)
+static inline int collect_expired_timers(struct timer_base *base)
 {
-	return __collect_expired_timers(base, heads);
+	return __collect_expired_timers(base);
 }
 #endif
+
+/*
+ * Increments timer_base to current jiffies or until first expired
+ * timer is found. Return number of expired levels.
+ */
+static int find_expired_timers(struct timer_base *base)
+{
+	unsigned long int end_clk = jiffies;
+	int expired_levels = 0;
+
+	while (time_after_eq(end_clk, base->clk) && !expired_levels) {
+		expired_levels = collect_expired_timers(base);
+		base->clk++;
+	}
+
+	return expired_levels;
+}
+
+/*
+ * Called from CPU tick routine to collect expired timers up to current
+ * jiffies. Return number of expired levels.
+ */
+static int tick_find_expired(struct timer_base *base)
+{
+	int levels;
+
+	raw_spin_lock(&base->lock);
+	levels = find_expired_timers(base);
+	raw_spin_unlock(&base->lock);
+
+	return levels;
+}
 
 /*
  * Called from the timer interrupt handler to charge one tick to the current
@@ -1652,22 +1714,12 @@ void update_process_times(int user_tick)
  */
 static inline void __run_timers(struct timer_base *base)
 {
-	struct hlist_head heads[LVL_DEPTH];
-	int levels;
-
-	if (!time_after_eq(jiffies, base->clk))
-		return;
-
 	raw_spin_lock_irq(&base->lock);
 
-	while (time_after_eq(jiffies, base->clk)) {
+	do {
+		expire_timers(base);
+	} while (find_expired_timers(base));
 
-		levels = collect_expired_timers(base, heads);
-		base->clk++;
-
-		while (levels--)
-			expire_timers(base, heads + levels);
-	}
 	raw_spin_unlock_irq(&base->lock);
 	wakeup_timer_waiters(base);
 }
@@ -1707,12 +1759,12 @@ void run_local_timers(void)
 
 	hrtimer_run_queues();
 	/* Raise the softirq only if required. */
-	if (time_before(jiffies, base->clk)) {
+	if (time_before(jiffies, base->clk) || !tick_find_expired(base)) {
 		if (!IS_ENABLED(CONFIG_NO_HZ_COMMON))
 			return;
 		/* CPU is awake, so check the deferrable base. */
 		base++;
-		if (time_before(jiffies, base->clk))
+		if (time_before(jiffies, base->clk) || !tick_find_expired(base))
 			return;
 	}
 	raise_softirq(TIMER_SOFTIRQ);
@@ -1893,6 +1945,7 @@ int timers_dead_cpu(unsigned int cpu)
 		forward_timer_base(new_base);
 
 		BUG_ON(old_base->running_timer);
+		BUG_ON(old_base->expired_levels);
 
 		for (i = 0; i < WHEEL_SIZE; i++)
 			migrate_timer_list(new_base, old_base->vectors + i);
