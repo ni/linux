@@ -292,9 +292,6 @@ static int niwatchdog_misc_open(struct inode *inode, struct file *file)
 	struct miscdevice *misc_dev = file->private_data;
 	struct niwatchdog *niwatchdog = container_of(
 		misc_dev, struct niwatchdog, misc_dev);
-	struct sched_param param;
-	struct irq_desc *desc;
-	int ret;
 
 	file->private_data = niwatchdog;
 
@@ -303,23 +300,8 @@ static int niwatchdog_misc_open(struct inode *inode, struct file *file)
 		return -EBUSY;
 	}
 
-	ret = request_threaded_irq(niwatchdog->irq, NULL, niwatchdog_irq,
-				   IRQF_ONESHOT, NIWATCHDOG_NAME, niwatchdog);
-	if (ret) {
-		dev_err(&niwatchdog->acpi_device->dev, "failed to get irq");
-		atomic_inc(&niwatchdog->available);
-		return ret;
-	}
-
-	desc = irq_to_desc(niwatchdog->irq);
-	param.sched_priority = MAX_RT_PRIO - 1;
-	ret = sched_setscheduler_nocheck(desc->action->thread, SCHED_FIFO,
-					 &param);
-	if (ret)
-		dev_err(&niwatchdog->acpi_device->dev,
-			"failed to raise irq handler priority");
-
-	return ret;
+	return request_threaded_irq(niwatchdog->irq, NULL, niwatchdog_irq,
+				    IRQF_ONESHOT, NIWATCHDOG_NAME, niwatchdog);
 }
 
 static int niwatchdog_misc_release(struct inode *inode, struct file *file)
