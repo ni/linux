@@ -299,15 +299,13 @@ static int niwatchdog_misc_open(struct inode *inode, struct file *file)
 		return -EBUSY;
 	}
 
-	return request_threaded_irq(niwatchdog->irq, NULL, niwatchdog_irq,
-				    IRQF_ONESHOT, NIWATCHDOG_NAME, niwatchdog);
+	return 0;
 }
 
 static int niwatchdog_misc_release(struct inode *inode, struct file *file)
 {
 	struct niwatchdog *niwatchdog = file->private_data;
 
-	free_irq(niwatchdog->irq, niwatchdog);
 	atomic_inc(&niwatchdog->available);
 	return 0;
 }
@@ -457,6 +455,13 @@ static acpi_status niwatchdog_resources(struct acpi_resource *res, void *data)
 		}
 
 		niwatchdog->irq = res->data.irq.interrupts[0];
+
+		if (devm_request_threaded_irq(dev, niwatchdog->irq, NULL,
+					      niwatchdog_irq, IRQF_ONESHOT,
+					      NIWATCHDOG_NAME, niwatchdog)) {
+			dev_err(dev, "failed to get interrupt\n");
+			return AE_ERROR;
+		}
 
 		return AE_OK;
 
