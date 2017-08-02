@@ -970,32 +970,15 @@ static int nizynqcpld_watchdog_misc_open(struct inode *inode,
 	struct miscdevice *misc_dev = file->private_data;
 	struct nizynqcpld *cpld = container_of(misc_dev, struct nizynqcpld,
 					       watchdog.misc_dev);
-	struct device_node *watchdogs_node;
-	struct device_node *boot_watchdog_node;
 
 	file->private_data = cpld;
-
-	/* Find the watchdogs node. */
-	watchdogs_node = of_find_node_by_name(cpld->client->dev.of_node,
-					      "watchdogs");
-	if (!watchdogs_node)
-		return -ENOENT;
-
-	/* Get the boot watchdog node. */
-	boot_watchdog_node = of_find_node_by_name(watchdogs_node,
-						  "boot-watchdog");
-	if (!boot_watchdog_node)
-		return -ENOENT;
 
 	if (!atomic_dec_and_test(&cpld->watchdog.available)) {
 		atomic_inc(&cpld->watchdog.available);
 		return -EBUSY;
 	}
 
-	cpld->irq = irq_of_parse_and_map(boot_watchdog_node, 0);
-
-	return request_threaded_irq(cpld->irq, NULL, nizynqcpld_watchdog_irq,
-				    IRQF_ONESHOT, NIWATCHDOG_NAME, cpld);
+	return 0;
 }
 
 static int nizynqcpld_watchdog_misc_release(struct inode *inode,
@@ -1003,7 +986,6 @@ static int nizynqcpld_watchdog_misc_release(struct inode *inode,
 {
 	struct nizynqcpld *cpld = file->private_data;
 
-	free_irq(cpld->irq, cpld);
 	atomic_inc(&cpld->watchdog.available);
 	return 0;
 }
@@ -1599,11 +1581,38 @@ static int nizynqcpld_probe(struct i2c_client *client,
 
 	if (desc->watchdog_desc) {
 		struct nizynqcpld_watchdog *watchdog = &cpld->watchdog;
+		struct device_node *node;
 
 		watchdog->desc = desc->watchdog_desc;
 		atomic_set(&watchdog->available, 1);
 		init_waitqueue_head(&watchdog->irq_event);
 		watchdog->expired = false;
+
+		/* Find the watchdogs node. */
+		node = of_find_node_by_name(cpld->client->dev.of_node,
+					    "watchdogs");
+		if (!node) {
+			err = -ENOENT;
+			goto err_watchdog_register;
+		}
+
+		/* Get the boot watchdog node. */
+		node = of_find_node_by_name(node, "boot-watchdog");
+		if (!node) {
+			err = -ENOENT;
+			goto err_watchdog_register;
+		}
+
+		cpld->irq = irq_of_parse_and_map(node, 0);
+
+		err = devm_request_threaded_irq(&client->dev, cpld->irq, NULL,
+						nizynqcpld_watchdog_irq,
+						IRQF_ONESHOT, NIWATCHDOG_NAME,
+						cpld);
+		if (err) {
+			dev_err(cpld->dev, "failed to get irq\n");
+			goto err_watchdog_register;
+		}
 
 		watchdog->misc_dev.minor = MISC_DYNAMIC_MINOR;
 		watchdog->misc_dev.name  = NIWATCHDOG_NAME;
