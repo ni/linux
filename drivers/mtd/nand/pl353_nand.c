@@ -144,40 +144,73 @@ static const struct pl353_nand_command_format pl353_nand_commands[] = {
 };
 
 /* Define default oob placement schemes for large and small page devices */
-static struct nand_ecclayout nand_oob_16 = {
-	.eccbytes = 3,
-	.eccpos = {0, 1, 2},
-	.oobfree = {
-		{.offset = 8,
-		 . length = 8} }
-};
 
-static struct nand_ecclayout nand_oob_64 = {
-	.eccbytes = 12,
-	.eccpos = {
-		   52, 53, 54, 55, 56, 57,
-		   58, 59, 60, 61, 62, 63},
-	.oobfree = {
-		{.offset = 2,
-		 .length = 50} }
-};
+static int pl353_ooblayout_ecc(struct mtd_info *mtd, int section,
+			struct mtd_oob_region *oobregion)
+{
+	if (section)
+		return -ERANGE;
 
-static struct nand_ecclayout ondie_nand_oob_64 = {
-	.eccbytes = 32,
-
-	.eccpos = {
-		8, 9, 10, 11, 12, 13, 14, 15,
-		24, 25, 26, 27, 28, 29, 30, 31,
-		40, 41, 42, 43, 44, 45, 46, 47,
-		56, 57, 58, 59, 60, 61, 62, 63
-	},
-
-	.oobfree = {
-		{ .offset = 4, .length = 4 },
-		{ .offset = 20, .length = 4 },
-		{ .offset = 36, .length = 4 },
-		{ .offset = 52, .length = 4 }
+	if (mtd->oobsize == 64) {
+		oobregion->offset = 52;
+		oobregion->length = 12;
+	} else {
+		oobregion->offset = 0;
+		oobregion->length = 3;
 	}
+
+	return 0;
+}
+
+static int pl353_ooblayout_free(struct mtd_info *mtd, int section,
+				struct mtd_oob_region *oobregion)
+{
+	if (section)
+		return -ERANGE;
+
+	if (mtd->oobsize == 64) {
+		oobregion->offset = 2;
+		oobregion->length = 50;
+	} else {
+		oobregion->offset = 8;
+		oobregion->length = 8;
+	}
+
+	return 0;
+}
+
+static const struct mtd_ooblayout_ops pl353_ooblayout_ops = {
+	.ecc = pl353_ooblayout_ecc,
+	.free = pl353_ooblayout_free,
+};
+
+static int pl353_ondie_ooblayout_ecc(struct mtd_info *mtd, int section,
+				struct mtd_oob_region *oobregion)
+{
+	if (section > 3)
+		return -ERANGE;
+
+	oobregion->length = 8;
+	oobregion->offset = 8 * (section * 2 + 1);
+
+	return 0;
+}
+
+static int pl353_ondie_ooblayout_free(struct mtd_info *mtd, int section,
+				struct mtd_oob_region *oobregion)
+{
+	if (section > 3)
+		return -ERANGE;
+
+	oobregion->length = 4;
+	oobregion->offset = 4 + section * 16;
+
+	return 0;
+}
+
+static const struct mtd_ooblayout_ops pl353_ondie_ooblayout_ops = {
+	.ecc = pl353_ondie_ooblayout_ecc,
+	.free = pl353_ondie_ooblayout_free,
 };
 
 /* Generic flash bbt decriptors */
@@ -1062,7 +1095,6 @@ static void pl353_nand_ecc_init(struct mtd_info *mtd, int ondie_ecc_state)
 		 * SMC controller
 		 */
 		nand_chip->ecc.bytes = 0;
-		nand_chip->ecc.layout = &ondie_nand_oob_64;
 		nand_chip->ecc.read_page = pl353_nand_read_page_raw;
 		nand_chip->ecc.read_subpage = pl353_nand_read_subpage_raw;
 		nand_chip->ecc.write_page = pl353_nand_write_page_raw;
@@ -1091,6 +1123,8 @@ static void pl353_nand_ecc_init(struct mtd_info *mtd, int ondie_ecc_state)
 		 */
 		nand_chip->bbt_td = &bbt_main_descr;
 		nand_chip->bbt_md = &bbt_mirror_descr;
+
+		mtd_set_ooblayout(mtd, &pl353_ondie_ooblayout_ops);
 	} else {
 		/* Hardware ECC generates 3 bytes ECC code for each 512 bytes */
 		nand_chip->ecc.bytes = 3;
@@ -1121,10 +1155,7 @@ static void pl353_nand_ecc_init(struct mtd_info *mtd, int ondie_ecc_state)
 			break;
 		}
 
-		if (mtd->oobsize == 16)
-			nand_chip->ecc.layout = &nand_oob_16;
-		else if (mtd->oobsize == 64)
-			nand_chip->ecc.layout = &nand_oob_64;
+		mtd_set_ooblayout(mtd, &pl353_ooblayout_ops);
 	}
 }
 
