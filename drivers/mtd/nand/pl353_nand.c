@@ -543,7 +543,8 @@ static int pl353_nand_write_page_hwecc(struct mtd_info *mtd,
 	int eccsteps = chip->ecc.steps;
 	uint8_t *ecc_calc = chip->buffers->ecccalc;
 	const uint8_t *p = buf;
-	uint32_t *eccpos = chip->ecc.layout->eccpos;
+	struct mtd_oob_region oobregion = { };
+	int section = 0;
 	unsigned long data_phase_addr;
 	uint8_t *oob_ptr;
 
@@ -564,8 +565,14 @@ static int pl353_nand_write_page_hwecc(struct mtd_info *mtd,
 	p = buf;
 	chip->ecc.calculate(mtd, p, &ecc_calc[0]);
 
-	for (i = 0; i < chip->ecc.total; i++)
-		chip->oob_poi[eccpos[i]] = ~(ecc_calc[i]);
+	for (i = 0; i < chip->ecc.total; i++) {
+		if (!oobregion.length)
+			mtd_ooblayout_ecc(mtd, section++, &oobregion);
+
+		chip->oob_poi[oobregion.offset] = ~(ecc_calc[i]);
+		oobregion.length--;
+		oobregion.offset++;
+	}
 
 	/* Clear ECC last bit */
 	data_phase_addr = (unsigned long __force)chip->IO_ADDR_W;
@@ -605,14 +612,21 @@ static int pl353_nand_write_page_swecc(struct mtd_info *mtd,
 	int eccsteps = chip->ecc.steps;
 	uint8_t *ecc_calc = chip->buffers->ecccalc;
 	const uint8_t *p = buf;
-	uint32_t *eccpos = chip->ecc.layout->eccpos;
+	struct mtd_oob_region oobregion = { };
+	int section = 0;
 
 	/* Software ecc calculation */
 	for (i = 0; eccsteps; eccsteps--, i += eccbytes, p += eccsize)
 		chip->ecc.calculate(mtd, p, &ecc_calc[i]);
 
-	for (i = 0; i < chip->ecc.total; i++)
-		chip->oob_poi[eccpos[i]] = ecc_calc[i];
+	for (i = 0; i < chip->ecc.total; i++) {
+		if (!oobregion.length)
+			mtd_ooblayout_ecc(mtd, section++, &oobregion);
+
+		chip->oob_poi[oobregion.offset] = ecc_calc[i];
+		oobregion.length--;
+		oobregion.offset++;
+	}
 
 	chip->ecc.write_page_raw(mtd, chip, buf, 1, page);
 
@@ -642,7 +656,8 @@ static int pl353_nand_read_page_hwecc(struct mtd_info *mtd,
 	uint8_t *p = buf;
 	uint8_t *ecc_calc = chip->buffers->ecccalc;
 	uint8_t *ecc_code = chip->buffers->ecccode;
-	uint32_t *eccpos = chip->ecc.layout->eccpos;
+	struct mtd_oob_region oobregion = { };
+	int section = 0;
 	unsigned long data_phase_addr;
 	uint8_t *oob_ptr;
 
@@ -681,8 +696,14 @@ static int pl353_nand_read_page_hwecc(struct mtd_info *mtd,
 	oob_ptr += (mtd->oobsize - PL353_NAND_LAST_TRANSFER_LENGTH);
 	chip->read_buf(mtd, oob_ptr, PL353_NAND_LAST_TRANSFER_LENGTH);
 
-	for (i = 0; i < chip->ecc.total; i++)
-		ecc_code[i] = ~(chip->oob_poi[eccpos[i]]);
+	for (i = 0; i < chip->ecc.total; i++) {
+		if (!oobregion.length)
+			mtd_ooblayout_ecc(mtd, section++, &oobregion);
+
+		ecc_code[i] = ~(chip->oob_poi[oobregion.offset]);
+		oobregion.length--;
+		oobregion.offset++;
+	}
 
 	eccsteps = chip->ecc.steps;
 	p = buf;
@@ -718,15 +739,22 @@ static int pl353_nand_read_page_swecc(struct mtd_info *mtd,
 	uint8_t *p = buf;
 	uint8_t *ecc_calc = chip->buffers->ecccalc;
 	uint8_t *ecc_code = chip->buffers->ecccode;
-	uint32_t *eccpos = chip->ecc.layout->eccpos;
+	struct mtd_oob_region oobregion = { };
+	int section = 0;
 
 	chip->ecc.read_page_raw(mtd, chip, buf, page, 1);
 
 	for (i = 0; eccsteps; eccsteps--, i += eccbytes, p += eccsize)
 		chip->ecc.calculate(mtd, p, &ecc_calc[i]);
 
-	for (i = 0; i < chip->ecc.total; i++)
-		ecc_code[i] = chip->oob_poi[eccpos[i]];
+	for (i = 0; i < chip->ecc.total; i++) {
+		if (!oobregion.length)
+			mtd_ooblayout_ecc(mtd, section++, &oobregion);
+
+		ecc_code[i] = chip->oob_poi[oobregion.offset];
+		oobregion.length--;
+		oobregion.offset++;
+	}
 
 	eccsteps = chip->ecc.steps;
 	p = buf;
