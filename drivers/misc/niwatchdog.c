@@ -47,7 +47,6 @@
 struct niwatchdog {
 	struct acpi_device *acpi_device;
 	u16 io_base;
-	u16 io_size;
 	u32 irq;
 	spinlock_t lock;
 	struct miscdevice misc_dev;
@@ -425,25 +424,35 @@ static const struct file_operations niwatchdog_misc_fops = {
 static acpi_status niwatchdog_resources(struct acpi_resource *res, void *data)
 {
 	struct niwatchdog *niwatchdog = data;
+	struct device *dev = &niwatchdog->acpi_device->dev;
+	u16 io_size;
 
 	switch (res->type) {
 	case ACPI_RESOURCE_TYPE_IO:
-		if ((niwatchdog->io_base != 0) ||
-		    (niwatchdog->io_size != 0)) {
-			dev_err(&niwatchdog->acpi_device->dev,
-				"too many IO resources\n");
+		if (niwatchdog->io_base != 0) {
+			dev_err(dev, "too many IO resources\n");
 			return AE_ERROR;
 		}
 
 		niwatchdog->io_base = res->data.io.minimum;
-		niwatchdog->io_size = res->data.io.address_length;
+		io_size = res->data.io.address_length;
+
+		if (io_size < NIWD_IO_SIZE) {
+			dev_err(dev, "memory region too small\n");
+			return AE_ERROR;
+		}
+
+		if (!devm_request_region(dev, niwatchdog->io_base, io_size,
+					 MODULE_NAME)) {
+			dev_err(dev, "failed to get memory region\n");
+			return AE_ERROR;
+		}
 
 		return AE_OK;
 
 	case ACPI_RESOURCE_TYPE_IRQ:
 		if (niwatchdog->irq != 0) {
-			dev_err(&niwatchdog->acpi_device->dev,
-				"too many IRQ resources\n");
+			dev_err(dev, "too many IRQ resources\n");
 			return AE_ERROR;
 		}
 
@@ -455,13 +464,9 @@ static acpi_status niwatchdog_resources(struct acpi_resource *res, void *data)
 		return AE_OK;
 
 	default:
-		dev_err(&niwatchdog->acpi_device->dev,
-			"unsupported resource type %d\n",
-			res->type);
+		dev_err(dev, "unsupported resource type %d\n", res->type);
 		return AE_ERROR;
 	}
-
-	return AE_OK;
 }
 
 static int niwatchdog_acpi_remove(struct acpi_device *device)
@@ -473,54 +478,29 @@ static int niwatchdog_acpi_remove(struct acpi_device *device)
 	sysfs_remove_files(&niwatchdog->acpi_device->dev.kobj,
 			   niwatchdog_attrs);
 
-	if ((niwatchdog->io_base != 0) &&
-	    (niwatchdog->io_size == NIWD_IO_SIZE))
-		release_region(niwatchdog->io_base, niwatchdog->io_size);
-
-	device->driver_data = NULL;
-
-	kfree(niwatchdog);
-
 	return 0;
 }
 
 static int niwatchdog_acpi_add(struct acpi_device *device)
 {
+	struct device *dev = &device->dev;
 	struct niwatchdog *niwatchdog;
 	acpi_status acpi_ret;
 	int err;
 
-	niwatchdog = kzalloc(sizeof(*niwatchdog), GFP_KERNEL);
-
+	niwatchdog = devm_kzalloc(dev, sizeof(*niwatchdog), GFP_KERNEL);
 	if (!niwatchdog)
 		return -ENOMEM;
 
 	device->driver_data = niwatchdog;
-
 	niwatchdog->acpi_device = device;
 
 	acpi_ret = acpi_walk_resources(device->handle, METHOD_NAME__CRS,
 				       niwatchdog_resources, niwatchdog);
-
-	if (ACPI_FAILURE(acpi_ret) ||
-	    (niwatchdog->io_base == 0) ||
-	    (niwatchdog->io_size != NIWD_IO_SIZE) ||
-	    (niwatchdog->irq == 0)) {
-		niwatchdog_acpi_remove(device);
+	if (ACPI_FAILURE(acpi_ret) || niwatchdog->io_base == 0 ||
+	    niwatchdog->irq == 0) {
+		dev_err(dev, "failed to get resources\n");
 		return -ENODEV;
-	}
-
-	if (!request_region(niwatchdog->io_base, niwatchdog->io_size,
-	    MODULE_NAME)) {
-		niwatchdog_acpi_remove(device);
-		return -EBUSY;
-	}
-
-	err = sysfs_create_files(&niwatchdog->acpi_device->dev.kobj,
-				 niwatchdog_attrs);
-	if (err) {
-		niwatchdog_acpi_remove(device);
-		return err;
 	}
 
 	spin_lock_init(&niwatchdog->lock);
@@ -529,21 +509,22 @@ static int niwatchdog_acpi_add(struct acpi_device *device)
 	init_waitqueue_head(&niwatchdog->irq_event);
 	niwatchdog->expired = false;
 
+	err = sysfs_create_files(&dev->kobj, niwatchdog_attrs);
+	if (err) {
+		dev_err(dev, "failed to create sysfs attributes\n");
+		return err;
+	}
+
 	niwatchdog->misc_dev.minor = MISC_DYNAMIC_MINOR;
 	niwatchdog->misc_dev.name  = NIWATCHDOG_NAME;
 	niwatchdog->misc_dev.fops  = &niwatchdog_misc_fops;
 
 	err = misc_register(&niwatchdog->misc_dev);
-
 	if (err) {
-		niwatchdog_acpi_remove(device);
+		dev_err(dev, "failed to register misc device\n");
+		sysfs_remove_files(&dev->kobj, niwatchdog_attrs);
 		return err;
 	}
-
-	dev_info(&niwatchdog->acpi_device->dev,
-		"IO range 0x%04X-0x%04X, IRQ %d\n",
-		niwatchdog->io_base,
-		niwatchdog->io_base + niwatchdog->io_size - 1, niwatchdog->irq);
 
 	return 0;
 }
@@ -562,18 +543,7 @@ static struct acpi_driver niwatchdog_acpi_driver = {
 		},
 };
 
-static int __init niwatchdog_init(void)
-{
-	return acpi_bus_register_driver(&niwatchdog_acpi_driver);
-}
-
-static void __exit niwatchdog_exit(void)
-{
-	acpi_bus_unregister_driver(&niwatchdog_acpi_driver);
-}
-
-module_init(niwatchdog_init);
-module_exit(niwatchdog_exit);
+module_acpi_driver(niwatchdog_acpi_driver);
 
 MODULE_DEVICE_TABLE(acpi, niwatchdog_device_ids);
 MODULE_DESCRIPTION("NI Watchdog");
