@@ -1,0 +1,6 @@
+/dts-v1/;
+/include/ "ni-elvisiii.dtsi"
+
+/ {
+	model = "NI ELVIS III";
+};
