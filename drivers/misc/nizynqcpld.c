@@ -76,6 +76,8 @@
 #define MYRIO_WIFISWCTRL_ENRELIRQ	0x04
 #define MYRIO_WIFISWCTRL_RELIRQ		0x40
 
+#define ELVISIII_WIFILEDCTRL_ADDR	0x0A
+
 struct nizynqcpld_led_desc {
 	const char *of_node_name;
 	u8 addr;
@@ -1215,6 +1217,37 @@ static struct nizynqcpld_led_desc sol_leds[] = {
 	},
 };
 
+static struct nizynqcpld_led_desc elvisiii_leds[] = {
+	{
+		.of_node_name		= "status-0",
+		.addr			= DOSX_LED,
+		.bit			= 1 << 2,
+		.pattern_lo_addr	= DOSX_STATUSLEDSHIFTBYTE0,
+		/* write byte 1 first */
+		.pattern_hi_addr	= DOSX_STATUSLEDSHIFTBYTE1,
+	},
+	{
+		.of_node_name		= "eth0-0",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 1,
+	},
+	{
+		.of_node_name		= "eth0-1",
+		.addr			= DOSX_ETHERNETLED,
+		.bit			= 1 << 0,
+	},
+	{
+		.of_node_name		= "wifi-0",
+		.addr			= ELVISIII_WIFILEDCTRL_ADDR,
+		.bit			= 1 << 1,
+	},
+	{
+		.of_node_name		= "wifi-1",
+		.addr			= ELVISIII_WIFILEDCTRL_ADDR,
+		.bit			= 1 << 0,
+	},
+};
+
 static struct nizynqcpld_watchdog_desc dosxv4_watchdog_desc = {
 	.watchdog_period_ns	= 24000,
 };
@@ -1332,6 +1365,20 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.scratch_sr_addr        = DOSX_SCRATCHPADSR,
 		.switch_addr            = PROTO_PROCESSORMODE,
 		.watchdog_addr          = DOSX_WATCHDOGCONTROL,
+	},
+	/* ELVIS III CPLD */
+	{
+		.attrs			= dosequis6_attrs,
+		.supported_version	= 1,
+		.supported_product	= 6,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
+		.led_descs		= elvisiii_leds,
+		.num_led_descs		= ARRAY_SIZE(elvisiii_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= PROTO_PROCESSORMODE,
+		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
 };
 
