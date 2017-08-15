@@ -47,7 +47,8 @@
 #define	KSZPHY_INTCS_REMOTE_FAULT		BIT(9)
 #define	KSZPHY_INTCS_LINK_UP			BIT(8)
 #define	KSZPHY_INTCS_ALL			(KSZPHY_INTCS_LINK_UP |\
-						KSZPHY_INTCS_LINK_DOWN)
+						KSZPHY_INTCS_LINK_DOWN |\
+						KSZPHY_INTCS_LINK_PARTNER_ACK)
 
 /* PHY Control 1 */
 #define	MII_KSZPHY_CTRL_1			0x1e
@@ -89,6 +90,8 @@ static struct kszphy_hw_stat kszphy_hw_stats[] = {
 struct ksz9031_timeout {
 	unsigned long autoneg_timeout_jiffies;
 	int timeout_set;
+	struct delayed_work poll_work;
+	struct phy_device *phydev;
 };
 
 struct kszphy_type {
@@ -533,12 +536,20 @@ static int ksz9031_enable_edpd(struct phy_device *phydev)
 				      reg | MII_KSZ9031RN_EDPD_ENABLE);
 }
 
+static void ksz9031_autoneg_poll(struct work_struct *work);
 static int ksz9031_probe(struct phy_device *phydev)
 {
-	phydev->priv = devm_kzalloc(&phydev->mdio.dev,
-				    sizeof(struct ksz9031_timeout), GFP_KERNEL);
-	if (!phydev->priv)
+	struct ksz9031_timeout *timeout =
+		devm_kzalloc(&phydev->mdio.dev,
+			     sizeof(struct ksz9031_timeout), GFP_KERNEL);
+
+	if (!timeout)
 		return -ENOMEM;
+
+	INIT_DELAYED_WORK(&timeout->poll_work, ksz9031_autoneg_poll);
+
+	timeout->phydev = phydev;
+	phydev->priv = timeout;
 
 	return 0;
 }
@@ -657,13 +668,31 @@ static int ksz9031_read_status(struct phy_device *phydev)
 
 		if (time_is_before_jiffies(timeout->autoneg_timeout_jiffies)) {
 			phy_init_hw(phydev);
+			phydev->link = 0;
 			timeout->timeout_set = 0;
+			if (phydev->drv->config_intr &&
+			    phy_interrupt_is_valid(phydev))
+				phydev->drv->config_intr(phydev);
+		} else {
+			queue_delayed_work(system_power_efficient_wq,
+					   &timeout->poll_work,
+					   PHY_STATE_TIME * HZ);
 		}
 	} else {
 		timeout->timeout_set = 0;
 	}
 
 	return 0;
+}
+
+static void ksz9031_autoneg_poll(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct ksz9031_timeout *timeout =
+		container_of(dwork, struct ksz9031_timeout, poll_work);
+	struct phy_device *phydev = timeout->phydev;
+
+	ksz9031_read_status(phydev);
 }
 
 static int ksz8873mll_config_aneg(struct phy_device *phydev)
