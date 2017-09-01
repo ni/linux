@@ -35,6 +35,8 @@
 #define PCI_DEVICE_ID_INTEL_APL_EMMC	0x5acc
 #define PCI_DEVICE_ID_INTEL_APL_SDIO	0x5ad0
 
+#define PCI_SUBDEVICE_ID_NI_78E3	0x78e3
+
 /*
  * PCI registers
  */
