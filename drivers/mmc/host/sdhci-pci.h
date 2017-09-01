@@ -83,6 +83,8 @@
 	.driver_data = (kernel_ulong_t)&(sdhci_##cfg) \
 }
 
+#define PCI_SUBDEVICE_ID_NI_78E3	0x78e3
+
 /*
  * PCI registers
  */
