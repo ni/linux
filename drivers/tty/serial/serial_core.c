@@ -1066,8 +1066,8 @@ static int uart_tiocmget(struct tty_struct *tty)
 		spin_unlock_irq(&uport->lock);
 	}
 
-out_up:
 #ifdef CONFIG_FPGA_PERIPHERAL
+out_up:
 	up_read(&uport->fpga_lock);
 #endif
 out:
@@ -1101,8 +1101,8 @@ uart_tiocmset(struct tty_struct *tty, unsigned int set, unsigned int clear)
 		ret = 0;
 	}
 
-out_up:
 #ifdef CONFIG_FPGA_PERIPHERAL
+out_up:
 	up_read(&uport->fpga_lock);
 #endif
 out:
