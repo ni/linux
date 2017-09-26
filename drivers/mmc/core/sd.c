@@ -797,6 +797,13 @@ try_again:
 		}
 	}
 
+	if (host->caps2 & MMC_CAP2_REQUIRE_1_8V &&
+	    host->ios.signal_voltage != MMC_SIGNAL_VOLTAGE_180) {
+		pr_err("%s: Host requires UHS-capable card\n",
+		       mmc_hostname(host));
+		return -EINVAL;
+	}
+
 	if (mmc_host_is_spi(host))
 		err = mmc_send_cid(host, cid);
 	else
