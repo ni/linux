@@ -668,7 +668,7 @@ static irqreturn_t phy_change(struct phy_device *phydev)
 	if (phy_interrupt_is_valid(phydev)) {
 		if (phydev->drv->did_interrupt &&
 		    !phydev->drv->did_interrupt(phydev))
-			goto ignore;
+			return IRQ_NONE;
 
 		if (phy_disable_interrupts(phydev))
 			goto phy_err;
@@ -680,27 +680,16 @@ static irqreturn_t phy_change(struct phy_device *phydev)
 	mutex_unlock(&phydev->lock);
 
 	if (phy_interrupt_is_valid(phydev)) {
-		atomic_dec(&phydev->irq_disable);
-		enable_irq(phydev->irq);
-
 		/* Reenable interrupts */
 		if (PHY_HALTED != phydev->state &&
 		    phy_config_interrupt(phydev, PHY_INTERRUPT_ENABLED))
-			goto irq_enable_err;
+			goto phy_err;
 	}
 
 	/* reschedule state queue work to run as soon as possible */
 	phy_trigger_machine(phydev, true);
 	return IRQ_HANDLED;
 
-ignore:
-	atomic_dec(&phydev->irq_disable);
-	enable_irq(phydev->irq);
-	return IRQ_NONE;
-
-irq_enable_err:
-	disable_irq(phydev->irq);
-	atomic_inc(&phydev->irq_disable);
 phy_err:
 	phy_error(phydev);
 	return IRQ_NONE;
@@ -733,9 +722,6 @@ static irqreturn_t phy_interrupt(int irq, void *phy_dat)
 	if (PHY_HALTED == phydev->state)
 		return IRQ_NONE;		/* It can't be ours.  */
 
-	disable_irq_nosync(irq);
-	atomic_inc(&phydev->irq_disable);
-
 	return phy_change(phydev);
 }
 
@@ -765,7 +751,6 @@ static int phy_enable_interrupts(struct phy_device *phydev)
  */
 int phy_start_interrupts(struct phy_device *phydev)
 {
-	atomic_set(&phydev->irq_disable, 0);
 	if (request_threaded_irq(phydev->irq, NULL, phy_interrupt,
 				 IRQF_ONESHOT | IRQF_SHARED,
 				 phydev_name(phydev), phydev) < 0) {
@@ -791,13 +776,6 @@ int phy_stop_interrupts(struct phy_device *phydev)
 		phy_error(phydev);
 
 	free_irq(phydev->irq, phydev);
-
-	/* If work indeed has been cancelled, disable_irq() will have
-	 * been left unbalanced from phy_interrupt() and enable_irq()
-	 * has to be called so that other devices on the line work.
-	 */
-	while (atomic_dec_return(&phydev->irq_disable) >= 0)
-		enable_irq(phydev->irq);
 
 	return err;
 }
