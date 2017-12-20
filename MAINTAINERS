@@ -12162,6 +12162,13 @@ S:	Orphan
 F:	drivers/media/platform/sh_vou.c
 F:	include/media/drv-intf/sh_vou.h
 
+SH1107 OLED CONTROLLER DRIVER
+M:	Wilson Lee <wilson.lee@ni.com>
+S:	Maintained
+F:	Documentation/devicetree/bindings/auxdisplay/sh1107.txt
+F:	drivers/auxdisplay/sh1107.c
+F:	drivers/auxdisplay/sh1107.h
+
 SI2157 MEDIA DRIVER
 M:	Antti Palosaari <crope@iki.fi>
 L:	linux-media@vger.kernel.org
