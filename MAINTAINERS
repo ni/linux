@@ -18763,6 +18763,14 @@ F:	drivers/misc/ocxl/
 F:	include/misc/ocxl*
 F:	include/uapi/misc/ocxl.h
 
+OEL9M1027 TRULY OLED MODULE DRIVER
+M:	Wilson Lee <wilson.lee@ni.com>
+S:	Maintained
+F:	Documentation/devicetree/bindings/auxdisplay/oel9m1027.txt
+F:	drivers/auxdisplay/oel9m1027.c
+F:	drivers/auxdisplay/oel9m1027fb.c
+F:	drivers/auxdisplay/oel9m1027.h
+
 OMAP AUDIO SUPPORT
 M:	Peter Ujfalusi <peter.ujfalusi@gmail.com>
 M:	Jarkko Nikula <jarkko.nikula@bitmer.com>
