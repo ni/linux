@@ -141,4 +141,28 @@ config IMG_ASCII_LCD
 	  development boards such as the MIPS Boston, MIPS Malta & MIPS SEAD3
 	  from Imagination Technologies.
 
+config OEL9M1027
+	tristate "OEL9M1027 LCD"
+	depends on FB
+	depends on SH1107
+	select FB_SYS_FILLRECT
+	select FB_SYS_COPYAREA
+	select FB_SYS_IMAGEBLIT
+	select FB_SYS_FOPS
+	default n
+	---help---
+	  If you have a Truly 64x128 2-color LCD, OEL9M1027 Series,
+	  say Y. You also need the sh1107 LCD Controller driver.
+
+	  Depends on the framebuffer support.
+
+	  The LCD framebuffer driver can be attached to a console.
+	  It will work fine. However, you can't attach it to the fbdev driver
+	  of the xorg server.
+
+	  To compile this as a module, choose M here:
+	  the modules will be called oel9m1027 and oel9m1027fb.
+
+	  If unsure, say N.
+
 endif # AUXDISPLAY
