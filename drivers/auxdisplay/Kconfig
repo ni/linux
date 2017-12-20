@@ -70,6 +70,19 @@ config KS0108_DELAY
 	  If you compile this as a module, you can still override this
 	  value using the module parameters.
 
+config SH1107
+	tristate "SH1107 LCD Controller"
+	depends on I2C
+	---help---
+	  If you have a LCD controlled by one or more sh1107
+	  controller, say Y. You will need also another more specific
+	  driver for your LCD.
+
+	  To compile this as a module, choose M here:
+	  the module will be called sh1107.
+
+	  If unsure, say N.
+
 config CFAG12864B
 	tristate "CFAG12864B LCD"
 	depends on X86
