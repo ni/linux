@@ -8736,6 +8736,14 @@ M:	Josh Poimboeuf <jpoimboe@redhat.com>
 S:	Supported
 F:	tools/objtool/
 
+OEL9M1027 TRULY OLED MODULE DRIVER
+M:	Wilson Lee <wilson.lee@ni.com>
+S:	Maintained
+F:	Documentation/devicetree/bindings/auxdisplay/oel9m1027.txt
+F:	drivers/auxdisplay/oel9m1027.c
+F:	drivers/auxdisplay/oel9m1027fb.c
+F:	drivers/auxdisplay/oel9m1027.h
+
 OMAP SUPPORT
 M:	Tony Lindgren <tony@atomide.com>
 L:	linux-omap@vger.kernel.org

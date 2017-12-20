@@ -1,0 +1,15 @@
+Binding for OEL9M1027 OLED display module manufactured by Truly
+
+Required properties:
+  - compatible : Compatibility string. Must be "truly,oel9m1027".
+
+Example:
+
+	oleddriver@3C {
+		compatible = "sinowealth,sh1107";
+		reg = <0x3C>;
+
+		oledmodule {
+			compatible = "truly,oel9m1027";
+		};
+	};
