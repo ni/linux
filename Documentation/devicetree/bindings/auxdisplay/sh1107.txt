@@ -1,0 +1,12 @@
+Binding for Sinowealth OLED driver
+
+Required properties:
+  - compatible: Compatibility string. Must be "sinowealth,sh1107".
+  - reg : i2c address of Truly OLED module (0x3C or 0x3D)
+
+Example:
+
+	oleddriver@3C {
+		compatible = "sinowealth,sh1107";
+		reg = <0x3C>;
+	};
