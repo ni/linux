@@ -248,6 +248,7 @@ silead	Silead Inc.
 silergy	Silergy Corp.
 siliconmitus	Silicon Mitus, Inc.
 simtek
+sinowealth	Sino Wealth Electronic Ltd.
 sirf	SiRF Technology, Inc.
 sis	Silicon Integrated Systems Corp.
 sitronix	Sitronix Technology Corporation
