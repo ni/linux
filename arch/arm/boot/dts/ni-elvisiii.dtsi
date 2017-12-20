@@ -36,6 +36,15 @@
 					};
 				};
 			};
+
+			oleddriver@3C {
+				compatible = "sinowealth,sh1107";
+				reg = <0x3C>;
+
+				oledmodule {
+					compatible = "truly,oel9m1027";
+				};
+			};
 		};
 	};
 };
