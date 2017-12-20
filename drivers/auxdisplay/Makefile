@@ -17,3 +17,5 @@ obj-$(CONFIG_MAX6959)		+= max6959.o
 obj-$(CONFIG_PARPORT_PANEL)	+= panel.o
 obj-$(CONFIG_SEG_LED_GPIO)	+= seg-led-gpio.o
 obj-$(CONFIG_SH1107)		+= sh1107.o
+obj-$(CONFIG_OEL9M1027)		+= oel9m1027.o
+oel9m1027-y			+= oel9m1027_core.o oel9m1027_fb.o
