@@ -10625,6 +10625,13 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/serial/
 F:	drivers/tty/serial/
 
+SH1107 OLED CONTROLLER DRIVER
+M:	Wilson Lee <wilson.lee@ni.com>
+S:	Maintained
+F:	Documentation/devicetree/bindings/auxdisplay/sh1107.txt
+F:	drivers/auxdisplay/sh1107.c
+F:	drivers/auxdisplay/sh1107.h
+
 STI CEC DRIVER
 M:	Benjamin Gaignard <benjamin.gaignard@linaro.org>
 L:	kernel@stlinux.com
