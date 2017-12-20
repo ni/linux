@@ -11,3 +11,4 @@ obj-$(CONFIG_IMG_ASCII_LCD)	+= img-ascii-lcd.o
 obj-$(CONFIG_HD44780)		+= hd44780.o
 obj-$(CONFIG_HT16K33)		+= ht16k33.o
 obj-$(CONFIG_PANEL)             += panel.o
+obj-$(CONFIG_SH1107)		+= sh1107.o
