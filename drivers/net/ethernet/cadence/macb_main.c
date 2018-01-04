@@ -4477,7 +4477,7 @@ static int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void
 			if (netif_running(bp->dev)) {
 				macb_close(bp->dev);
 				phy_stop_interrupts(dev->phydev);
-				phy_stop_machine(dev->phydev);
+				phy_stop_machine_nolink(dev->phydev);
 			}
 
 			bp->fpga_down = 1;
