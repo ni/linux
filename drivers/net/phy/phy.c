@@ -682,6 +682,25 @@ void phy_stop_machine(struct phy_device *phydev)
 }
 
 /**
+ * phy_stop_machine_nolink - stop the PHY state machine tracking
+ * @phydev: target phy_device struct
+ *
+ * Description: Stops the state machine timer, sets the state to UP
+ *   (unless it wasn't up yet). This function must be called BEFORE
+ *   phy_detach.  Does not run the state machine to avoid taking the
+ *   link down.
+ */
+void phy_stop_machine_nolink(struct phy_device *phydev)
+{
+	cancel_delayed_work_sync(&phydev->state_queue);
+
+	mutex_lock(&phydev->lock);
+	if (phydev->state > PHY_UP && phydev->state != PHY_HALTED)
+		phydev->state = PHY_UP;
+	mutex_unlock(&phydev->lock);
+}
+
+/**
  * phy_error - enter HALTED state for this PHY device
  * @phydev: target phy_device struct
  *
