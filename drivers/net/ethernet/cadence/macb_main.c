@@ -42,6 +42,7 @@
 
 #ifdef CONFIG_FPGA_PERIPHERAL
 #include <linux/rtnetlink.h>
+#include <net/sch_generic.h>
 #include <misc/fpgaperipheral.h>
 #endif
 
@@ -4475,6 +4476,7 @@ static int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void
 		if (!bp->fpga_down) {
 			/* If the interface has been opened. */
 			if (netif_running(bp->dev)) {
+				dev_deactivate(bp->dev);
 				macb_close(bp->dev);
 				phy_stop_interrupts(dev->phydev);
 				phy_stop_machine_nolink(dev->phydev);
@@ -4501,6 +4503,7 @@ static int macb_fpga_notifier(struct notifier_block *nb, unsigned long val, void
 			phy_start_machine(dev->phydev);
 			phy_start_interrupts(dev->phydev);
 			macb_open(bp->dev);
+			dev_activate(bp->dev);
 		}
 
 		rtnl_unlock();
