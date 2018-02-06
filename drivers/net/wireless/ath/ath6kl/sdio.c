@@ -571,9 +571,6 @@ static int ath6kl_sdio_power_off(struct ath6kl *ar)
 	ret = sdio_disable_func(ar_sdio->func);
 	sdio_release_host(ar_sdio->func);
 
-	if (ret)
-		return ret;
-
 	/* Power off the card manually in case it wasn't powered off above */
 	ret = mmc_power_save_host(card->host);
 	if (ret < 0)
