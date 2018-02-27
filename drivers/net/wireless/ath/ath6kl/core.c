@@ -21,8 +21,6 @@
 #include <linux/moduleparam.h>
 #include <linux/export.h>
 #include <linux/vmalloc.h>
-#include <linux/dmi.h>
-#include <linux/ctype.h>
 
 #include "debug.h"
 #include "hif-ops.h"
@@ -56,31 +54,6 @@ MODULE_PARM_DESC(heart_beat_poll,
 MODULE_PARM_DESC(boot_attempts, "Number of times to retry booting the firmware");
 
 
-#define WLAN_REGION_ID 161
-#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-struct region_table {
-	struct dmi_header header;
-	char padding[3];
-	char alpha2[2];
-};
-
-static char region[2];
-static void find_region_type(const struct dmi_header *dm, void *private_data)
-{
-	int *found = (int *)private_data;
-
-	if (dm->type == WLAN_REGION_ID) {
-		struct region_table *table =
-			container_of(dm, struct region_table, header);
-
-		ath6kl_dbg(ATH6KL_DBG_TRC, "Region code from BIOS: %c%c\n",
-			   table->alpha2[0], table->alpha2[1]);
-		memcpy(region, table->alpha2, 2);
-		*found = 1;
-	}
-}
-#endif
-
 void ath6kl_core_tx_complete(struct ath6kl *ar, struct sk_buff *skb)
 {
 	ath6kl_htc_tx_complete(ar, skb);
@@ -98,21 +71,6 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	struct ath6kl_bmi_target_info targ_info;
 	struct wireless_dev *wdev;
 	int ret = 0, i;
-
-#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-	char *region_board_file = NULL;
-	/* get region code from DMI */
-	dmi_walk(find_region_type, &ret);
-	if (!ret)
-		return -ENODEV;
-
-	if (!isascii(region[0]) || !isascii(region[1]))
-		return -EINVAL;
-
-	ath6kl_info("Using region: %c%c\n",
-		    region[0],
-		    region[1]);
-#endif
 
 	ar->boot_attempts = boot_attempts;
 
@@ -175,17 +133,6 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 
 	ar->testmode = testmode;
 
-#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-	/* ath6kl_init_hw_params() will set the board file name, but we want
-	 * to override it with a region specific board file here.
-	 */
-	region_board_file = devm_kzalloc(ar->dev, 64, GFP_KERNEL);
-
-	snprintf(region_board_file, 64, AR6004_HW_3_0_FW_DIR "/bdata.%c%c.bin",
-		 region[0], region[1]);
-
-	ar->hw.fw_board = region_board_file;
-#endif
 	ret = ath6kl_init_fetch_firmwares(ar);
 	if (ret)
 		goto err_htc_cleanup;
@@ -268,10 +215,10 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 		/* Did not boot after several attempts */
 		goto err_rxbuf_cleanup;
 
-#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
-	/* set region from DMI if it is US */
-	if (region[0] == 'U' && region[1] == 'S') {
-		ret = ath6kl_wmi_set_regdomain_cmd(ar->wmi, region);
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+	/* set US region if this device is a US device (US or 1S) */
+	if (ar->region[0] == 'U' && ar->region[1] == 'S') {
+		ret = ath6kl_wmi_set_regdomain_cmd(ar->wmi, ar->region);
 		if (ret)
 			goto err_rxbuf_cleanup;
 	}
