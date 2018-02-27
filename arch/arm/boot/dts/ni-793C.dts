@@ -123,6 +123,7 @@
 		compatible = "atheros,ath6kl";
 		status = "okay";
 		atheros,board-id = "";
+		atheros,region-code = "";
 	};
 };
 
