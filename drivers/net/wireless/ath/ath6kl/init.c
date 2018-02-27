@@ -24,6 +24,8 @@
 #include <linux/of.h>
 #include <linux/mmc/sdio_func.h>
 #include <linux/vmalloc.h>
+#include <linux/dmi.h>
+#include <linux/ctype.h>
 
 #include "core.h"
 #include "cfg80211.h"
@@ -31,6 +33,8 @@
 #include "debug.h"
 #include "hif-ops.h"
 #include "htc-ops.h"
+
+#define WLAN_REGION_ID 161
 
 static const struct ath6kl_hw hw_list[] = {
 	{
@@ -706,6 +710,10 @@ static bool check_device_tree(struct ath6kl *ar)
 	char board_filename[64];
 	const char *board_id;
 	int ret;
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+	static const char *region_code_prop = "atheros,region-code";
+	const char *region_code;
+#endif
 
 	for_each_compatible_node(node, NULL, "atheros,ath6kl") {
 		board_id = of_get_property(node, board_id_prop, NULL);
@@ -724,6 +732,16 @@ static bool check_device_tree(struct ath6kl *ar)
 				   board_filename, ret);
 			continue;
 		}
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+		region_code = of_get_property(node, region_code_prop, NULL);
+		if (region_code == NULL) {
+			ath6kl_warn("No \"%s\" property on %s node.\n",
+				    region_code_prop, node->name);
+			continue;
+		}
+		/* Silex firmware needs a region command in some cases */
+		memcpy(&ar->region, region_code, 2);
+#endif
 		of_node_put(node);
 		return true;
 	}
@@ -735,6 +753,73 @@ static bool check_device_tree(struct ath6kl *ar)
 	return false;
 }
 #endif /* CONFIG_OF */
+
+#ifdef CONFIG_ATH6KL_NI_BIOS_DOMAIN
+struct region_table {
+	struct dmi_header header;
+	char padding[3];
+	char alpha2[2];
+};
+
+static char region[2];
+static void find_region_type(const struct dmi_header *dm, void *private_data)
+{
+	int *found = (int *)private_data;
+
+	if (dm->type == WLAN_REGION_ID) {
+		struct region_table *table =
+			container_of(dm, struct region_table, header);
+
+		memcpy(region, table->alpha2, 2);
+		*found = 1;
+	}
+}
+
+static bool check_ni_bios(struct ath6kl *ar)
+{
+	char *region_board_file = NULL;
+	int ret = 0;
+
+	/* get region code from DMI */
+	dmi_walk(find_region_type, &ret);
+	if (!ret)
+		return -ENODEV;
+
+	if (!isascii(region[0]) || !isascii(region[1]))
+		return -EINVAL;
+
+	ath6kl_info("Using BIOS region: %c%c\n",
+		    region[0],
+		    region[1]);
+
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+	/* Silex firmware needs a region command in some cases */
+	memcpy(&ar->region, region, 2);
+#endif
+
+	/* ath6kl_init_hw_params() will set the board file name, but we want
+	 * to override it with a region specific board file here.
+	 */
+	region_board_file = devm_kzalloc(ar->dev, 64, GFP_KERNEL);
+
+	snprintf(region_board_file, 64, AR6004_HW_3_0_FW_DIR "/bdata.%c%c.bin",
+		 region[0], region[1]);
+
+	ret = ath6kl_get_fw(ar, region_board_file, &ar->fw_board,
+			    &ar->fw_board_len);
+	if (ret) {
+		ath6kl_err("Failed to get BIOS board file %s: %d\n",
+			   region_board_file, ret);
+		return false;
+	}
+	return true;
+}
+#else
+static bool check_ni_bios(struct ath6kl *ar)
+{
+	return false;
+}
+#endif /* CONFIG_ATH6KL_NI_BIOS_DOMAIN */
 
 static int ath6kl_fetch_board_file(struct ath6kl *ar)
 {
@@ -758,6 +843,11 @@ static int ath6kl_fetch_board_file(struct ath6kl *ar)
 
 	if (check_device_tree(ar)) {
 		/* got board file from device tree */
+		return 0;
+	}
+
+	if (check_ni_bios(ar)) {
+		/* got board file from BIOS */
 		return 0;
 	}
 
