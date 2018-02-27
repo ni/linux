@@ -877,6 +877,10 @@ struct ath6kl {
 
 	/* Number of times we have attempted to boot the radio */
 	unsigned int boot_attempts;
+
+#ifdef CONFIG_ATH6KL_SILEX_FIRMWARE
+	unsigned char region[2];
+#endif
 };
 
 static inline struct ath6kl *ath6kl_priv(struct net_device *dev)
