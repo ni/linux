@@ -125,10 +125,17 @@ struct nirtfeatures {
 	u16 io_size;
 	spinlock_t lock;
 	u8 revision[5];
-	const char *bpstring;
 	bool has_wifi;
 	struct regulator_dev *reg_dev;
 	unsigned int irq;
+	struct nirtfeatures_desc *desc;
+};
+
+struct nirtfeatures_desc {
+	unsigned int backplane_id;
+	const char *name;
+	struct nirtfeatures_led *leds;
+	unsigned int num_leds;
 };
 
 struct nirtfeatures_led {
@@ -214,7 +221,7 @@ static ssize_t nirtfeatures_backplane_id_get(struct device *dev,
 	struct acpi_device *acpi_device = to_acpi_device(dev);
 	struct nirtfeatures *nirtfeatures = acpi_device->driver_data;
 
-	return sprintf(buf, "%s\n", nirtfeatures->bpstring);
+	return sprintf(buf, "%s\n", nirtfeatures->desc->name);
 }
 
 static DEVICE_ATTR(backplane_id, S_IRUGO, nirtfeatures_backplane_id_get, NULL);
@@ -457,7 +464,7 @@ nirtfeatures_led_brightness_get(struct led_classdev *led_cdev)
 	return (data & led->mask) ? LED_FULL : LED_OFF;
 }
 
-static struct nirtfeatures_led nirtfeatures_leds_common[] = {
+static struct nirtfeatures_led nirtfeatures_leds[] = {
 	{
 		{
 			.name = CONFIG_NI_LED_PREFIX ":status:red",
@@ -488,7 +495,67 @@ static struct nirtfeatures_led nirtfeatures_leds_common[] = {
 		},
 		.address = NIRTF_SYSTEM_LEDS,
 		.mask = NIRTF_SYSTEM_LEDS_POWER_YELLOW,
+	}
+};
+
+static struct nirtfeatures_led nirtfeatures_leds_monochrome[] = {
+	{
+		{
+			.name = CONFIG_NI_LED_PREFIX ":status:yellow",
+			.max_brightness = 0xFFFF,
+		},
+		.address = NIRTF_SYSTEM_LEDS,
+		.mask = NIRTF_SYSTEM_LEDS_STATUS_YELLOW,
+		.pattern_hi_addr = NIRTF_STATUS_LED_SHIFT1,
+		.pattern_lo_addr = NIRTF_STATUS_LED_SHIFT0,
 	},
+	{
+		{
+			.name = CONFIG_NI_LED_PREFIX ":power:green",
+		},
+		.address = NIRTF_SYSTEM_LEDS,
+		.mask = NIRTF_SYSTEM_LEDS_POWER_GREEN,
+	}
+};
+
+static struct nirtfeatures_desc nirtfeatures_descs[] = {
+	{
+		.backplane_id = NIRTF_PLATFORM_MISC_ID_MANHATTAN,
+		.name = "Manhattan",
+		.leds = nirtfeatures_leds,
+		.num_leds = ARRAY_SIZE(nirtfeatures_leds),
+	},
+	{
+		.backplane_id = NIRTF_PLATFORM_MISC_ID_FIRE_EAGLE,
+		.name = "Fire Eagle",
+		.leds = nirtfeatures_leds,
+		.num_leds = ARRAY_SIZE(nirtfeatures_leds),
+	},
+	{
+		.backplane_id = NIRTF_PLATFORM_MISC_ID_SWORDFISH,
+		.name = "Swordfish",
+		.leds = nirtfeatures_leds_monochrome,
+		.num_leds = ARRAY_SIZE(nirtfeatures_leds_monochrome),
+	},
+	{
+		.backplane_id = NIRTF_PLATFORM_MISC_ID_HAMMERHEAD,
+		.name = "Hammerhead",
+		.leds = nirtfeatures_leds,
+		.num_leds = ARRAY_SIZE(nirtfeatures_leds),
+	},
+	{
+		.backplane_id = NIRTF_PLATFORM_MISC_ID_WINGHEAD,
+		.name = "Winghead",
+		.leds = nirtfeatures_leds,
+		.num_leds = ARRAY_SIZE(nirtfeatures_leds),
+	}
+};
+
+static struct nirtfeatures_desc nirtfeatures_desc_unknown = {
+	.backplane_id = 0xf,
+	.name = "Unknown",
+	.leds = nirtfeatures_leds,
+	.num_leds = ARRAY_SIZE(nirtfeatures_leds),
 };
 
 /*=====================================================================
@@ -907,7 +974,7 @@ static int nirtfeatures_parse_switch_pie(struct nirtfeatures *nirtfeatures,
 	}
 
 	snprintf(switch_dev->phys_location_string, MAX_NODELEN, "%s/%s/%s",
-	   CONFIG_NI_LED_PREFIX, nirtfeatures->bpstring, pie->name);
+	   CONFIG_NI_LED_PREFIX, nirtfeatures->desc->name, pie->name);
 
 	switch_dev->cdev->name = switch_dev->name_string;
 	switch_dev->cdev->phys = switch_dev->phys_location_string;
@@ -1110,24 +1177,20 @@ exit:
 
 static int nirtfeatures_create_leds(struct nirtfeatures *nirtfeatures)
 {
-	int i;
-	int err;
+	struct nirtfeatures_led *leds = nirtfeatures->desc->leds;
+	int i, err;
 
-	for (i = 0; i < ARRAY_SIZE(nirtfeatures_leds_common); ++i) {
+	for (i = 0; i < nirtfeatures->desc->num_leds; i++) {
+		leds[i].nirtfeatures = nirtfeatures;
 
-		nirtfeatures_leds_common[i].nirtfeatures = nirtfeatures;
+		if (leds[i].cdev.max_brightness == 0)
+			leds[i].cdev.max_brightness = 1;
 
-		if (nirtfeatures_leds_common[i].cdev.max_brightness == 0)
-			nirtfeatures_leds_common[i].cdev.max_brightness = 1;
-
-		nirtfeatures_leds_common[i].cdev.brightness_set =
-			nirtfeatures_led_brightness_set;
-
-		nirtfeatures_leds_common[i].cdev.brightness_get =
-			nirtfeatures_led_brightness_get;
+		leds[i].cdev.brightness_set = nirtfeatures_led_brightness_set;
+		leds[i].cdev.brightness_get = nirtfeatures_led_brightness_get;
 
 		err = devm_led_classdev_register(&nirtfeatures->acpi_device->dev,
-						 &nirtfeatures_leds_common[i].cdev);
+						 &leds[i].cdev);
 		if (err)
 			return err;
 	}
@@ -1366,7 +1429,7 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 	struct nirtfeatures *nirtfeatures;
 	acpi_status acpi_ret;
 	u8 bpinfo;
-	int err;
+	int err, i;
 
 	nirtfeatures = devm_kzalloc(&device->dev, sizeof(*nirtfeatures),
 				    GFP_KERNEL);
@@ -1394,28 +1457,17 @@ static int nirtfeatures_acpi_add(struct acpi_device *device)
 
 	bpinfo &= NIRTF_PLATFORM_MISC_ID_MASK;
 
-	switch (bpinfo) {
-	case NIRTF_PLATFORM_MISC_ID_MANHATTAN:
-		nirtfeatures->bpstring = "Manhattan";
-		break;
-	case NIRTF_PLATFORM_MISC_ID_FIRE_EAGLE:
-		nirtfeatures->bpstring = "Fire Eagle";
-		break;
-	case NIRTF_PLATFORM_MISC_ID_SWORDFISH:
-		nirtfeatures->bpstring = "Swordfish";
-		break;
-	case NIRTF_PLATFORM_MISC_ID_HAMMERHEAD:
-		nirtfeatures->bpstring = "Hammerhead";
-		break;
-	case NIRTF_PLATFORM_MISC_ID_WINGHEAD:
-		nirtfeatures->bpstring = "Winghead";
-		break;
-	default:
+	for (i = 0; i < ARRAY_SIZE(nirtfeatures_descs); i++) {
+		if (bpinfo == nirtfeatures_descs[i].backplane_id) {
+			nirtfeatures->desc = &nirtfeatures_descs[i];
+			break;
+		}
+	}
+
+	if (!nirtfeatures->desc) {
 		dev_err(&nirtfeatures->acpi_device->dev,
-			"Unrecognized backplane type %u\n",
-			bpinfo);
-		nirtfeatures->bpstring = "Unknown";
-		break;
+			"Unrecognized backplane ID %u\n", bpinfo);
+		nirtfeatures->desc = &nirtfeatures_desc_unknown;
 	}
 
 	spin_lock_init(&nirtfeatures->lock);
