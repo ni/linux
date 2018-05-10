@@ -2415,7 +2415,7 @@ static int mv88e6xxx_phc_enable(struct ptp_clock_info *ptp,
 		return ret;
 
 	case PTP_CLK_REQ_PEROUT:
-		pin = mv88e6xxx_find_pin(ptp, PTP_PF_PEROUT, rq->extts.index);
+		pin = mv88e6xxx_find_pin(ptp, PTP_PF_PEROUT, rq->perout.index);
 		dev_dbg(ds->master_dev, "PEROUT req on=%d index %d pin %d\n",
 			on, rq->perout.index, pin);
 
