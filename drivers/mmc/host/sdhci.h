@@ -477,6 +477,8 @@ struct sdhci_host {
  * block count.
  */
 #define SDHCI_QUIRK2_USE_32BIT_BLK_CNT			(1<<18)
+/* Controller requires delay between card clock disable and param change */
+#define SDHCI_QUIRK2_NEED_DELAY_AFTER_CLK_DISABLE	(1<<19)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */
