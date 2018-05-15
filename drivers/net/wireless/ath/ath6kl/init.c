@@ -1251,6 +1251,19 @@ int ath6kl_init_fetch_firmwares(struct ath6kl *ar)
 	if (ret)
 		return ret;
 
+#if CONFIG_ATH6KL_NI_BIOS_DOMAIN
+	if (ar->region[0] == 'U' && ar->region[1] == 'S') {
+		/* use US firmware when in the US region */
+		ath6kl_info("Using US firmware");
+		ret = ath6kl_fetch_fw_apin(ar, "fw-5-US.bin");
+		if (ret)
+			return ret;
+
+		ar->fw_api = 5;
+		goto out;
+	}
+#endif
+
 	ret = ath6kl_fetch_fw_apin(ar, ATH6KL_FW_API5_FILE);
 	if (ret == 0) {
 		ar->fw_api = 5;
