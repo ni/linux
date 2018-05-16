@@ -1363,7 +1363,7 @@ void sdhci_set_clock(struct sdhci_host *host, unsigned int clock)
 
 	if (clock == 0) {
 		sdhci_writew(host, 0, SDHCI_CLOCK_CONTROL);
-		return;
+		goto out_delay;
 	}
 
 	clk = sdhci_calc_clk(host, clock, &host->mmc->actual_clock);
@@ -1379,7 +1379,7 @@ void sdhci_set_clock(struct sdhci_host *host, unsigned int clock)
 			pr_err("%s: Internal clock never stabilised.\n",
 			       mmc_hostname(host->mmc));
 			sdhci_dumpregs(host);
-			return;
+			goto out_delay;
 		}
 		timeout--;
 		spin_unlock_irq(&host->lock);
@@ -1389,6 +1389,13 @@ void sdhci_set_clock(struct sdhci_host *host, unsigned int clock)
 
 	clk |= SDHCI_CLOCK_CARD_EN;
 	sdhci_writew(host, clk, SDHCI_CLOCK_CONTROL);
+out_delay:
+	if (host->quirks2 & SDHCI_QUIRK2_SPURIOUS_CARD_INSERT_INTERRUPT) {
+		spin_unlock_irq(&host->lock);
+		usleep_range(4900, 5100);
+		spin_lock_irq(&host->lock);
+	}
+
 }
 EXPORT_SYMBOL_GPL(sdhci_set_clock);
 
