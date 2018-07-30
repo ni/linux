@@ -73,10 +73,14 @@
 		/* Interrupt on GPIO1, shared with phy1. */
 		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
 		interrupt-parent = <&gpio>;
-		/* Page 3, Register 16, LED[2:0] Function
-		 * Control Register
+
+		/* marvell,reg-init = <reg-page reg mask value>
+		 *
+		 * reg-page = MII_MARVELL_LED_PAGE (3)
+		 * reg = PHY_LED_CTRL (16)
+		 * value = 0x1881 (LED[0] = on:link, blink:activity, off:no link)
 		 */
-		leds = <0x1881>;
+		marvell,reg-init = <3 16 0 0x1881>;
 	};
 
 	phy1: phy@1 {
@@ -86,10 +90,14 @@
 		/* Interrupt on GPIO1, shared with phy0. */
 		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
 		interrupt-parent = <&gpio>;
-		/* Page 3, Register 16, LED[2:0] Function
-		 * Control Register
+
+		/* marvell,reg-init = <reg-page reg mask value>
+		 *
+		 * reg-page = MII_MARVELL_LED_PAGE (3)
+		 * reg = PHY_LED_CTRL (16)
+		 * value = 0x1881 (LED[0] = on:link, blink:activity, off:no link)
 		 */
-		leds = <0x1881>;
+		marvell,reg-init = <3 16 0 0x1881>;
 	};
 };
 
