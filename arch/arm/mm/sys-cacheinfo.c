@@ -596,45 +596,6 @@ static int cache_add_dev(struct device *sys_dev)
 	return 0;
 }
 
-static void cache_remove_dev(struct device *sys_dev)
-{
-	unsigned int cpu = sys_dev->id;
-	unsigned long i;
-
-	if (!cpumask_test_cpu(cpu, to_cpumask(cache_dev_map)))
-		return;
-	cpumask_clear_cpu(cpu, to_cpumask(cache_dev_map));
-
-	for (i = 0; i < num_cache_leaves; i++)
-		kobject_put(&(INDEX_KOBJECT_PTR(cpu, i)->kobj));
-	kobject_put(per_cpu(arm_cache_kobject, cpu));
-	arm_cache_sysfs_exit(cpu);
-}
-
-static int cacheinfo_cpu_callback(struct notifier_block *nfb,
-				unsigned long action, void *hcpu)
-{
-	unsigned int cpu = (unsigned long)hcpu;
-	struct device *sys_dev;
-
-	sys_dev = get_cpu_device(cpu);
-	switch (action) {
-	case CPU_ONLINE:
-	case CPU_ONLINE_FROZEN:
-		cache_add_dev(sys_dev);
-		break;
-	case CPU_DEAD:
-	case CPU_DEAD_FROZEN:
-		cache_remove_dev(sys_dev);
-		break;
-	}
-	return NOTIFY_OK;
-}
-
-static struct notifier_block cacheinfo_cpu_notifier = {
-	.notifier_call = cacheinfo_cpu_callback,
-};
-
 static int cache_sysfs_init(void)
 {
 	int i;
@@ -652,7 +613,6 @@ static int cache_sysfs_init(void)
 		if (err)
 			return err;
 	}
-	register_hotcpu_notifier(&cacheinfo_cpu_notifier);
 
 	return 0;
 }
