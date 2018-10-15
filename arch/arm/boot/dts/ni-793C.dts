@@ -23,12 +23,12 @@
 					eth0-0 {
 						label = "nilrt:eth0:green";
 						linux,default-trigger =
-						  "e000b000.etherne:00:100Mb";
+						  "e000b000.ethernet-ffffffff:00:100Mbps";
 					};
 					eth0-1 {
 						label = "nilrt:eth0:yellow";
 						linux,default-trigger =
-						  "e000b000.etherne:00:Gb";
+						  "e000b000.ethernet-ffffffff:00:1Gbps";
 					};
 					wifi-0 {
 						label = "nilrt:wifi:primary";

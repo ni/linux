@@ -32,22 +32,22 @@
 					eth0-0 {
 						label = "nilrt:eth0:green";
 						linux,default-trigger =
-						  "e000b000.etherne:00:100Mb";
+						  "e000b000.ethernet-ffffffff:00:100Mbps";
 					};
 					eth0-1 {
 						label = "nilrt:eth0:yellow";
 						linux,default-trigger =
-						  "e000b000.etherne:00:Gb";
+						  "e000b000.ethernet-ffffffff:00:1Gbps";
 					};
 					eth1-0 {
 						label = "nilrt:eth1:green";
 						linux,default-trigger =
-						  "e000b000.etherne:01:100Mb";
+						  "e000b000.ethernet-ffffffff:01:100Mbps";
 					};
 					eth1-1 {
 						label = "nilrt:eth1:yellow";
 						linux,default-trigger =
-						  "e000b000.etherne:01:Gb";
+						  "e000b000.ethernet-ffffffff:01:1Gbps";
 					};
 				};
 			};
