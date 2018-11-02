@@ -36,11 +36,9 @@ early_param("threadirqs", setup_forced_irqthreads);
 # endif
 #endif
 
-static int irqthread_pri = MAX_USER_RT_PRIO/2;
-
 void init_irq_default_prio(struct irq_desc *desc)
 {
-	desc->irq_data.priority = irqthread_pri;
+	desc->irq_data.priority = MAX_USER_RT_PRIO/2;
 }
 
 static atomic_long_t irq_handler_change_count = ATOMIC_LONG_INIT(0);
@@ -1143,18 +1141,6 @@ void irq_wake_thread(unsigned int irq, void *dev_id)
 }
 EXPORT_SYMBOL_GPL(irq_wake_thread);
 
-static __init int set_irqthread_pri(char *str)
-{
-	int pri;
-
-	get_option(&str, &pri);
-	if (pri > 0 && pri < MAX_USER_RT_PRIO)
-		irqthread_pri = pri;
-	return 0;
-}
-
-early_param("irqthread_pri", set_irqthread_pri);
-
 static int irq_setup_forced_threading(struct irqaction *new)
 {
 	if (!force_irqthreads)
@@ -1216,7 +1202,7 @@ setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 {
 	struct task_struct *t;
 	struct sched_param param = {
-		.sched_priority = irqthread_pri,
+		.sched_priority = MAX_USER_RT_PRIO/2,
 	};
 
 	if (!secondary) {
