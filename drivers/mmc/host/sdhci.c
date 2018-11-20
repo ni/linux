@@ -2011,11 +2011,8 @@ void sdhci_set_clock(struct sdhci_host *host, unsigned int clock)
 		sdhci_writew(host, clk & ~SDHCI_CLOCK_CARD_EN,
 			SDHCI_CLOCK_CONTROL);
 
-	if (host->quirks2 & SDHCI_QUIRK2_NEED_DELAY_AFTER_CLK_DISABLE) {
-		spin_unlock_irq(&host->lock);
-		usleep_range(900, 1100);
-		spin_lock_irq(&host->lock);
-	}
+	if (host->quirks2 & SDHCI_QUIRK2_NEED_DELAY_AFTER_CLK_DISABLE)
+		mdelay(1);
 
 	if (clock == 0) {
 		sdhci_writew(host, 0, SDHCI_CLOCK_CONTROL);
@@ -2025,11 +2022,8 @@ void sdhci_set_clock(struct sdhci_host *host, unsigned int clock)
 	clk = sdhci_calc_clk(host, clock, &host->mmc->actual_clock);
 	sdhci_enable_clk(host, clk);
 out_delay:
-	if (host->quirks2 & SDHCI_QUIRK2_SPURIOUS_CARD_INSERT_INTERRUPT) {
-		spin_unlock_irq(&host->lock);
-		usleep_range(4900, 5100);
-		spin_lock_irq(&host->lock);
-	}
+	if (host->quirks2 & SDHCI_QUIRK2_SPURIOUS_CARD_INSERT_INTERRUPT)
+		mdelay(5);
 }
 EXPORT_SYMBOL_GPL(sdhci_set_clock);
 
