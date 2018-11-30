@@ -49,6 +49,7 @@
 #define NIRTF_PLATFORM_MISC_ID_MANHATTAN	0
 #define NIRTF_PLATFORM_MISC_ID_SWORDFISH	1
 #define NIRTF_PLATFORM_MISC_ID_FIRE_EAGLE	2
+#define NIRTF_PLATFORM_MISC_ID_DOGFISH		3
 #define NIRTF_PLATFORM_MISC_ID_HAMMERHEAD	4
 #define NIRTF_PLATFORM_MISC_ID_WINGHEAD		5
 
@@ -534,6 +535,12 @@ static struct nirtfeatures_desc nirtfeatures_descs[] = {
 	{
 		.backplane_id = NIRTF_PLATFORM_MISC_ID_SWORDFISH,
 		.name = "Swordfish",
+		.leds = nirtfeatures_leds_monochrome,
+		.num_leds = ARRAY_SIZE(nirtfeatures_leds_monochrome),
+	},
+	{
+		.backplane_id = NIRTF_PLATFORM_MISC_ID_DOGFISH,
+		.name = "Dogfish",
 		.leds = nirtfeatures_leds_monochrome,
 		.num_leds = ARRAY_SIZE(nirtfeatures_leds_monochrome),
 	},
