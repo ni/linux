@@ -1942,18 +1942,13 @@ static void macb_reset_hw(struct macb *bp)
 	struct macb_queue *queue;
 	unsigned int q;
 
-	/* save the MDIO enable value, do not turn it off if it's
-	 * on.  The bus may be shared with another MAC
-	 */
-	int mpe_val = macb_readl(bp, NCR) & MACB_BIT(MPE);
-
 	/* Disable RX and TX (XXX: Should we halt the transmission
 	 * more gracefully?)
 	 */
-	macb_writel(bp, NCR, macb_readl(bp, NCR) | mpe_val);
+	macb_writel(bp, NCR, 0);
 
 	/* Clear the stats registers (XXX: Update stats first?) */
-	macb_writel(bp, NCR, MACB_BIT(CLRSTAT) | mpe_val);
+	macb_writel(bp, NCR, MACB_BIT(CLRSTAT));
 
 	/* Clear all status flags */
 	macb_writel(bp, TSR, -1);
