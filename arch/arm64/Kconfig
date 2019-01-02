@@ -694,7 +694,6 @@ config NEED_PER_CPU_EMBED_FIRST_CHUNK
 
 config HOLES_IN_ZONE
 	def_bool y
-	depends on NUMA
 
 source kernel/Kconfig.preempt
 source kernel/Kconfig.hz
@@ -792,7 +791,7 @@ config XEN_DOM0
 
 config XEN
 	bool "Xen guest support on ARM64"
-	depends on ARM64 && OF && !PREEMPT_RT_FULL
+	depends on ARM64 && OF
 	select SWIOTLB_XEN
 	select PARAVIRT
 	help

@@ -147,7 +147,7 @@ void softirq_check_pending_idle(void)
 {
 	static int rate_limit;
 
-	if (rate_limit < 10 &&
+	if (rate_limit < 10 && !in_softirq() &&
 			(local_softirq_pending() & SOFTIRQ_STOP_IDLE_MASK)) {
 		printk(KERN_ERR "NOHZ: local_softirq_pending %02x\n",
 		       local_softirq_pending());
@@ -842,13 +842,8 @@ static inline void tick_irq_exit(void)
 	int cpu = smp_processor_id();
 
 	/* Make sure that timer wheel updates are propagated */
-#ifdef CONFIG_PREEMPT_RT_BASE
 	if ((idle_cpu(cpu) || tick_nohz_full_cpu(cpu)) &&
-	    !need_resched() && !local_softirq_pending())
-#else
-	if ((idle_cpu(cpu) && !need_resched()) || tick_nohz_full_cpu(cpu))
-#endif
-	{
+	    !need_resched() && !local_softirq_pending()) {
 		if (!in_irq())
 			tick_nohz_irq_exit();
 	}
