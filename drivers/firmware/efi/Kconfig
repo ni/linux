@@ -14,6 +14,15 @@ config EFI_VARS
 	  legacy users: new users should use the efivarfs filesystem
 	  instead.
 
+config EFI_RUNTIME
+	bool "Enable EFI runtime services on boot by default"
+	depends on EFI
+	default y if !PREEMPT_RT
+	help
+	  Set Y to enable EFI runtime services on boot by default.
+	  This selection is overridden by "efi=runtime" and "efi=noruntime"
+	  boot parameters.
+
 config EFI_ESRT
 	bool
 	depends on EFI && !IA64
