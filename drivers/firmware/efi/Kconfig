@@ -19,6 +19,15 @@ config EFI_VARS
 	  Subsequent efibootmgr releases may be found at:
 	  <http://github.com/vathpela/efibootmgr>
 
+config EFI_RUNTIME
+	bool "Enable EFI runtime services on boot by default"
+	depends on EFI
+	default y if !PREEMPT_RT
+	help
+	  Set Y to enable EFI runtime services on boot by default.
+	  This selection is overridden by "efi=runtime" and "efi=noruntime"
+	  boot parameters.
+
 config EFI_ESRT
 	bool
 	depends on EFI && !IA64
