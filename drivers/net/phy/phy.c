@@ -719,9 +719,6 @@ static irqreturn_t phy_interrupt(int irq, void *phy_dat)
 {
 	struct phy_device *phydev = phy_dat;
 
-	if (PHY_HALTED == phydev->state)
-		return IRQ_NONE;		/* It can't be ours.  */
-
 	return phy_change(phydev);
 }
 
