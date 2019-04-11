@@ -221,6 +221,7 @@ static const struct acpi_device_id acpi_pnp_device_ids[] = {
 	{"NIC7750"},		/* National Instruments (NI) 16550 PNP */
 	{"NIC7772"},		/* National Instruments (NI) 16550 PNP */
 	{"NIC792B"},		/* National Instruments (NI) 16550 PNP */
+	{"NIC7A69"},		/* National Instruments (NI) 16550 PNP */
 	{"PMC2430"},		/* Pace 56 Voice Internal Plug & Play Modem */
 	{"PNP0500"},		/* Generic standard PC COM port     */
 	{"PNP0501"},		/* Generic 16550A-compatible COM port */
