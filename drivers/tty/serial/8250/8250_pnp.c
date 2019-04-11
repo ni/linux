@@ -22,6 +22,7 @@
 #include "8250.h"
 
 #include <linux/ni16550.h>
+#include <linux/property.h>
 
 #define UNKNOWN_DEV 0x3000
 #define CIR_PORT	0x0800
@@ -30,6 +31,7 @@
 #define NI_CAP_PMR		0x0001
 #define NI_CLK_33333333		0x0002
 #define NI_CPR_CLK_25000000	0x0008
+#define NI_CPR_CLK_33333333	0x0010
 
 static bool is_niport(struct pnp_dev *dev)
 {
@@ -213,6 +215,7 @@ static const struct pnp_device_id pnp_dev_table[] = {
 	{	"NIC7750",	NI_CLK_33333333			},
 	{	"NIC7772",	NI_CAP_PMR | NI_16BYTE_FIFO	},
 	{	"NIC792B",	NI_CPR_CLK_25000000		},
+	{	"NIC7A69",	NI_CPR_CLK_33333333		},
 	/* NEC 98NOTE SPEAKER PHONE FAX MODEM(33600bps) */
 	{	"nEC8241",		0	},
 	/* Pace 56 Voice Internal Plug & Play Modem */
@@ -497,10 +500,15 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 
 #ifdef CONFIG_SERIAL_8250_NI16550
 	if (is_niport(dev)) {
-		WARN_ON((flags & (NI_CLK_33333333 | NI_CPR_CLK_25000000)) ==
-		    (NI_CLK_33333333 | NI_CPR_CLK_25000000));
+		bool rs232_property = false;
+
+		WARN_ON(hweight32(flags & (NI_CPR_CLK_25000000 |
+					   NI_CPR_CLK_33333333 |
+					   NI_CLK_33333333)) > 1);
+
 		if (flags & NI_CLK_33333333)
 			uart.port.uartclk = 33333333;
+
 		if (flags & NI_CPR_CLK_25000000) {
 			/* Sets UART clock rate to 22.222 MHz
 			 * with prescaler 1.125.
@@ -508,6 +516,27 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 			uart.port.uartclk = 22222222;
 			uart.mcr_force = UART_MCR_CLKSEL;
 			ni16550_config_prescaler(uart.port.iobase, 0x9);
+		}
+
+		if (flags & NI_CPR_CLK_33333333) {
+			const char *transceiver;
+
+			/*
+			 * Set UART clock rate to 29.629 MHz
+			 * with prescaler 1.125.
+			 */
+			uart.port.uartclk = 29629629;
+			uart.mcr_force = UART_MCR_CLKSEL;
+			ni16550_config_prescaler(uart.port.iobase, 0x9);
+
+			if (device_property_read_string(&dev->dev,
+							"transceiver",
+							&transceiver)) {
+				dev_err(&dev->dev, "transceiver property missing\n");
+				return -EINVAL;
+			}
+
+			rs232_property = strncmp(transceiver, "RS-232", 6) == 0;
 		}
 
 		uart.port.flags |= UPF_FIXED_PORT | UPF_FIXED_TYPE;
@@ -518,18 +547,21 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 			uart.port.type = PORT_NI16550_F128;
 
 		/*
-		 * NI UARTs are by default connected to RS-485 transceivers,
-		 * unless the PMR register is implemented, and the UART is
-		 * dual-mode capable. Then it could be in RS-232 mode and if it
-		 * is, we will register as a standard 8250 port.
+		 * NI UARTs may be connected to RS-485 or RS-232 transceivers,
+		 * depending on the ACPI 'transceiver' property and whether or
+		 * not the PMR is implemented. If the PMR is implemented and
+		 * the port is in RS-232 mode, register as a standard 8250 port
+		 * and print about it.
 		 */
 		if ((flags & NI_CAP_PMR) && is_rs232_mode(uart.port.iobase))
 			pr_info("NI 16550 at I/O 0x%x (irq = %d) is dual-mode capable and is in RS-232 mode\n",
 					 (unsigned int)uart.port.iobase,
 					 uart.port.irq);
-		else
-			/* Either the PMR register is not implemented, or it is
-			 * and the UART is in RS-485 mode as set in the PMR
+		else if (!rs232_property)
+			/*
+			 * Either the PMR is implemented and set to RS-485 mode
+			 * or it's not implemented and the 'transceiver' ACPI
+			 * property is 'RS-485';
 			 */
 			ni16550_port_setup(&uart.port);
 	}
