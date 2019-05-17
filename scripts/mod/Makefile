@@ -36,8 +36,7 @@ KBUILD_OUTPUT=$(CURDIR)
 endif
 
 $(patsubst %,$(obj)/$(TGTPRE)%,$(modpost-objs)): $(KBUILD_SRC)/$(src)/$(TGTPRE)elfconfig.h | $(obj)/modpost
-	$(Q)cp -f $(KBUILD_SRC)/$(src)/$(TGTPRE)elfconfig.h $(KBUILD_OUTPUT)/$(obj)/elfconfig.h
-	$(Q)$(CC) $(TGT_EXTRACFLAGS) $(CFLAGS) -I$(KBUILD_OUTPUT)/$(obj)  -c -o $@ $(KBUILD_SRC)/$(subst $(TGTPRE),,$(subst .o,.c,$@))
+	$(Q)$(CC) $(TGT_EXTRACFLAGS) $(CFLAGS) -I$(KBUILD_OUTPUT)/$(obj) -DCONFIG_MODPOST_ELFCONFIG="\"$(TGTPRE)elfconfig.h\"" -c -o $@ $(KBUILD_SRC)/$(subst $(TGTPRE),,$(subst .o,.c,$@))
 
 $(obj)/$(tgtmodpost) : $(patsubst %,$(obj)/$(TGTPRE)%,$(modpost-objs))
 	$(Q)$(CC) $(TGT_EXTRACFLAGS) $(CFLAGS) -o $@ $^

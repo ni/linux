@@ -10,7 +10,11 @@
 #include <unistd.h>
 #include <elf.h>
 
+#if defined(CONFIG_MODPOST_ELFCONFIG)
+#include CONFIG_MODPOST_ELFCONFIG
+#else
 #include "elfconfig.h"
+#endif
 
 /* On BSD-alike OSes elf.h defines these according to host's word size */
 #undef ELF_ST_BIND
