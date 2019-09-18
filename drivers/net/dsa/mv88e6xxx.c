@@ -1984,12 +1984,30 @@ abort:
 	return ret;
 }
 
-static int mv88e6xxx_phc_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
+static int mv88e6xxx_phc_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 {
-	if (ppb == 0)
-		return 0;
+	struct mv88e6xxx_priv_state *ps =
+		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
+	unsigned long flags;
+	int neg_adj = 0;
+	u32 diff, mult;
+	u64 adj;
 
-	return -EOPNOTSUPP;
+	if (scaled_ppm < 0) {
+		neg_adj = 1;
+		scaled_ppm = -scaled_ppm;
+	}
+	mult = CC_MULT;
+	adj = CC_MULT_NUM;
+	adj *= scaled_ppm;
+	diff = div_u64(adj, CC_MULT_DEM);
+
+	spin_lock_irqsave(&ps->phc_lock, flags);
+	timecounter_read(&ps->phc_tc);
+	ps->phc_cc.mult = neg_adj ? mult - diff : mult + diff;
+	spin_unlock_irqrestore(&ps->phc_lock, flags);
+
+	return 0;
 }
 
 static int mv88e6xxx_phc_adjtime(struct ptp_clock_info *ptp, s64 delta)
@@ -2427,12 +2445,12 @@ int mv88e6xxx_setup_phc(struct dsa_switch *ds)
 		ppd->func = PTP_PF_NONE;
 	}
 	snprintf(ps->ptp_clock_caps.name, 20, "dsa-%d:mv88e6xxx", ds->index);
-	ps->ptp_clock_caps.max_adj = 0;
+	ps->ptp_clock_caps.max_adj = 1000000;
 	ps->ptp_clock_caps.n_ext_ts = MV88E6XXX_NUM_EXTTS;
 	ps->ptp_clock_caps.n_per_out = MV88E6XXX_NUM_PEROUT;
 	ps->ptp_clock_caps.n_pins = MV88E6XXX_NUM_GPIO;
 	ps->ptp_clock_caps.pin_config = ps->pin_config;
-	ps->ptp_clock_caps.adjfreq = mv88e6xxx_phc_adjfreq;
+	ps->ptp_clock_caps.adjfine = mv88e6xxx_phc_adjfine;
 	ps->ptp_clock_caps.adjtime = mv88e6xxx_phc_adjtime;
 	ps->ptp_clock_caps.gettime64 = mv88e6xxx_phc_gettime;
 	ps->ptp_clock_caps.settime64 = mv88e6xxx_phc_settime;
