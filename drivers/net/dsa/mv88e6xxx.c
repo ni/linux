@@ -23,6 +23,15 @@
 #include <net/dsa.h>
 #include "mv88e6xxx.h"
 
+/* Raw timestamps are in units of 8-ns clock periods. */
+#define CC_SHIFT	28
+#define CC_MULT		(8 << CC_SHIFT)
+#define CC_MULT_NUM	(1 << 9)
+#define CC_MULT_DEM	15625ULL
+
+static int mv88e6xxx_phc_gettime(struct ptp_clock_info *ptp,
+                                 struct timespec64 *ts);
+
 /* If the switch's ADDR[4:0] strap pins are strapped to zero, it will
  * use all 32 SMI bus addresses on its SMI bus, and all switch registers
  * will be directly accessible on some {device address,register address}
@@ -1176,108 +1185,41 @@ static u8 *_get_ptp_header(struct sk_buff *skb, unsigned int type)
 	return data + offset;
 }
 
-static u64 mv88e6xxx_raw_to_ns(struct dsa_switch *ds, u64 raw)
-{
-	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
-	u64 ns;
-	unsigned long flags;
-
-	spin_lock_irqsave(&ps->phc_lock, flags);
-	/* Raw timestamps are in units of 8-ns clock periods. */
-	ns = (raw * 8) + ps->phc_offset_ns;
-	spin_unlock_irqrestore(&ps->phc_lock, flags);
-
-	return ns;
-}
-
-/* Detect and track rollovers in the PHC clock.
- *
- * Because PHC times come from both direct TAI/PHC event reads and
- * packet timestamps, we can't assume they are in order. This means a
- * new value can be from the past, potentially from a previous
- * rollover.
- *
- * This function must be called at least every rollover period (~34s
- * at 125MHz) for the rollover count to remain in sync with the switch
- * time. This is guaranteed to happen in any functioning PTP scenario
- * since a GM will send peer delays >1/s, and a non-GM must be
- * receiving sync frames >1/s
+/* With a 125MHz input clock, the 32-bit timestamp counter overflows in ~34.3
+ * seconds; this task forces periodic reads so that we don't miss any.
  */
-static u32 mv88e6xxx_update_phc_rollover(struct dsa_switch *ds, u32 phc_counter)
+#define MV88E6XXX_TAI_OVERFLOW_PERIOD (HZ * 16)
+static void mv88e6xxx_ptp_overflow_check(struct work_struct *work)
 {
-	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
-	u32 rollovers_this_ts;
-	unsigned long flags;
+	struct delayed_work *dw = to_delayed_work(work);
+	struct mv88e6xxx_priv_state *ps =
+		container_of(dw, struct mv88e6xxx_priv_state, overflow_work);
+	struct timespec64 ts;
 
-	spin_lock_irqsave(&ps->phc_lock, flags);
+	mv88e6xxx_phc_gettime(&ps->ptp_clock_caps, &ts);
 
-	rollovers_this_ts = ps->phc_rollovers;
-
-	if (phc_counter > ps->latest_phc_counter) {
-		if (phc_counter - ps->latest_phc_counter < 0x7ffffff) {
-			/* phc_counter is newer than latest seen, no rollover */
-			ps->latest_phc_counter = phc_counter;
-		} else {
-			/* phc_counter is older than latest seen, and
-			 * latest rolled over
-			 */
-			rollovers_this_ts--;
-		}
-	} else {
-		if (ps->latest_phc_counter - phc_counter < 0x7ffffff) {
-			/* phc_counter is older than latest seen, no rollover */
-		} else {
-			/* phc_counter is newer than latest seen, and
-			 * rolled over
-			 */
-			ps->latest_phc_counter = phc_counter;
-			rollovers_this_ts++;
-			ps->phc_rollovers = rollovers_this_ts;
-		}
-	}
-
-	spin_unlock_irqrestore(&ps->phc_lock, flags);
-
-	return rollovers_this_ts;
-}
-
-/* Augment a 32-bit PHC count with the current rollover count to get a
- * valid u64 count. Also convert to a ktime_t timestamp. This function
- * must be called within one rollover period from when the timestamp
- * was taken to work correctly.
- */
-static u64 mv88e6xxx_augment_phc_count(struct dsa_switch *ds, u32 phc_count,
-				       ktime_t *kt)
-{
-	u64 raw = (((u64)mv88e6xxx_update_phc_rollover(ds, phc_count)) << 32)
-		| phc_count;
-
-	if (kt)
-		*kt = ns_to_ktime(mv88e6xxx_raw_to_ns(ds, raw));
-
-	return raw;
+	schedule_delayed_work(&ps->overflow_work,
+			      MV88E6XXX_TAI_OVERFLOW_PERIOD);
 }
 
 /* Retrieve the current global time from the switch.
  */
-static int mv88e6xxx_get_raw_phc_time(struct dsa_switch *ds, u64 *raw)
+static u64 mv88e6xxx_ptp_clock_read(const struct cyclecounter *cc)
 {
-	int ret;
+	struct mv88e6xxx_priv_state *ps =
+		container_of(cc, struct mv88e6xxx_priv_state, phc_cc);
+	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
 	u16 phc_block[4];
-	u32 phc_counter;
+	int ret;
 
 	ret = mv88e6xxx_read_ptp_block(ds, GLOBAL2_PTP_AVB_OP_PORT_TAI_GLOBAL,
 				       GLOBAL2_PTP_AVB_OP_BLOCK_PTP,
 				       TAI_GLOBAL_TIME_LO, phc_block);
-	if (ret < 0)
-		goto out;
 
-	phc_counter = ((u32)phc_block[1] << 16) | phc_block[0];
-
-	*raw = mv88e6xxx_augment_phc_count(ds, phc_counter, NULL);
-
-out:
-	return ret;
+	if (ret)
+		return 0;
+	else
+		return ((u32)phc_block[1] << 16) | phc_block[0];
 }
 
 static bool mv88e6xxx_should_timestamp(struct dsa_switch *ds, int port,
@@ -1329,6 +1271,7 @@ bool mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 	struct mv88e6xxx_port_priv_state *pps = &ps->port_priv[port];
 	__be32 *ptp_rx_ts;
 	u32 raw_ts;
+	u64 ns;
 	struct skb_shared_hwtstamps *shhwtstamps;
 
 	if (port < 0 || port >= ps->num_ports)
@@ -1342,7 +1285,8 @@ bool mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 	/* RX timestamps are written into the PTP header itself */
 	ptp_rx_ts = (__be32 *)(_get_ptp_header(skb, type) + 16);
 	raw_ts = __be32_to_cpu(*ptp_rx_ts);
-	mv88e6xxx_augment_phc_count(ds, raw_ts, &shhwtstamps->hwtstamp);
+	ns = timecounter_cyc2time(&ps->phc_tc, raw_ts);
+	shhwtstamps->hwtstamp = ns_to_ktime(ns);
 
 	netdev_dbg(ds->ports[pps->port_id], "rxtstamp %llx\n",
 		   ktime_to_ns(shhwtstamps->hwtstamp));
@@ -1388,6 +1332,7 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 		u16 status;
 		struct skb_shared_hwtstamps shhwtstamps;
 		u32 tx_low_word;
+		u64 ns;
 
 		/* We have the timestamp; go ahead and clear valid now */
 		mv88e6xxx_write_ptp_word(ds, pps->port_id,
@@ -1409,8 +1354,8 @@ static void mv88e6xxx_tx_tstamp_work(struct work_struct *ugly)
 		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
 		tx_low_word = ((u32)departure_block[2] << 16) |
 			      departure_block[1];
-		mv88e6xxx_augment_phc_count(ds, tx_low_word,
-					    &shhwtstamps.hwtstamp);
+		ns = timecounter_cyc2time(&ps->phc_tc, tx_low_word);
+		shhwtstamps.hwtstamp = ns_to_ktime(ns);
 
 		netdev_dbg(ds->ports[pps->port_id],
 			   "txtstamp %llx status 0x%04x skb ID 0x%04x hw ID 0x%04x\n",
@@ -2054,7 +1999,7 @@ static int mv88e6xxx_phc_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	unsigned long flags;
 
 	spin_lock_irqsave(&ps->phc_lock, flags);
-	ps->phc_offset_ns += delta;
+	timecounter_adjtime(&ps->phc_tc, delta);
 	spin_unlock_irqrestore(&ps->phc_lock, flags);
 
 	return 0;
@@ -2065,16 +2010,14 @@ static int mv88e6xxx_phc_gettime(struct ptp_clock_info *ptp,
 {
 	struct mv88e6xxx_priv_state *ps =
 		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
-	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
+	unsigned long flags;
+	u64 ns;
 
-	u64 raw_count;
-	int ret;
+	spin_lock_irqsave(&ps->phc_lock, flags);
+	ns = timecounter_read(&ps->phc_tc);
+	spin_unlock_irqrestore(&ps->phc_lock, flags);
 
-	ret = mv88e6xxx_get_raw_phc_time(ds, &raw_count);
-	if (ret < 0)
-		return ret;
-
-	*ts = ns_to_timespec64(mv88e6xxx_raw_to_ns(ds, raw_count));
+	*ts = ns_to_timespec64(ns);
 
 	return 0;
 }
@@ -2084,21 +2027,13 @@ static int mv88e6xxx_phc_settime(struct ptp_clock_info *ptp,
 {
 	struct mv88e6xxx_priv_state *ps =
 		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
-	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
-
-	u64 raw_count, new_now;
 	unsigned long flags;
-	int ret;
+	u64 ns;
 
-	ret = mv88e6xxx_get_raw_phc_time(ds, &raw_count);
-	if (ret < 0)
-		return ret;
-
-	new_now = timespec64_to_ns(ts);
+	ns = timespec64_to_ns(ts);
 
 	spin_lock_irqsave(&ps->phc_lock, flags);
-	/* Raw timestamps are in units of 8-ns clock periods. */
-	ps->phc_offset_ns = new_now - (raw_count * 8);
+	timecounter_init(&ps->phc_tc, &ps->phc_cc, ns);
 	spin_unlock_irqrestore(&ps->phc_lock, flags);
 
 	return 0;
@@ -2304,10 +2239,7 @@ static void mv88e6xxx_tai_work(struct work_struct *ugly)
 
 	if (event_block[0] & TAI_GLOBAL_EVENT_STATUS_VALID) {
 		struct ptp_clock_event ev;
-		ktime_t ev_time;
 		u32 raw_ts = ((u32)event_block[2] << 16) | event_block[1];
-
-		mv88e6xxx_augment_phc_count(ds, raw_ts, &ev_time);
 
 		/* Clear the valid bit so the next timestamp can come in */
 		event_block[0] &= ~TAI_GLOBAL_EVENT_STATUS_VALID;
@@ -2328,7 +2260,7 @@ static void mv88e6xxx_tai_work(struct work_struct *ugly)
 		}
 		/* We only have the one TAI timestamping channel */
 		ev.index = 0;
-		ev.timestamp = ktime_to_ns(ev_time);
+		ev.timestamp = timecounter_cyc2time(&ps->phc_tc, raw_ts);
 
 		ptp_clock_event(ps->ptp_clock, &ev);
 	}
@@ -2476,6 +2408,16 @@ int mv88e6xxx_setup_phc(struct dsa_switch *ds)
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 	int i;
 
+	/* Set up the cycle counter */
+	memset(&ps->phc_cc, 0, sizeof(ps->phc_cc));
+	ps->phc_cc.read = mv88e6xxx_ptp_clock_read;
+	ps->phc_cc.mask = CYCLECOUNTER_MASK(32);
+	ps->phc_cc.mult = CC_MULT;
+	ps->phc_cc.shift = CC_SHIFT;
+
+	timecounter_init(&ps->phc_tc, &ps->phc_cc,
+			 ktime_to_ns(ktime_get_real()));
+
 	ps->ptp_clock_caps.owner = THIS_MODULE;
 	for (i = 0; i < MV88E6XXX_NUM_GPIO; i++) {
 		struct ptp_pin_desc *ppd = &ps->pin_config[i];
@@ -2500,6 +2442,9 @@ int mv88e6xxx_setup_phc(struct dsa_switch *ds)
 	ps->ptp_clock = ptp_clock_register(&ps->ptp_clock_caps, ds->master_dev);
 	if (IS_ERR(ps->ptp_clock))
 		return PTR_ERR(ps->ptp_clock);
+
+	schedule_delayed_work(&ps->overflow_work,
+			      MV88E6XXX_TAI_OVERFLOW_PERIOD);
 
 	return 0;
 }
@@ -2550,14 +2495,8 @@ int mv88e6xxx_setup_common(struct dsa_switch *ds)
 
 	ps->fid_mask = (1 << DSA_MAX_PORTS) - 1;
 
-	/* The actual value of the rollovers doesn't matter, but starting at once
-	 * avoids making it look like the 64-bit PHC clock rolls over right away
-	 */
-
-	ps->phc_rollovers = 1;
-	ps->latest_phc_counter = 0;
-
 	INIT_WORK(&ps->bridge_work, mv88e6xxx_bridge_work);
+	INIT_DELAYED_WORK(&ps->overflow_work, mv88e6xxx_ptp_overflow_check);
 	INIT_DELAYED_WORK(&ps->tai_work, mv88e6xxx_tai_work);
 
 	return 0;

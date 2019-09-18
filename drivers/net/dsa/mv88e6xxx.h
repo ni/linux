@@ -11,6 +11,8 @@
 #ifndef __MV88E6XXX_H
 #define __MV88E6XXX_H
 
+#include <linux/timecounter.h>
+
 #ifndef UINT64_MAX
 #define UINT64_MAX		(u64)(~((u64)0))
 #endif
@@ -502,9 +504,8 @@ struct mv88e6xxx_priv_state {
 	 * IRQ context.
 	 */
 	spinlock_t phc_lock;
-	u32 phc_rollovers;
-	u32 latest_phc_counter;
-	u64 phc_offset_ns;
+	struct cyclecounter phc_cc;
+	struct timecounter phc_tc;
 
 	/* This mutex serializes access to the rest of the PTP
 	 * hardware clock resources.
@@ -519,6 +520,7 @@ struct mv88e6xxx_priv_state {
 	u16 trig_config;
 	u16 evcap_config;
 
+	struct delayed_work overflow_work;
 	struct delayed_work tai_work;
 };
 
