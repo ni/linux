@@ -8,7 +8,6 @@
  * (at your option) any later version.
  */
 
-#include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
@@ -2042,31 +2041,8 @@ abort:
 
 static int mv88e6xxx_phc_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 {
-	struct mv88e6xxx_priv_state *ps =
-		container_of(ptp, struct mv88e6xxx_priv_state, ptp_clock_caps);
-	struct dsa_switch *ds = ((struct dsa_switch *)ps) - 1;
-
 	if (ppb == 0)
 		return 0;
-
-	/* Only support steering of the primary XTAL_IN clock for now */
-	if (ps->xtal_in) {
-		u32 old_freq, new_freq;
-		u64 adjust;
-
-		old_freq = clk_get_rate(ps->xtal_in);
-		adjust = (u64)old_freq * abs(ppb);
-		do_div(adjust, 1000000000U);
-		if (ppb > 0)
-			new_freq = old_freq + (u32)adjust;
-		else
-			new_freq = old_freq - (u32)adjust;
-
-		dev_dbg(ds->master_dev, "adjusted clock from %d by %d ppb to %d",
-			old_freq, ppb, new_freq);
-
-		return clk_set_rate(ps->xtal_in, new_freq);
-	}
 
 	return -EOPNOTSUPP;
 }
@@ -2500,15 +2476,6 @@ int mv88e6xxx_setup_phc(struct dsa_switch *ds)
 	struct mv88e6xxx_priv_state *ps = ds_to_priv(ds);
 	int i;
 
-	/* These are optional clock handles for steering the PTP time */
-	ps->xtal_in = of_clk_get_by_name(ds->pd->of_node, "xtal_in");
-	if (IS_ERR(ps->xtal_in))
-		ps->xtal_in = NULL;
-
-	ps->ptp_extclk = of_clk_get_by_name(ds->pd->of_node, "ptp_ext");
-	if (IS_ERR(ps->ptp_extclk))
-		ps->ptp_extclk = NULL;
-
 	ps->ptp_clock_caps.owner = THIS_MODULE;
 	for (i = 0; i < MV88E6XXX_NUM_GPIO; i++) {
 		struct ptp_pin_desc *ppd = &ps->pin_config[i];
@@ -2518,13 +2485,7 @@ int mv88e6xxx_setup_phc(struct dsa_switch *ds)
 		ppd->func = PTP_PF_NONE;
 	}
 	snprintf(ps->ptp_clock_caps.name, 20, "dsa-%d:mv88e6xxx", ds->index);
-
-	if (ps->xtal_in || ps->ptp_extclk)
-		/* Default to 1000 ppm steering */
-		ps->ptp_clock_caps.max_adj = 1000000;
-	else
-		ps->ptp_clock_caps.max_adj = 0;
-
+	ps->ptp_clock_caps.max_adj = 0;
 	ps->ptp_clock_caps.n_ext_ts = MV88E6XXX_NUM_EXTTS;
 	ps->ptp_clock_caps.n_per_out = MV88E6XXX_NUM_PEROUT;
 	ps->ptp_clock_caps.n_pins = MV88E6XXX_NUM_GPIO;
