@@ -225,6 +225,14 @@ extern struct cred init_cred;
 #define INIT_TASK_SECURITY
 #endif
 
+#if defined(CONFIG_SMP) && defined(CONFIG_PREEMPT_RT_BASE) &&		\
+    defined(CONFIG_SCHED_DEBUG)
+# define INIT_LAZY_MIGRATE(tsk)						\
+	.pinned_on_cpu	= -1,
+#else
+# define INIT_LAZY_MIGRATE(tsk)
+#endif
+
 /*
  *  INIT_TASK is used to set up the first task table, touch at
  * your own risk!. Base=0, limit=0x1fffff (=2MB)
@@ -243,6 +251,7 @@ extern struct cred init_cred;
 	.cpus_ptr	= &tsk.cpus_mask,				\
 	.cpus_mask	= CPU_MASK_ALL,					\
 	.nr_cpus_allowed= NR_CPUS,					\
+	INIT_LAZY_MIGRATE(tsk)						\
 	.mm		= NULL,						\
 	.active_mm	= &init_mm,					\
 	.restart_block = {						\
