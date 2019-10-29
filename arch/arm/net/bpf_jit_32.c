@@ -25,8 +25,6 @@
 
 #include "bpf_jit_32.h"
 
-int bpf_jit_enable __read_mostly;
-
 /*
  * eBPF prog stack layout:
  *
@@ -915,7 +913,7 @@ static inline void emit_str_r(const u8 dst, const u8 src, bool dstk,
 /* dst = *(size*)(src + off) */
 static inline void emit_ldx_r(const u8 dst[], const u8 src, bool dstk,
 			      s32 off, struct jit_ctx *ctx, const u8 sz){
-	const u8 *tmp = bpf2a32[TMP_REG_1];
+	const u8 *tmp = bpf2a32[TMP_REG_2];
 	const u8 *rd = dstk ? tmp : dst;
 	u8 rm = src;
 	s32 off_max;
