@@ -83,22 +83,22 @@
 
 			port@1 {
 				reg = <0x1>;
-				label = "sw0";
+				label = "sw3";
 			};
 
 			port@2 {
 				reg = <0x2>;
-				label = "sw1";
+				label = "sw2";
 			};
 
 			port@3 {
 				reg = <0x3>;
-				label = "sw2";
+				label = "sw1";
 			};
 
 			port@4 {
 				reg = <0x4>;
-				label = "sw3";
+				label = "sw0";
 			};
 		};
 	};
