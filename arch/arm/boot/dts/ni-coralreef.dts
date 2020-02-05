@@ -32,9 +32,9 @@
 			default-state = "on";
 		};
 
-		/* LED_ACTIVEg on GPIO47 */
+		/* LED_POWERb on GPIO47 */
 		active {
-			label = "nilrt:active:green";
+			label = "nilrt:status:blue";
 			gpios = <&gpio 47 0>;
 			default-state = "off";
 		};
