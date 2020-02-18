@@ -2448,6 +2448,16 @@ retry:
 		 * Since we just failed the trylock; there must be an owner.
 		 */
 		newowner = rt_mutex_owner(&pi_state->pi_mutex);
+		WARN_ON(!newowner);
+
+		/*
+		 * pi_state is incorrect, some other task did a lock steal and
+		 * we returned due to timeout or signal without taking the
+		 * rt_mutex. Too late.
+		 */
+		if (!newowner)
+			newowner = rt_mutex_next_owner(&pi_state->pi_mutex);
+
 		BUG_ON(!newowner);
 	} else {
 		WARN_ON_ONCE(argowner != current);
