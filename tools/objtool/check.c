@@ -505,8 +505,8 @@ static int add_jump_destinations(struct objtool_file *file)
 		if (insn->ignore || insn->offset == FAKE_JUMP_OFFSET)
 			continue;
 
-		rela = find_rela_by_dest_range(insn->sec, insn->offset,
-					       insn->len);
+		rela = find_rela_by_dest_range(file->elf, insn->sec,
+					       insn->offset, insn->len);
 		if (!rela) {
 			dest_sec = insn->sec;
 			dest_off = insn->offset + insn->len + insn->immediate;
@@ -564,8 +564,8 @@ static int add_call_destinations(struct objtool_file *file)
 		if (insn->type != INSN_CALL)
 			continue;
 
-		rela = find_rela_by_dest_range(insn->sec, insn->offset,
-					       insn->len);
+		rela = find_rela_by_dest_range(file->elf, insn->sec,
+					       insn->offset, insn->len);
 		if (!rela) {
 			dest_off = insn->offset + insn->len + insn->immediate;
 			insn->call_dest = find_symbol_by_offset(insn->sec,
@@ -932,8 +932,8 @@ static struct rela *find_switch_table(struct objtool_file *file,
 		    break;
 
 		/* look for a relocation which references .rodata */
-		text_rela = find_rela_by_dest_range(insn->sec, insn->offset,
-						    insn->len);
+		text_rela = find_rela_by_dest_range(file->elf, insn->sec,
+						    insn->offset, insn->len);
 		if (!text_rela || text_rela->sym->type != STT_SECTION ||
 		    !text_rela->sym->sec->rodata)
 			continue;
@@ -951,7 +951,7 @@ static struct rela *find_switch_table(struct objtool_file *file,
 		if (find_symbol_containing(rodata_sec, table_offset))
 			continue;
 
-		rodata_rela = find_rela_by_dest(rodata_sec, table_offset);
+		rodata_rela = find_rela_by_dest(file->elf, rodata_sec, table_offset);
 		if (rodata_rela) {
 			/*
 			 * Use of RIP-relative switch jumps is quite rare, and
@@ -960,7 +960,6 @@ static struct rela *find_switch_table(struct objtool_file *file,
 			 */
 			if (text_rela->type == R_X86_64_PC32)
 				file->ignore_unreachables = true;
-
 			return rodata_rela;
 		}
 	}
@@ -1082,7 +1081,7 @@ static int read_unwind_hints(struct objtool_file *file)
 	for (i = 0; i < sec->len / sizeof(struct unwind_hint); i++) {
 		hint = (struct unwind_hint *)sec->data->d_buf + i;
 
-		rela = find_rela_by_dest(sec, i * sizeof(*hint));
+		rela = find_rela_by_dest(file->elf, sec, i * sizeof(*hint));
 		if (!rela) {
 			WARN("can't find rela for unwind_hints[%d]", i);
 			return -1;
