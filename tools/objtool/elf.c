@@ -106,8 +106,8 @@ struct symbol *find_symbol_containing(struct section *sec, unsigned long offset)
 	return NULL;
 }
 
-struct rela *find_rela_by_dest_range(struct section *sec, unsigned long offset,
-				     unsigned int len)
+struct rela *find_rela_by_dest_range(struct elf *elf, struct section *sec,
+				     unsigned long offset, unsigned int len)
 {
 	struct rela *rela;
 	unsigned long o;
@@ -115,17 +115,22 @@ struct rela *find_rela_by_dest_range(struct section *sec, unsigned long offset,
 	if (!sec->rela)
 		return NULL;
 
-	for (o = offset; o < offset + len; o++)
-		hash_for_each_possible(sec->rela->rela_hash, rela, hash, o)
-			if (rela->offset == o)
+	sec = sec->rela;
+
+	for (o = offset; o < offset + len; o++) {
+		hash_for_each_possible(elf->rela_hash, rela, hash,
+				       sec_offset_hash(sec, o)) {
+			if (rela->rela_sec == sec && rela->offset == o)
 				return rela;
+		}
+	}
 
 	return NULL;
 }
 
-struct rela *find_rela_by_dest(struct section *sec, unsigned long offset)
+struct rela *find_rela_by_dest(struct elf *elf, struct section *sec, unsigned long offset)
 {
-	return find_rela_by_dest_range(sec, offset, 1);
+	return find_rela_by_dest_range(elf, sec, offset, 1);
 }
 
 struct symbol *find_containing_func(struct section *sec, unsigned long offset)
@@ -167,7 +172,6 @@ static int read_sections(struct elf *elf)
 
 		INIT_LIST_HEAD(&sec->symbol_list);
 		INIT_LIST_HEAD(&sec->rela_list);
-		hash_init(sec->rela_hash);
 		hash_init(sec->symbol_hash);
 
 		list_add_tail(&sec->list, &elf->sections);
@@ -398,8 +402,7 @@ static int read_relas(struct elf *elf)
 			}
 
 			list_add_tail(&rela->list, &sec->rela_list);
-			hash_add(sec->rela_hash, &rela->hash, rela->offset);
-
+			hash_add(elf->rela_hash, &rela->hash, rela_hash(rela));
 		}
 	}
 
@@ -420,6 +423,7 @@ struct elf *elf_open(const char *name, int flags)
 	}
 	memset(elf, 0, sizeof(*elf));
 
+	hash_init(elf->rela_hash);
 	INIT_LIST_HEAD(&elf->sections);
 
 	elf->fd = open(name, flags);
@@ -480,7 +484,6 @@ struct section *elf_create_section(struct elf *elf, const char *name,
 
 	INIT_LIST_HEAD(&sec->symbol_list);
 	INIT_LIST_HEAD(&sec->rela_list);
-	hash_init(sec->rela_hash);
 	hash_init(sec->symbol_hash);
 
 	list_add_tail(&sec->list, &elf->sections);
