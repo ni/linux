@@ -1029,7 +1029,8 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	ni-77D5.dtb \
 	ni-77D6.dtb \
 	ni-7885.dtb \
-	ni-793C.dtb
+	ni-793C.dtb \
+	ni-7AAE.dtb
 dtb-$(CONFIG_MACH_ARMADA_370) += \
 	armada-370-db.dtb \
 	armada-370-dlink-dns327l.dtb \
