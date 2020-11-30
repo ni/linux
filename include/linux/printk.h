@@ -170,6 +170,8 @@ int vprintk(const char *fmt, va_list args);
 asmlinkage __printf(1, 2) __cold
 int printk(const char *fmt, ...);
 
+bool pr_flush(int timeout_ms, bool reset_on_progress);
+
 /*
  * Please don't use printk_ratelimit(), because it shares ratelimiting state
  * with all other unrelated printk_ratelimit() callsites.  Instead use
@@ -208,6 +210,11 @@ static inline __printf(1, 2) __cold
 int printk(const char *s, ...)
 {
 	return 0;
+}
+
+static inline bool pr_flush(int timeout_ms, bool reset_on_progress)
+{
+	return true;
 }
 
 static inline int printk_ratelimit(void)
