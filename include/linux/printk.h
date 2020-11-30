@@ -171,21 +171,6 @@ asmlinkage __printf(1, 2) __cold
 int printk(const char *fmt, ...);
 
 /*
- * Special printk facility for scheduler/timekeeping use only, _DO_NOT_USE_ !
- */
-__printf(1, 2) __cold int printk_deferred(const char *fmt, ...);
-
-extern void __printk_safe_enter(void);
-extern void __printk_safe_exit(void);
-/*
- * The printk_deferred_enter/exit macros are available only as a hack for
- * some code paths that need to defer all printk console printing. Interrupts
- * must be disabled for the deferred duration.
- */
-#define printk_deferred_enter __printk_safe_enter
-#define printk_deferred_exit __printk_safe_exit
-
-/*
  * Please don't use printk_ratelimit(), because it shares ratelimiting state
  * with all other unrelated printk_ratelimit() callsites.  Instead use
  * printk_ratelimited() or plain old __ratelimit().
@@ -223,19 +208,6 @@ static inline __printf(1, 2) __cold
 int printk(const char *s, ...)
 {
 	return 0;
-}
-static inline __printf(1, 2) __cold
-int printk_deferred(const char *s, ...)
-{
-	return 0;
-}
-
-static inline void printk_deferred_enter(void)
-{
-}
-
-static inline void printk_deferred_exit(void)
-{
 }
 
 static inline int printk_ratelimit(void)
@@ -508,12 +480,8 @@ extern int kptr_restrict;
 #ifdef CONFIG_PRINTK
 #define printk_once(fmt, ...)					\
 	DO_ONCE_LITE(printk, fmt, ##__VA_ARGS__)
-#define printk_deferred_once(fmt, ...)				\
-	DO_ONCE_LITE(printk_deferred, fmt, ##__VA_ARGS__)
 #else
 #define printk_once(fmt, ...)					\
-	no_printk(fmt, ##__VA_ARGS__)
-#define printk_deferred_once(fmt, ...)				\
 	no_printk(fmt, ##__VA_ARGS__)
 #endif
 
