@@ -1,7 +1,10 @@
-/dts-v1/;
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2013-2020 National Instruments
+ */
 
 / {
-	model = "NI Xilinx Zynq prototype";
+	model = "NI VirtualBench";
 	compatible = "xlnx,zynq-zc770-xm010";
 	#address-cells = <0x1>;
 	#size-cells = <0x1>;
@@ -52,7 +55,7 @@
 			clock = <100000000>;
 		};
 
-		timer@0xf8001000 {
+		timer@f8001000 {
 			clock-frequency-timer0 = <111111000>;
 			clock-frequency-timer1 = <111111000>;
 			clock-frequency-timer2 = <111111000>;
@@ -68,13 +71,6 @@
 			reg = <0xe000b000 0x1000>;
 			interrupts = <0 22 0>;
 			phy-handle = <&phy0>;
-			xlnx,slcr-div0-1000Mbps = <8>;
-			xlnx,slcr-div0-100Mbps = <8>;
-			xlnx,slcr-div0-10Mbps = <8>;
-			xlnx,slcr-div1-1000Mbps = <1>;
-			xlnx,slcr-div1-100Mbps = <5>;
-			xlnx,slcr-div1-10Mbps = <50>;
-			xlnx,mdc-clk-div = <3>;
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
 
@@ -82,9 +78,6 @@
 				compatible = "marvell,88e1512";
 				device_type = "ethernet-phy";
 				reg = <0x0>;
-				/* Page 3, Registers 16-18, LED[2:0] Function,
-				   Polarity, and Timer Control Registers */
-				leds = <0x1177 0x15 0x4900>;
 			};
 		};
 
@@ -110,11 +103,11 @@
 		};
 
 		swdt@f8005000 {
-                        device_type = "watchdog";
-                        compatible = "xlnx,ps7-wdt-1.00.a";
-                        reg = <0xf8005000 0x100>;
-                        clock-frequency = <111111000>;
-                };
+			device_type = "watchdog";
+			compatible = "xlnx,ps7-wdt-1.00.a";
+			reg = <0xf8005000 0x100>;
+			clock-frequency = <111111000>;
+		};
 
 		scugtimer@f8f00000 {
 			compatible = "xlnx,xscugtimer-1.00.a";
@@ -138,23 +131,6 @@
 			interrupts = <0 20 0>;
 			#gpio-cells = <2>;
 			gpio-controller;
-
-			/* You can specify GPIO settings here:
-			 *
-			 *  gpioN-label      String label.
-			 *  gpioN-direction  "input" or "output".
-			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
-			 *                              or "low".
-			 *                   "input"  - specifies GPIO interrupt settings as
-			 *                              "none", "level-low", "level-high",
-			 *                              "edge-falling", "edge-rising", or
-			 *                              "edge-both".
-			 */
-
-			/* GPIO15 (MIO15) */
-			gpio15-label     = "wifi_interrupt";
-			gpio15-direction = "input";
-			gpio15-settings  = "level-low";
 		};
 
 		devcfg@f8007000 {
@@ -177,5 +153,3 @@
 		};
 	};
 };
-
-
