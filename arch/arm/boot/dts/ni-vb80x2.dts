@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2013-2020 National Instruments
+ */
+
+/dts-v1/;
+/include/ "ni-vb-1.dtsi"
+
+/ {
+	amba@0 {
+		sdhci@e0100000 {
+			status = "okay";
+		};
+
+		eth@e000b000 {
+			status = "disabled";
+		};
+	};
+};

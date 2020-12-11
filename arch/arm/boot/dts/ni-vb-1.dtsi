@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2013-2020 National Instruments
+ */
+
+/include/ "ni-vb.dtsi"
+
+/ {
+	model = "NI VirtualBench 80x2";
+
+	amba@0 {
+		eth@e000b000 {
+			xlnx,slcr-div0-1000Mbps = <12>;
+			xlnx,slcr-div0-100Mbps = <12>;
+			xlnx,slcr-div0-10Mbps = <12>;
+			xlnx,slcr-div1-1000Mbps = <1>;
+			xlnx,slcr-div1-100Mbps = <5>;
+			xlnx,slcr-div1-10Mbps = <50>;
+			xlnx,mdc-clk-div = <3>;
+
+			phy@0 {
+				/* Interrupt on GPIO1 */
+				interrupts = <1 0>;
+				interrupt-parent = <&gpio>;
+				/* Page 3, Register 16, LED[2:0] Function
+				   Control Register */
+				leds = <0x1881>;
+			};
+		};
+
+		gpio@e000a000 {
+			/* GPIO1 (MIO1) */
+			gpio1-label     = "phy_interupt";
+			gpio1-direction = "input";
+			gpio1-settings  = "level-low";
+
+			/* GPIO15 (MIO15) */
+			gpio15-label     = "wifi_interrupt";
+			gpio15-direction = "input";
+			gpio15-settings  = "level-low";
+		};
+	};
+};
+

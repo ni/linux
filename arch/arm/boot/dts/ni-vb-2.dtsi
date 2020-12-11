@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2013-2020 National Instruments
+ */
+
+/include/ "ni-vb.dtsi"
+
+/ {
+	model = "NI VirtualBench 80x4";
+
+	amba@0 {
+		eth0: eth@e000b000 {
+			xlnx,slcr-div0-1000Mbps = <8>;
+			xlnx,slcr-div0-100Mbps = <8>;
+			xlnx,slcr-div0-10Mbps = <8>;
+			xlnx,slcr-div1-1000Mbps = <1>;
+			xlnx,slcr-div1-100Mbps = <5>;
+			xlnx,slcr-div1-10Mbps = <50>;
+			xlnx,mdc-clk-div = <3>;
+
+			phy@0 {
+				/* Page 3, Register 16-18, LED[2:0] Function,
+				   Polarity, and Timer Control Registers */
+				leds = <0x1177 0x15 0x4900>;
+			};
+		};
+
+		gpio@e000a000 {
+			/* GPIO15 (MIO15) */
+			gpio15-label     = "wifi_interrupt";
+			gpio15-direction = "input";
+			gpio15-settings  = "level-low";
+		};
+	};
+};
