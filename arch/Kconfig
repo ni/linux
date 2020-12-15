@@ -628,6 +628,12 @@ config HAVE_TIF_NOHZ
 config HAVE_VIRT_CPU_ACCOUNTING
 	bool
 
+config HAVE_VIRT_CPU_ACCOUNTING_IDLE
+	bool
+	help
+	  Architecture has its own way to account idle CPU time and therefore
+	  doesn't implement vtime_account_idle().
+
 config ARCH_HAS_SCALED_CPUTIME
 	bool
 
@@ -641,7 +647,6 @@ config HAVE_VIRT_CPU_ACCOUNTING_GEN
 	  cputime_t. For example, reading/writing 64-bit cputime_t on
 	  some 32-bit arches may require multiple accesses, so proper
 	  locking is needed to protect against concurrent accesses.
-
 
 config HAVE_IRQ_TIME_ACCOUNTING
 	bool
@@ -1028,6 +1033,15 @@ config HAVE_STATIC_CALL
 config HAVE_STATIC_CALL_INLINE
 	bool
 	depends on HAVE_STATIC_CALL
+
+config ARCH_WANT_LD_ORPHAN_WARN
+	bool
+	help
+	  An arch should select this symbol once all linker sections are explicitly
+	  included, size-asserted, or discarded in the linker scripts. This is
+	  important because we never want expected sections to be placed heuristically
+	  by the linker, since the locations of such sections can change between linker
+	  versions.
 
 source "kernel/gcov/Kconfig"
 
