@@ -31,6 +31,14 @@ static char *fsg_manuf = "NI";
 
 module_param(fsg_manuf, charp, S_IRUGO);
 
+/* Whether or not to enable RNDIS */
+static bool rndis = 0;
+module_param(rndis, bool, 0);
+
+static inline int lci_use_rndis(void) {
+	return rndis;
+}
+
 /*-------------------------------------------------------------------------*/
 
 /*
@@ -48,14 +56,10 @@ module_param(fsg_manuf, charp, S_IRUGO);
 #include "f_mass_storage.c"
 #include "usbstring.c"
 
-#ifdef CONFIG_USB_G_LCI_RNDIS
-
 #define USB_ETH_RNDIS
 #include "f_rndis.c"
 #include "rndis.c"
 #include "u_ether.c"
-
-#endif
 
 static void lci_cleanup(void);
 static int lci_unbind(struct usb_composite_dev*);
@@ -119,6 +123,10 @@ static struct fsg_module_parameters mod_data = {
 };
 FSG_MODULE_PARAMETERS(/* no prefix */, mod_data);
 
+static inline int lci_use_mass_storage(void) {
+	/* This keys off of g_lci.cdrom=1 */
+	return (mod_data.cdrom_count > 0) && (!!mod_data.cdrom[0]);
+}
 
 /* HID Gadget Data ***********************************************************/
 
@@ -358,27 +366,27 @@ static void hid_unregister(void)
 
 /*****************************************************************************/
 
-#ifdef CONFIG_USB_G_LCI_RNDIS
-u8 macaddr[ETH_ALEN];
-#endif
+static u8 macaddr[ETH_ALEN];
 
 static int __init lci_bind_config(struct usb_configuration *c)
 {
 	struct hidg_func_node *e;
 	int func = 0, status = 0;
 
-#ifdef CONFIG_USB_G_LCI_RNDIS
-	status = rndis_bind_config(c, macaddr);
-	if(status) return status;
-#endif
+	if (lci_use_rndis()) {
+		status = rndis_bind_config(c, macaddr);
+		if(status) return status;
+	}
 
 	list_for_each_entry(e, &hidg_func_list, node) {
 		status = hidg_bind_config(c, e->func, func++);
 		if (status) break;
 	}
 
-	status = msg_add_to_config(c);
-	if(status) return status;
+	if (lci_use_mass_storage()) {
+		status = msg_add_to_config(c);
+		if(status) return status;
+	}
 
 	return status;
 }
@@ -396,11 +404,11 @@ static int __init lci_bind(struct usb_composite_dev *cdev)
 		return -ENODEV;
 	}
 
-#ifdef CONFIG_USB_G_LCI_RNDIS
-	//Setup ether
-	status = gether_setup(gadget, macaddr);
-	if (status < 0) return status;
-#endif
+	if (lci_use_rndis()) {
+		//Setup ether
+		status = gether_setup(gadget, macaddr);
+		if (status < 0) return status;
+	}
 
 	//Setup HID
 	status = ghid_setup(gadget, num_hid_interfaces);
