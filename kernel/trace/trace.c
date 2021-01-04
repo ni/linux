@@ -6858,7 +6858,8 @@ tracing_ni_ett_raw_write(struct file *filp, const char __user *ubuf,
 	struct trace_array *tr = &global_trace;
 	struct trace_buffer *buffer = tr->array_buffer.buffer;
 	struct trace_array_cpu *data;
-	int cpu, size, pc;
+	int cpu, size;
+	unsigned int trace_ctx;
 	struct bprint_entry *entry;
 	unsigned long irq_flags;
 	int disable;
@@ -6869,7 +6870,7 @@ tracing_ni_ett_raw_write(struct file *filp, const char __user *ubuf,
 	if (tracing_disabled || tracing_selftest_running)
 		return -EINVAL;
 
-	pc = preempt_count();
+	trace_ctx = tracing_gen_ctx_flags();
 	preempt_disable_notrace();
 	cpu = raw_smp_processor_id();
 	data = per_cpu_ptr(tr->array_buffer.data, cpu);
@@ -6881,7 +6882,7 @@ tracing_ni_ett_raw_write(struct file *filp, const char __user *ubuf,
 
 	size = sizeof(*entry) + cnt;
 	event = trace_buffer_lock_reserve(buffer, TRACE_BPRINT, size,
-					  irq_flags, pc);
+					trace_ctx);
 	if (!event)
 		goto out_unlock;
 	entry = ring_buffer_event_data(event);
@@ -6898,7 +6899,7 @@ tracing_ni_ett_raw_write(struct file *filp, const char __user *ubuf,
 		goto out_unlock;
  error_and_trace:
 	__buffer_unlock_commit(buffer, event);
-	ftrace_trace_stack(&global_trace, buffer, irq_flags, 6, pc, NULL);
+	ftrace_trace_stack(&global_trace, buffer, trace_ctx, 6, NULL);
  out_unlock:
 	raw_local_irq_restore(irq_flags);
 	unpause_graph_tracing();
