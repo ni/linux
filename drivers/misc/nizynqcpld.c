@@ -1380,6 +1380,20 @@ static struct nizynqcpld_desc nizynqcpld_descs[] = {
 		.switch_addr		= PROTO_PROCESSORMODE,
 		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
 	},
+	/* roboRIO 2.0 CPLD */
+	{
+		.attrs			= dosequis6_attrs,
+		.supported_version	= 1,
+		.supported_product	= 7,
+		.watchdog_desc		= &dosxv5_watchdog_desc,
+		.led_descs		= dosx_leds,
+		.num_led_descs		= ARRAY_SIZE(dosx_leds),
+		.reboot_addr		= DOSX_PROCESSORRESET,
+		.scratch_hr_addr	= DOSX_SCRATCHPADHR,
+		.scratch_sr_addr	= DOSX_SCRATCHPADSR,
+		.switch_addr		= PROTO_PROCESSORMODE,
+		.watchdog_addr		= DOSX_WATCHDOGCONTROL,
+	},
 };
 
 static void wifi_sw_work_func(struct work_struct *work)
