@@ -3,7 +3,7 @@
 
 / {
 	model = "NI roboRIO 2.0";
-	compatible = "ni,zynq", "xlnx,zynq-7000";
+	compatible = "ni,zynq", "xlnx,zynq-7000", "ni,artemis";
 
 	aliases {
 		spi0 = &spi0;
