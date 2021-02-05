@@ -6840,7 +6840,7 @@ tracing_ni_ett_raw_write(struct file *filp, const char __user *ubuf,
 
 	trace_ctx = tracing_gen_ctx_flags(irq_flags);
 	size = sizeof(*entry) + cnt;
-	event = trace_buffer_lock_reserve(buffer, TRACE_BPRINT, size,
+	event = __trace_buffer_lock_reserve(buffer, TRACE_BPRINT, size,
 					trace_ctx);
 	if (!event)
 		goto out_unlock;
