@@ -916,7 +916,7 @@ void wake_q_add_safe(struct wake_q_head *head, struct task_struct *task)
 		put_task_struct(task);
 }
 
-void wake_up_q(struct wake_q_head *head)
+void __wake_up_q(struct wake_q_head *head, unsigned int state)
 {
 	struct wake_q_node *node = head->first;
 
@@ -932,7 +932,7 @@ void wake_up_q(struct wake_q_head *head)
 		 * wake_up_process() executes a full barrier, which pairs with
 		 * the queueing in wake_q_add() so as not to miss wakeups.
 		 */
-		wake_up_process(task);
+		wake_up_state(task, state);
 		put_task_struct(task);
 	}
 }

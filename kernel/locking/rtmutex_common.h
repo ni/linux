@@ -43,14 +43,17 @@ struct rt_mutex_waiter {
  * rt_wake_q_head - Wrapper around regular wake_q_head to support
  *		    "sleeping" spinlocks on RT
  * @head:	The regular wake_q_head for sleeping lock variants
+ * @rt_head:	The wake_q_head for RT lock (spin/rwlock) variants
  */
 struct rt_wake_q_head {
 	struct wake_q_head	head;
+	struct wake_q_head	rt_head;
 };
 
 #define DEFINE_RT_WAKE_Q(name)						\
 	struct rt_wake_q_head name = {					\
 		.head		= WAKE_Q_HEAD_INITIALIZER(name.head),	\
+		.rt_head	= WAKE_Q_HEAD_INITIALIZER(name.rt_head),\
 	}
 
 /*
