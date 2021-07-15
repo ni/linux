@@ -97,13 +97,13 @@ bool nmi_cpu_backtrace(struct pt_regs *regs)
 			 * Allow nested NMI backtraces while serializing
 			 * against other CPUs.
 			 */
-			printk_cpu_lock_irqsave(flags);
+			raw_printk_cpu_lock_irqsave(flags);
 			pr_warn("NMI backtrace for cpu %d\n", cpu);
 			if (regs)
 				show_regs(regs);
 			else
 				dump_stack();
-			printk_cpu_unlock_irqrestore(flags);
+			raw_printk_cpu_unlock_irqrestore(flags);
 		}
 		cpumask_clear_cpu(cpu, to_cpumask(backtrace_mask));
 		return true;
