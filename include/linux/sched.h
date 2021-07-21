@@ -1646,6 +1646,16 @@ static inline bool is_percpu_thread(void)
 #endif
 }
 
+/* Is the current task guaranteed not to be migrated elsewhere? */
+static inline bool is_pcpu_safe(void)
+{
+#ifdef CONFIG_SMP
+	return !preemptible() || is_percpu_thread() || current->migration_disabled;
+#else
+	return true;
+#endif
+}
+
 /* Per-process atomic flags. */
 #define PFA_NO_NEW_PRIVS		0	/* May not gain new privileges. */
 #define PFA_SPREAD_PAGE			1	/* Spread page cache over cpuset */
