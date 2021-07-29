@@ -1125,6 +1125,8 @@ static void fpsimd_flush_thread_vl(enum vec_type type)
 
 void fpsimd_flush_thread(void)
 {
+	void *sve_state = NULL;
+
 	if (!system_supports_fpsimd())
 		return;
 
@@ -1136,11 +1138,16 @@ void fpsimd_flush_thread(void)
 
 	if (system_supports_sve()) {
 		clear_thread_flag(TIF_SVE);
-		sve_free(current);
+
+		/* Defer kfree() while in atomic context */
+		sve_state = current->thread.sve_state;
+		current->thread.sve_state = NULL;
+
 		fpsimd_flush_thread_vl(ARM64_VEC_SVE);
 	}
 
 	put_cpu_fpsimd_context();
+	kfree(sve_state);
 }
 
 /*
