@@ -1277,6 +1277,43 @@ static __always_inline void __rt_mutex_unlock(struct rt_mutex_base *lock)
 	rt_mutex_slowunlock(lock);
 }
 
+#ifdef CONFIG_SMP
+/*
+ * Note that owner is a speculative pointer and dereferencing relies
+ * on rcu_read_lock() and the check against the lock owner.
+ */
+static bool rtmutex_adaptive_spinwait(struct rt_mutex_base *lock,
+				     struct task_struct *owner)
+{
+	bool res = true;
+
+	rcu_read_lock();
+	for (;;) {
+		/* Owner changed. Trylock again */
+		if (owner != rt_mutex_owner(lock))
+			break;
+		/*
+		 * Ensure that owner->on_cpu is dereferenced _after_
+		 * checking the above to be valid.
+		 */
+		barrier();
+		if (!owner->on_cpu) {
+			res = false;
+			break;
+		}
+		cpu_relax();
+	}
+	rcu_read_unlock();
+	return res;
+}
+#else
+static bool rtmutex_adaptive_spinwait(struct rt_mutex_base *lock,
+				     struct task_struct *owner)
+{
+	return false;
+}
+#endif
+
 #ifdef RT_MUTEX_BUILD_MUTEX
 /*
  * Functions required for:
@@ -1361,6 +1398,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
 					   struct rt_mutex_waiter *waiter)
 {
 	struct rt_mutex *rtm = container_of(lock, struct rt_mutex, rtmutex);
+	struct task_struct *owner;
 	int ret = 0;
 
 	for (;;) {
@@ -1383,9 +1421,14 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
 				break;
 		}
 
+		if (waiter == rt_mutex_top_waiter(lock))
+			owner = rt_mutex_owner(lock);
+		else
+			owner = NULL;
 		raw_spin_unlock_irq(&lock->wait_lock);
 
-		schedule();
+		if (!owner || !rtmutex_adaptive_spinwait(lock, owner))
+			schedule();
 
 		raw_spin_lock_irq(&lock->wait_lock);
 		set_current_state(state);
@@ -1534,43 +1577,6 @@ static __always_inline int __rt_mutex_lock(struct rt_mutex_base *lock,
  * Functions required for spin/rw_lock substitution on RT kernels
  */
 
-#ifdef CONFIG_SMP
-/*
- * Note that owner is a speculative pointer and dereferencing relies
- * on rcu_read_lock() and the check against the lock owner.
- */
-static bool rtlock_adaptive_spinwait(struct rt_mutex_base *lock,
-				     struct task_struct *owner)
-{
-	bool res = true;
-
-	rcu_read_lock();
-	for (;;) {
-		/* Owner changed. Trylock again */
-		if (owner != rt_mutex_owner(lock))
-			break;
-		/*
-		 * Ensure that owner->on_cpu is dereferenced _after_
-		 * checking the above to be valid.
-		 */
-		barrier();
-		if (!owner->on_cpu) {
-			res = false;
-			break;
-		}
-		cpu_relax();
-	}
-	rcu_read_unlock();
-	return res;
-}
-#else
-static bool rtlock_adaptive_spinwait(struct rt_mutex_base *lock,
-				     struct task_struct *owner)
-{
-	return false;
-}
-#endif
-
 /**
  * rtlock_slowlock_locked - Slow path lock acquisition for RT locks
  * @lock:	The underlying rt mutex
@@ -1603,7 +1609,7 @@ static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock)
 			owner = NULL;
 		raw_spin_unlock_irq(&lock->wait_lock);
 
-		if (!owner || !rtlock_adaptive_spinwait(lock, owner))
+		if (!owner || !rtmutex_adaptive_spinwait(lock, owner))
 			schedule_rtlock();
 
 		raw_spin_lock_irq(&lock->wait_lock);
