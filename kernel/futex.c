@@ -1853,15 +1853,16 @@ enum {
 static inline bool futex_requeue_pi_prepare(struct futex_q *q,
 					    struct futex_pi_state *pi_state)
 {
-	int cur, res, new;
+	int old, new;
 
 	/*
 	 * Set state to Q_REQUEUE_PI_IN_PROGRESS unless an early wakeup has
 	 * already set Q_REQUEUE_PI_IGNORE to signal that requeue should
 	 * ignore the waiter.
 	 */
-	for (cur = atomic_read(&q->requeue_state);; cur = res) {
-		if (cur == Q_REQUEUE_PI_IGNORE)
+	old = atomic_read_acquire(&q->requeue_state);
+	do {
+		if (old == Q_REQUEUE_PI_IGNORE)
 			return false;
 
 		/*
@@ -1872,74 +1873,68 @@ static inline bool futex_requeue_pi_prepare(struct futex_q *q,
 		 * trylock, but that would just add more conditionals
 		 * all over the place for a dubious value.
 		 */
-		if (cur != Q_REQUEUE_PI_NONE)
+		if (old != Q_REQUEUE_PI_NONE)
 			break;
 
 		new = Q_REQUEUE_PI_IN_PROGRESS;
-		res = atomic_cmpxchg(&q->requeue_state, cur, new);
-		if (likely(cur == res))
-			break;
-	}
+	} while (!atomic_try_cmpxchg(&q->requeue_state, &old, new));
+
 	q->pi_state = pi_state;
 	return true;
 }
 
 static inline void futex_requeue_pi_complete(struct futex_q *q, int locked)
 {
-	int cur, res, new;
+	int old, new;
 
-	for (cur = atomic_read(&q->requeue_state);; cur = res) {
+	old = atomic_read_acquire(&q->requeue_state);
+	do {
 		if (locked >= 0) {
 			/* Requeue succeeded. Set DONE or LOCKED */
 			new = Q_REQUEUE_PI_DONE + locked;
-		} else if (cur == Q_REQUEUE_PI_IN_PROGRESS) {
+		} else if (old == Q_REQUEUE_PI_IN_PROGRESS) {
 			/* Deadlock, no early wakeup interleave */
 			new = Q_REQUEUE_PI_NONE;
 		} else {
 			/* Deadlock, early wakeup interleave. */
 			new = Q_REQUEUE_PI_IGNORE;
 		}
-
-		res = atomic_cmpxchg(&q->requeue_state, cur, new);
-		if (likely(cur == res))
-			break;
-	}
+	} while (!atomic_try_cmpxchg(&q->requeue_state, &old, new));
 
 #ifdef CONFIG_PREEMPT_RT
 	/* If the waiter interleaved with the requeue let it know */
-	if (unlikely(cur == Q_REQUEUE_PI_WAIT))
+	if (unlikely(old == Q_REQUEUE_PI_WAIT))
 		rcuwait_wake_up(&q->requeue_wait);
 #endif
 }
 
 static inline int futex_requeue_pi_wakeup_sync(struct futex_q *q)
 {
-	int cur, new, res;
+	int old, new;
 
-	for (cur = atomic_read(&q->requeue_state);; cur = res) {
+	old = atomic_read_acquire(&q->requeue_state);
+	do {
 		/* Is requeue done already? */
-		if (cur >= Q_REQUEUE_PI_DONE)
-			break;
+		if (old >= Q_REQUEUE_PI_DONE)
+			return old;
 
 		/*
 		 * If not done, then tell the requeue code to either ignore
 		 * the waiter or to wake it up once the requeue is done.
 		 */
-		new = !cur ? Q_REQUEUE_PI_IGNORE : Q_REQUEUE_PI_WAIT;
-		res = atomic_cmpxchg(&q->requeue_state, cur, new);
-		if (likely(cur == res))
-			break;
-	}
+		new = Q_REQUEUE_PI_WAIT;
+		if (old == Q_REQUEUE_PI_NONE)
+			new = Q_REQUEUE_PI_IGNORE;
+	} while (!atomic_try_cmpxchg(&q->requeue_state, &old, new));
 
 	/* If the requeue was in progress, wait for it to complete */
-	if (cur == Q_REQUEUE_PI_IN_PROGRESS) {
+	if (old == Q_REQUEUE_PI_IN_PROGRESS) {
 #ifdef CONFIG_PREEMPT_RT
 		rcuwait_wait_event(&q->requeue_wait,
 				   atomic_read(&q->requeue_state) != Q_REQUEUE_PI_WAIT,
 				   TASK_UNINTERRUPTIBLE);
 #else
-		while (atomic_read(&q->requeue_state) == Q_REQUEUE_PI_WAIT)
-			cpu_relax();
+		(void)atomic_cond_read_relaxed(&q->requeue_state, VAL != Q_REQUEUE_PI_WAIT);
 #endif
 	}
 
@@ -2039,7 +2034,10 @@ futex_proxy_trylock_atomic(u32 __user *pifutex, struct futex_hash_bucket *hb1,
 	if (!top_waiter)
 		return 0;
 
-	/* Ensure that this is a waiter sitting in futex_wait_requeue_pi() */
+	/*
+	 * Ensure that this is a waiter sitting in futex_wait_requeue_pi()
+	 * and waiting on the 'waitqueue' futex which is always !PI.
+	 */
 	if (!top_waiter->rt_waiter || top_waiter->pi_state)
 		ret = -EINVAL;
 

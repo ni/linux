@@ -61,11 +61,5 @@ static inline bool wake_q_empty(struct wake_q_head *head)
 
 extern void wake_q_add(struct wake_q_head *head, struct task_struct *task);
 extern void wake_q_add_safe(struct wake_q_head *head, struct task_struct *task);
-extern void __wake_up_q(struct wake_q_head *head, unsigned int state);
-
-static inline void wake_up_q(struct wake_q_head *head)
-{
-	__wake_up_q(head, TASK_NORMAL);
-}
-
+extern void wake_up_q(struct wake_q_head *head);
 #endif /* _LINUX_SCHED_WAKE_Q_H */

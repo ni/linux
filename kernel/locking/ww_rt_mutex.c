@@ -60,7 +60,7 @@ EXPORT_SYMBOL(ww_mutex_lock);
 int __sched
 ww_mutex_lock_interruptible(struct ww_mutex *lock, struct ww_acquire_ctx *ctx)
 {
-	return __ww_rt_mutex_lock(lock, ctx, TASK_UNINTERRUPTIBLE, _RET_IP_);
+	return __ww_rt_mutex_lock(lock, ctx, TASK_INTERRUPTIBLE, _RET_IP_);
 }
 EXPORT_SYMBOL(ww_mutex_lock_interruptible);
 
