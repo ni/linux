@@ -224,7 +224,7 @@ void __sched rt_mutex_init_proxy_locked(struct rt_mutex_base *lock,
 	 * the wait_lock of the rtmutex associated to the pi_futex held.
 	 * spin_unlock() in turn takes wait_lock of the rtmutex on which
 	 * the spinlock is based which makes lockdep notice a lock
-	 * recursion. Give the futex/rtmutex wait_lock a seperate key.
+	 * recursion. Give the futex/rtmutex wait_lock a separate key.
 	 */
 	lockdep_set_class(&lock->wait_lock, &pi_futex_key);
 	rt_mutex_set_owner(lock, proxy_owner);
