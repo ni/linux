@@ -1896,14 +1896,14 @@ static inline void futex_requeue_pi_complete(struct futex_q *q, int locked)
 		if (locked >= 0) {
 			/* Requeue succeeded. Set DONE or LOCKED */
 			WARN_ON_ONCE(old != Q_REQUEUE_PI_IN_PROGRESS &&
-				     old != Q_REQUEUE_PI_WAIT)
+				     old != Q_REQUEUE_PI_WAIT);
 			new = Q_REQUEUE_PI_DONE + locked;
 		} else if (old == Q_REQUEUE_PI_IN_PROGRESS) {
 			/* Deadlock, no early wakeup interleave */
 			new = Q_REQUEUE_PI_NONE;
 		} else {
 			/* Deadlock, early wakeup interleave. */
-			WARN_ON_ONCE(old != Q_REQUEUE_PI_IN_WAIT);
+			WARN_ON_ONCE(old != Q_REQUEUE_PI_WAIT);
 			new = Q_REQUEUE_PI_IGNORE;
 		}
 	} while (!atomic_try_cmpxchg(&q->requeue_state, &old, new));

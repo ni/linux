@@ -127,33 +127,34 @@ struct task_group;
 	((state) & (__TASK_STOPPED | __TASK_TRACED | TASK_PARKED | TASK_DEAD))
 
 #ifdef CONFIG_DEBUG_ATOMIC_SLEEP
-# debug_normal_state_change(state_value)				\
+# define debug_normal_state_change(state_value)				\
 	do {								\
 		WARN_ON_ONCE(is_special_task_state(state_value));	\
 		current->task_state_change = _THIS_IP_;			\
 	} while (0)
 
-# debug_special_state_change(state_value)				\
+# define debug_special_state_change(state_value)			\
 	do {								\
 		WARN_ON_ONCE(!is_special_task_state(state_value));	\
 		current->task_state_change = _THIS_IP_;			\
 	} while (0)
 
-# debug_rtlock_wait_set_state()						 \
+# define debug_rtlock_wait_set_state()					\
 	do {								 \
 		current->saved_state_change = current->task_state_change;\
 		current->task_state_change = _THIS_IP_;			 \
 	} while (0)
 
-# debug_rtlock_wait_restore_state()					 \
+# define debug_rtlock_wait_restore_state()				\
 	do {								 \
 		current->task_state_change = current->saved_state_change;\
 	} while (0)
+
 #else
-# debug_normal_state_change(cond)	do { } while (0)
-# debug_special_state_change(cond)	do { } while (0)
-# debug_rtlock_wait_set_state()		do { } while (0)
-# debug_rtlock_wait_restore_state()	do { } while (0)
+# define debug_normal_state_change(cond)	do { } while (0)
+# define debug_special_state_change(cond)	do { } while (0)
+# define debug_rtlock_wait_set_state()		do { } while (0)
+# define debug_rtlock_wait_restore_state()	do { } while (0)
 #endif
 
 /*

@@ -11,7 +11,7 @@
  *   during that time are redirected to the saved state so no wake up is
  *   missed.
  *
- * - Non RT spin/rw_locks disable preemption and evtl. interrupts.
+ * - Non RT spin/rw_locks disable preemption and eventually interrupts.
  *   Disabling preemption has the side effect of disabling migration and
  *   preventing RCU grace periods.
  *

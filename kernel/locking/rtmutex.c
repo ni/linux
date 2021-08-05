@@ -1303,7 +1303,8 @@ static bool rtmutex_adaptive_spinwait(struct rt_mutex_base *lock,
 		 * checking the above to be valid.
 		 */
 		barrier();
-		if (!owner->on_cpu) {
+		if (!owner->on_cpu || need_resched() ||
+		    vcpu_is_preempted(task_cpu(owner))) {
 			res = false;
 			break;
 		}
