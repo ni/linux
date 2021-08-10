@@ -112,7 +112,7 @@ static __always_inline void spin_unlock_irq(spinlock_t *lock)
 static __always_inline void spin_unlock_irqrestore(spinlock_t *lock,
 						   unsigned long flags)
 {
-	spin_unlock(lock);
+	rt_spin_unlock(lock);
 }
 
 #define spin_trylock(lock)				\

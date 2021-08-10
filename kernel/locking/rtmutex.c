@@ -284,11 +284,28 @@ static __always_inline bool unlock_rt_mutex_safe(struct rt_mutex_base *lock,
 }
 #endif
 
+static __always_inline int __waiter_prio(struct task_struct *task)
+{
+	int prio = task->prio;
+
+	if (!rt_prio(prio))
+		return DEFAULT_PRIO;
+
+	return prio;
+}
+
+static __always_inline void
+waiter_update_prio(struct rt_mutex_waiter *waiter, struct task_struct *task)
+{
+	waiter->prio = __waiter_prio(task);
+	waiter->deadline = task->dl.deadline;
+}
+
 /*
  * Only use with rt_mutex_waiter_{less,equal}()
  */
 #define task_to_waiter(p)	\
-	&(struct rt_mutex_waiter){ .prio = (p)->prio, .deadline = (p)->dl.deadline }
+	&(struct rt_mutex_waiter){ .prio = __waiter_prio(p), .deadline = (p)->dl.deadline }
 
 static __always_inline int rt_mutex_waiter_less(struct rt_mutex_waiter *left,
 						struct rt_mutex_waiter *right)
@@ -356,11 +373,15 @@ static __always_inline bool __waiter_less(struct rb_node *a, const struct rb_nod
 
 	if (rt_mutex_waiter_less(aw, bw))
 		return 1;
+
+	if (!build_ww_mutex())
+		return 0;
+
 	if (rt_mutex_waiter_less(bw, aw))
 		return 0;
 
 	/* NOTE: relies on waiter->ww_ctx being set before insertion */
-	if (build_ww_mutex() && aw->ww_ctx) {
+	if (aw->ww_ctx) {
 		if (!bw->ww_ctx)
 			return 1;
 
@@ -775,8 +796,7 @@ static int __sched rt_mutex_adjust_prio_chain(struct task_struct *task,
 	 * serializes all pi_waiters access and rb_erase() does not care about
 	 * the values of the node being removed.
 	 */
-	waiter->prio = task->prio;
-	waiter->deadline = task->dl.deadline;
+	waiter_update_prio(waiter, task);
 
 	rt_mutex_enqueue(lock, waiter);
 
@@ -1045,8 +1065,7 @@ static int __sched task_blocks_on_rt_mutex(struct rt_mutex_base *lock,
 	raw_spin_lock(&task->pi_lock);
 	waiter->task = task;
 	waiter->lock = lock;
-	waiter->prio = task->prio;
-	waiter->deadline = task->dl.deadline;
+	waiter_update_prio(waiter, task);
 
 	/* Get the top priority waiter on the lock */
 	if (rt_mutex_has_waiters(lock))
@@ -1284,27 +1303,34 @@ static __always_inline void __rt_mutex_unlock(struct rt_mutex_base *lock)
 }
 
 #ifdef CONFIG_SMP
-/*
- * Note that owner is a speculative pointer and dereferencing relies
- * on rcu_read_lock() and the check against the lock owner.
- */
-static bool rtmutex_adaptive_spinwait(struct rt_mutex_base *lock,
-				     struct task_struct *owner)
+static bool rtmutex_spin_on_owner(struct rt_mutex_base *lock,
+				  struct rt_mutex_waiter *waiter,
+				  struct task_struct *owner)
 {
 	bool res = true;
 
 	rcu_read_lock();
 	for (;;) {
-		/* Owner changed. Trylock again */
+		/* If owner changed, trylock again. */
 		if (owner != rt_mutex_owner(lock))
 			break;
 		/*
-		 * Ensure that owner->on_cpu is dereferenced _after_
-		 * checking the above to be valid.
+		 * Ensure that @owner is dereferenced after checking that
+		 * the lock owner still matches @owner. If that fails,
+		 * @owner might point to freed memory. If it still matches,
+		 * the rcu_read_lock() ensures the memory stays valid.
 		 */
 		barrier();
-		if (!owner->on_cpu || need_resched() ||
-		    vcpu_is_preempted(task_cpu(owner))) {
+		/*
+		 * Stop spinning when:
+		 *  - the lock owner has been scheduled out
+		 *  - current is not longer the top waiter
+		 *  - current is requested to reschedule (redundant
+		 *    for CONFIG_PREEMPT_RCU=y)
+		 *  - the VCPU on which owner runs is preempted
+		 */
+		if (!owner->on_cpu || waiter != rt_mutex_top_waiter(lock) ||
+		    need_resched() || vcpu_is_preempted(task_cpu(owner))) {
 			res = false;
 			break;
 		}
@@ -1314,8 +1340,9 @@ static bool rtmutex_adaptive_spinwait(struct rt_mutex_base *lock,
 	return res;
 }
 #else
-static bool rtmutex_adaptive_spinwait(struct rt_mutex_base *lock,
-				     struct task_struct *owner)
+static bool rtmutex_spin_on_owner(struct rt_mutex_base *lock,
+				  struct rt_mutex_waiter *waiter,
+				  struct task_struct *owner)
 {
 	return false;
 }
@@ -1434,7 +1461,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
 			owner = NULL;
 		raw_spin_unlock_irq(&lock->wait_lock);
 
-		if (!owner || !rtmutex_adaptive_spinwait(lock, owner))
+		if (!owner || !rtmutex_spin_on_owner(lock, waiter, owner))
 			schedule();
 
 		raw_spin_lock_irq(&lock->wait_lock);
@@ -1616,7 +1643,7 @@ static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock)
 			owner = NULL;
 		raw_spin_unlock_irq(&lock->wait_lock);
 
-		if (!owner || !rtmutex_adaptive_spinwait(lock, owner))
+		if (!owner || !rtmutex_spin_on_owner(lock, &waiter, owner))
 			schedule_rtlock();
 
 		raw_spin_lock_irq(&lock->wait_lock);

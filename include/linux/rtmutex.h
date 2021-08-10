@@ -16,6 +16,7 @@
 #include <linux/linkage.h>
 #include <linux/rbtree_types.h>
 #include <linux/spinlock_types_raw.h>
+#include <linux/compiler.h>
 
 extern int max_lock_depth; /* for sysctl */
 
@@ -40,7 +41,7 @@ struct rt_mutex_base {
  */
 static inline bool rt_mutex_base_is_locked(struct rt_mutex_base *lock)
 {
-	return lock->owner != NULL;
+	return READ_ONCE(lock->owner) != NULL;
 }
 
 extern void rt_mutex_base_init(struct rt_mutex_base *rtb);
