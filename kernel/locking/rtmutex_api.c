@@ -189,11 +189,11 @@ void __sched rt_mutex_futex_unlock(struct rt_mutex_base *lock)
  * Initializing of a locked rt_mutex is not allowed
  */
 void __sched __rt_mutex_init(struct rt_mutex *lock, const char *name,
-		     struct lock_class_key *key)
+			     struct lock_class_key *key)
 {
 	debug_check_no_locks_freed((void *)lock, sizeof(*lock));
 	__rt_mutex_base_init(&lock->rtmutex);
-	lockdep_init_map(&lock->dep_map, name, key, 0);
+	lockdep_init_map_wait(&lock->dep_map, name, key, 0, LD_WAIT_SLEEP);
 }
 EXPORT_SYMBOL_GPL(__rt_mutex_init);
 
@@ -473,7 +473,7 @@ void __mutex_rt_init(struct mutex *mutex, const char *name,
 		     struct lock_class_key *key)
 {
 	debug_check_no_locks_freed((void *)mutex, sizeof(*mutex));
-	lockdep_init_map(&mutex->dep_map, name, key, 0);
+	lockdep_init_map_wait(&mutex->dep_map, name, key, 0, LD_WAIT_SLEEP);
 }
 EXPORT_SYMBOL(__mutex_rt_init);
 

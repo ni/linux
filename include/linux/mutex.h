@@ -156,18 +156,17 @@ static inline void mutex_destroy(struct mutex *lock) { }
 
 #define mutex_is_locked(l)	rt_mutex_base_is_locked(&(l)->rtmutex)
 
-#define mutex_init(mutex)				\
-do {							\
-	static struct lock_class_key __key;		\
-							\
-	rt_mutex_base_init(&(mutex)->rtmutex);		\
-	__mutex_rt_init((mutex), #mutex, &__key);	\
-} while (0)
-
 #define __mutex_init(mutex, name, key)			\
 do {							\
 	rt_mutex_base_init(&(mutex)->rtmutex);		\
 	__mutex_rt_init((mutex), name, key);		\
+} while (0)
+
+#define mutex_init(mutex)				\
+do {							\
+	static struct lock_class_key __key;		\
+							\
+	__mutex_init((mutex), #mutex, &__key);		\
 } while (0)
 #endif /* CONFIG_PREEMPT_RT */
 

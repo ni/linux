@@ -120,10 +120,13 @@ EXPORT_SYMBOL(rt_spin_trylock_bh);
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 void __rt_spin_lock_init(spinlock_t *lock, const char *name,
-			 struct lock_class_key *key)
+			 struct lock_class_key *key, bool percpu)
 {
+	u8 type = percpu ? LD_LOCK_PERCPU : LD_LOCK_NORMAL;
+
 	debug_check_no_locks_freed((void *)lock, sizeof(*lock));
-	lockdep_init_map(&lock->dep_map, name, key, 0);
+	lockdep_init_map_type(&lock->dep_map, name, key, 0, LD_WAIT_CONFIG,
+			      LD_WAIT_INV, type);
 }
 EXPORT_SYMBOL(__rt_spin_lock_init);
 #endif
@@ -207,6 +210,7 @@ EXPORT_SYMBOL(rt_write_trylock);
 
 void __sched rt_read_lock(rwlock_t *rwlock)
 {
+	___might_sleep(__FILE__, __LINE__, 0);
 	rwlock_acquire_read(&rwlock->dep_map, 0, 0, _RET_IP_);
 	rwbase_read_lock(&rwlock->rwbase, TASK_RTLOCK_WAIT);
 	rcu_read_lock();
@@ -216,6 +220,7 @@ EXPORT_SYMBOL(rt_read_lock);
 
 void __sched rt_write_lock(rwlock_t *rwlock)
 {
+	___might_sleep(__FILE__, __LINE__, 0);
 	rwlock_acquire(&rwlock->dep_map, 0, 0, _RET_IP_);
 	rwbase_write_lock(&rwlock->rwbase, TASK_RTLOCK_WAIT);
 	rcu_read_lock();
@@ -252,7 +257,7 @@ void __rt_rwlock_init(rwlock_t *rwlock, const char *name,
 		      struct lock_class_key *key)
 {
 	debug_check_no_locks_freed((void *)rwlock, sizeof(*rwlock));
-	lockdep_init_map(&rwlock->dep_map, name, key, 0);
+	lockdep_init_map_wait(&rwlock->dep_map, name, key, 0, LD_WAIT_CONFIG);
 }
 EXPORT_SYMBOL(__rt_rwlock_init);
 #endif

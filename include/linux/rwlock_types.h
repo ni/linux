@@ -5,6 +5,16 @@
 # error "Do not include directly, include spinlock_types.h"
 #endif
 
+#ifdef CONFIG_DEBUG_LOCK_ALLOC
+# define RW_DEP_MAP_INIT(lockname)					\
+	.dep_map = {							\
+		.name = #lockname,					\
+		.wait_type_inner = LD_WAIT_CONFIG,			\
+	}
+#else
+# define RW_DEP_MAP_INIT(lockname)
+#endif
+
 #ifndef CONFIG_PREEMPT_RT
 /*
  * generic rwlock type definitions and initializers
@@ -24,16 +34,6 @@ typedef struct {
 } rwlock_t;
 
 #define RWLOCK_MAGIC		0xdeaf1eed
-
-#ifdef CONFIG_DEBUG_LOCK_ALLOC
-# define RW_DEP_MAP_INIT(lockname)					\
-	.dep_map = {							\
-		.name = #lockname,					\
-		.wait_type_inner = LD_WAIT_CONFIG,			\
-	}
-#else
-# define RW_DEP_MAP_INIT(lockname)
-#endif
 
 #ifdef CONFIG_DEBUG_SPINLOCK
 #define __RW_LOCK_UNLOCKED(lockname)					\
@@ -62,22 +62,16 @@ typedef struct {
 #endif
 } rwlock_t;
 
-#ifdef CONFIG_DEBUG_LOCK_ALLOC
-# define RW_DEP_MAP_INIT(lockname)	.dep_map = { .name = #lockname }
-#else
-# define RW_DEP_MAP_INIT(lockname)
-#endif
-
-#define __RW_LOCK_UNLOCKED(name) __RWLOCK_RT_INITIALIZER(name)
-
-#define DEFINE_RWLOCK(name) \
-	rwlock_t name = __RW_LOCK_UNLOCKED(name)
-
 #define __RWLOCK_RT_INITIALIZER(name)					\
 {									\
 	.rwbase = __RWBASE_INITIALIZER(name),				\
 	RW_DEP_MAP_INIT(name)						\
 }
+
+#define __RW_LOCK_UNLOCKED(name) __RWLOCK_RT_INITIALIZER(name)
+
+#define DEFINE_RWLOCK(name)						\
+	rwlock_t name = __RW_LOCK_UNLOCKED(name)
 
 #endif /* CONFIG_PREEMPT_RT */
 

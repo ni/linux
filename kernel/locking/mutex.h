@@ -35,16 +35,11 @@ extern void debug_mutex_unlock(struct mutex *lock);
 extern void debug_mutex_init(struct mutex *lock, const char *name,
 			     struct lock_class_key *key);
 #else /* CONFIG_DEBUG_MUTEXES */
-
-#define debug_mutex_wake_waiter(lock, waiter)		do { } while (0)
-#define debug_mutex_free_waiter(waiter)			do { } while (0)
-#define debug_mutex_add_waiter(lock, waiter, ti)	do { } while (0)
-#define debug_mutex_remove_waiter(lock, waiter, ti)     do { } while (0)
-#define debug_mutex_unlock(lock)			do { } while (0)
-#define debug_mutex_init(lock, name, key)		do { } while (0)
-
-static inline void
-debug_mutex_lock_common(struct mutex *lock, struct mutex_waiter *waiter)
-{
-}
+# define debug_mutex_lock_common(lock, waiter)		do { } while (0)
+# define debug_mutex_wake_waiter(lock, waiter)		do { } while (0)
+# define debug_mutex_free_waiter(waiter)		do { } while (0)
+# define debug_mutex_add_waiter(lock, waiter, ti)	do { } while (0)
+# define debug_mutex_remove_waiter(lock, waiter, ti)	do { } while (0)
+# define debug_mutex_unlock(lock)			do { } while (0)
+# define debug_mutex_init(lock, name, key)		do { } while (0)
 #endif /* !CONFIG_DEBUG_MUTEXES */

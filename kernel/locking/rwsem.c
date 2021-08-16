@@ -1381,7 +1381,7 @@ void __rwsem_init(struct rw_semaphore *sem, const char *name,
 		  struct lock_class_key *key)
 {
 	debug_check_no_locks_freed((void *)sem, sizeof(*sem));
-	lockdep_init_map(&sem->dep_map, name, key, 0);
+	lockdep_init_map_wait(&sem->dep_map, name, key, 0, LD_WAIT_SLEEP);
 }
 EXPORT_SYMBOL(__rwsem_init);
 #endif

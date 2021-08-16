@@ -16,29 +16,14 @@ typedef struct {
 } local_lock_t;
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
-# define LL_DEP_MAP_INIT(lockname)			\
+# define LOCAL_LOCK_DEBUG_INIT(lockname)		\
 	.dep_map = {					\
 		.name = #lockname,			\
 		.wait_type_inner = LD_WAIT_CONFIG,	\
-		.lock_type = LD_LOCK_PERCPU,			\
-	}
-#else
-# define LL_DEP_MAP_INIT(lockname)
-#endif
+		.lock_type = LD_LOCK_PERCPU,		\
+	},						\
+	.owner = NULL,
 
-#define INIT_LOCAL_LOCK(lockname)	{ LL_DEP_MAP_INIT(lockname) }
-
-#define __local_lock_init(lock)					\
-do {								\
-	static struct lock_class_key __key;			\
-								\
-	debug_check_no_locks_freed((void *)lock, sizeof(*lock));\
-	lockdep_init_map_type(&(lock)->dep_map, #lock, &__key, 0, \
-			      LD_WAIT_CONFIG, LD_WAIT_INV,	\
-			      LD_LOCK_PERCPU);			\
-} while (0)
-
-#ifdef CONFIG_DEBUG_LOCK_ALLOC
 static inline void local_lock_acquire(local_lock_t *l)
 {
 	lock_map_acquire(&l->dep_map);
@@ -53,103 +38,108 @@ static inline void local_lock_release(local_lock_t *l)
 	lock_map_release(&l->dep_map);
 }
 
+static inline void local_lock_debug_init(local_lock_t *l)
+{
+	l->owner = NULL;
+}
 #else /* CONFIG_DEBUG_LOCK_ALLOC */
+# define LOCAL_LOCK_DEBUG_INIT(lockname)
 static inline void local_lock_acquire(local_lock_t *l) { }
 static inline void local_lock_release(local_lock_t *l) { }
+static inline void local_lock_debug_init(local_lock_t *l) { }
 #endif /* !CONFIG_DEBUG_LOCK_ALLOC */
 
-#define ll_preempt_disable()		preempt_disable()
-#define ll_preempt_enable()		preempt_enable()
-#define ll_local_irq_disable()		local_irq_disable()
-#define ll_local_irq_enable()		local_irq_enable()
-#define ll_local_irq_save(flags)	local_irq_save(flags)
-#define ll_local_irq_restore(flags)	local_irq_restore(flags)
+#define INIT_LOCAL_LOCK(lockname)	{ LOCAL_LOCK_DEBUG_INIT(lockname) }
 
-#else /* !CONFIG_PREEMPT_RT */
-
-/*
- * The preempt RT mapping of local locks: a spinlock.
- */
-typedef struct {
-	spinlock_t		lock;
-} local_lock_t;
-
-#define INIT_LOCAL_LOCK(lockname)	{	\
-	__SPIN_LOCK_UNLOCKED((lockname).lock),	\
-	}
-
-#define __local_lock_init(l)					\
+#define __local_lock_init(lock)					\
 do {								\
-	spin_lock_init(&(l)->lock);				\
+	static struct lock_class_key __key;			\
+								\
+	debug_check_no_locks_freed((void *)lock, sizeof(*lock));\
+	lockdep_init_map_type(&(lock)->dep_map, #lock, &__key,  \
+			      0, LD_WAIT_CONFIG, LD_WAIT_INV,	\
+			      LD_LOCK_PERCPU);			\
+	local_lock_debug_init(lock);				\
 } while (0)
-
-static inline void local_lock_acquire(local_lock_t *l)
-{
-	spin_lock(&l->lock);
-}
-
-static inline void local_lock_release(local_lock_t *l)
-{
-	spin_unlock(&l->lock);
-}
-
-/*
- * On RT enabled kernels the serialization is guaranteed by the spinlock in
- * local_lock_t, so the only guarantee to make is to not leave the CPU.
- */
-#define ll_preempt_disable()		migrate_disable()
-#define ll_preempt_enable()		migrate_enable()
-#define ll_local_irq_disable()		migrate_disable()
-#define ll_local_irq_enable()		migrate_enable()
-
-#define ll_local_irq_save(flags)			\
-	do {						\
-		typecheck(unsigned long, flags);	\
-		flags = 0;				\
-		migrate_disable();			\
-	} while (0)
-
-#define ll_local_irq_restore(flags)			\
-	do {						\
-		typecheck(unsigned long, flags);	\
-		(void)flags;				\
-		migrate_enable();			\
-	} while (0)
-
-#endif /* CONFIG_PREEMPT_RT */
 
 #define __local_lock(lock)					\
 	do {							\
-		ll_preempt_disable();				\
+		preempt_disable();				\
 		local_lock_acquire(this_cpu_ptr(lock));		\
 	} while (0)
 
 #define __local_lock_irq(lock)					\
 	do {							\
-		ll_local_irq_disable();				\
+		local_irq_disable();				\
 		local_lock_acquire(this_cpu_ptr(lock));		\
 	} while (0)
 
 #define __local_lock_irqsave(lock, flags)			\
 	do {							\
-		ll_local_irq_save(flags);			\
+		local_irq_save(flags);				\
 		local_lock_acquire(this_cpu_ptr(lock));		\
 	} while (0)
 
 #define __local_unlock(lock)					\
 	do {							\
 		local_lock_release(this_cpu_ptr(lock));		\
-		ll_preempt_enable();				\
+		preempt_enable();				\
 	} while (0)
 
 #define __local_unlock_irq(lock)				\
 	do {							\
 		local_lock_release(this_cpu_ptr(lock));		\
-		ll_local_irq_enable();				\
+		local_irq_enable();				\
 	} while (0)
 
 #define __local_unlock_irqrestore(lock, flags)			\
 	do {							\
 		local_lock_release(this_cpu_ptr(lock));		\
-		ll_local_irq_restore(flags);			\
+		local_irq_restore(flags);			\
 	} while (0)
+
+#else /* !CONFIG_PREEMPT_RT */
+
+/*
+ * On PREEMPT_RT local_lock maps to a per CPU spinlock which protects the
+ * critical section while staying preemptible.
+ */
+typedef struct {
+	spinlock_t		lock;
+} local_lock_t;
+
+#define INIT_LOCAL_LOCK(lockname) {				\
+		__LOCAL_SPIN_LOCK_UNLOCKED((lockname).lock)	\
+	}
+
+#define __local_lock_init(l)					\
+	do {							\
+		local_spin_lock_init(&(l)->lock);		\
+	} while (0)
+
+#define __local_lock(__lock)					\
+	do {							\
+		migrate_disable();				\
+		spin_lock(&(this_cpu_ptr((__lock)))->lock);	\
+	} while (0)
+
+#define __local_lock_irq(lock)			__local_lock(lock)
+
+#define __local_lock_irqsave(lock, flags)			\
+	do {							\
+		typecheck(unsigned long, flags);		\
+		flags = 0;					\
+		__local_lock(lock);				\
+	} while (0)
+
+#define __local_unlock(__lock)					\
+	do {							\
+		spin_unlock(&(this_cpu_ptr((__lock)))->lock);	\
+		migrate_enable();				\
+	} while (0)
+
+#define __local_unlock_irq(lock)		__local_unlock(lock)
+
+#define __local_unlock_irqrestore(lock, flags)	__local_unlock(lock)
+
+#endif /* CONFIG_PREEMPT_RT */

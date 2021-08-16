@@ -13,10 +13,10 @@
 #ifndef __LINUX_RT_MUTEX_H
 #define __LINUX_RT_MUTEX_H
 
+#include <linux/compiler.h>
 #include <linux/linkage.h>
 #include <linux/rbtree_types.h>
 #include <linux/spinlock_types_raw.h>
-#include <linux/compiler.h>
 
 extern int max_lock_depth; /* for sysctl */
 
@@ -77,15 +77,18 @@ do { \
 } while (0)
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
-#define __DEP_MAP_RT_MUTEX_INITIALIZER(mutexname) \
-	, .dep_map = { .name = #mutexname }
+#define __DEP_MAP_RT_MUTEX_INITIALIZER(mutexname)	\
+	.dep_map = {					\
+		.name = #mutexname,			\
+		.wait_type_inner = LD_WAIT_SLEEP,	\
+	}
 #else
 #define __DEP_MAP_RT_MUTEX_INITIALIZER(mutexname)
 #endif
 
 #define __RT_MUTEX_INITIALIZER(mutexname)				\
 {									\
-	.rtmutex = __RT_MUTEX_BASE_INITIALIZER(mutexname.rtmutex)	\
+	.rtmutex = __RT_MUTEX_BASE_INITIALIZER(mutexname.rtmutex),	\
 	__DEP_MAP_RT_MUTEX_INITIALIZER(mutexname)			\
 }
 

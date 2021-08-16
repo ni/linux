@@ -17,6 +17,16 @@
 #include <linux/atomic.h>
 #include <linux/err.h>
 
+#ifdef CONFIG_DEBUG_LOCK_ALLOC
+# define __RWSEM_DEP_MAP_INIT(lockname)			\
+	.dep_map = {					\
+		.name = #lockname,			\
+		.wait_type_inner = LD_WAIT_SLEEP,	\
+	},
+#else
+# define __RWSEM_DEP_MAP_INIT(lockname)
+#endif
+
 #ifndef CONFIG_PREEMPT_RT
 
 #ifdef CONFIG_RWSEM_SPIN_ON_OWNER
@@ -66,16 +76,6 @@ static inline int rwsem_is_locked(struct rw_semaphore *sem)
 #define __RWSEM_COUNT_INIT(name)	.count = ATOMIC_LONG_INIT(RWSEM_UNLOCKED_VALUE)
 
 /* Common initializer macros and functions */
-
-#ifdef CONFIG_DEBUG_LOCK_ALLOC
-# define __RWSEM_DEP_MAP_INIT(lockname)			\
-	.dep_map = {					\
-		.name = #lockname,			\
-		.wait_type_inner = LD_WAIT_SLEEP,	\
-	},
-#else
-# define __RWSEM_DEP_MAP_INIT(lockname)
-#endif
 
 #ifdef CONFIG_DEBUG_RWSEMS
 # define __RWSEM_DEBUG_INIT(lockname) .magic = &lockname,
@@ -136,7 +136,7 @@ struct rw_semaphore {
 #define __RWSEM_INITIALIZER(name)				\
 	{							\
 		.rwbase = __RWBASE_INITIALIZER(name),		\
-		RW_DEP_MAP_INIT(name)				\
+		__RWSEM_DEP_MAP_INIT(name)			\
 	}
 
 #define DECLARE_RWSEM(lockname) \
