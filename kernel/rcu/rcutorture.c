@@ -1549,6 +1549,13 @@ rcutorture_extend_mask(int oldmask, struct torture_random_state *trsp)
 	 */
 	if (IS_ENABLED(CONFIG_PREEMPT_RT)) {
 		/*
+		 * Can't disable bh in atomic context if bh was already
+		 * disabled by another task on the same CPU. Instead of
+		 * attempting to track this, just avoid disabling bh in atomic
+		 * context.
+		 */
+		mask &= ~atomic_bhs;
+		/*
 		 * Can't release the outermost rcu lock in an irq disabled
 		 * section without preemption also being disabled, if irqs
 		 * had ever been enabled during this RCU critical section
@@ -1558,16 +1565,6 @@ rcutorture_extend_mask(int oldmask, struct torture_random_state *trsp)
 		    (mask & RCUTORTURE_RDR_IRQ) &&
 		    !(mask & preempts))
 			mask |= RCUTORTURE_RDR_RCU;
-
-		/* Can't modify atomic bh in non-atomic context */
-		if ((oldmask & atomic_bhs) && (mask & atomic_bhs) &&
-		    !(mask & preempts_irq)) {
-			mask |= oldmask & preempts_irq;
-			if (mask & RCUTORTURE_RDR_IRQ)
-				mask |= oldmask & tmp;
-		}
-		if ((mask & atomic_bhs) && !(mask & preempts_irq))
-			mask |= RCUTORTURE_RDR_PREEMPT;
 
 		/* Can't modify non-atomic bh in atomic context */
 		tmp = nonatomic_bhs;
