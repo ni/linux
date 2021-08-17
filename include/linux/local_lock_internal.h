@@ -104,23 +104,19 @@ do {								\
  * On PREEMPT_RT local_lock maps to a per CPU spinlock which protects the
  * critical section while staying preemptible.
  */
-typedef struct {
-	spinlock_t		lock;
-} local_lock_t;
+typedef spinlock_t local_lock_t;
 
-#define INIT_LOCAL_LOCK(lockname) {				\
-		__LOCAL_SPIN_LOCK_UNLOCKED((lockname).lock)	\
-	}
+#define INIT_LOCAL_LOCK(lockname) __LOCAL_SPIN_LOCK_UNLOCKED((lockname))
 
 #define __local_lock_init(l)					\
 	do {							\
-		local_spin_lock_init(&(l)->lock);		\
+		local_spin_lock_init((l));			\
 	} while (0)
 
 #define __local_lock(__lock)					\
 	do {							\
 		migrate_disable();				\
-		spin_lock(&(this_cpu_ptr((__lock)))->lock);	\
+		spin_lock(this_cpu_ptr((__lock)));		\
 	} while (0)
 
 #define __local_lock_irq(lock)			__local_lock(lock)
@@ -134,7 +130,7 @@ typedef struct {
 
 #define __local_unlock(__lock)					\
 	do {							\
-		spin_unlock(&(this_cpu_ptr((__lock)))->lock);	\
+		spin_unlock(this_cpu_ptr((__lock)));		\
 		migrate_enable();				\
 	} while (0)
 
