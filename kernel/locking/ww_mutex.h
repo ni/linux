@@ -228,7 +228,7 @@ static inline bool
 __ww_ctx_less(struct ww_acquire_ctx *a, struct ww_acquire_ctx *b)
 {
 /*
- * Can only do the RT prio for WW_RT because task->prio isn't stable due to PI,
+ * Can only do the RT prio for WW_RT, because task->prio isn't stable due to PI,
  * so the wait_list ordering will go wobbly. rt_mutex re-queues the waiter and
  * isn't affected by this.
  */

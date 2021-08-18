@@ -3639,12 +3639,12 @@ bool ttwu_state_match(struct task_struct *p, unsigned int state, int *success)
 #ifdef CONFIG_PREEMPT_RT
 	/*
 	 * Saved state preserves the task state across blocking on
-	 * a RT lock.  If the state matches, set p::saved_state to
+	 * an RT lock.  If the state matches, set p::saved_state to
 	 * TASK_RUNNING, but do not wake the task because it waits
 	 * for a lock wakeup. Also indicate success because from
 	 * the regular waker's point of view this has succeeded.
 	 *
-	 * After acquiring the lock the task will restore p::state
+	 * After acquiring the lock the task will restore p::__state
 	 * from p::saved_state which ensures that the regular
 	 * wakeup is not lost. The restore will also set
 	 * p::saved_state to TASK_RUNNING so any further tests will
@@ -5869,8 +5869,8 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
  * Constants for the sched_mode argument of __schedule().
  *
  * The mode argument allows RT enabled kernels to differentiate a
- * preemption from blocking on an 'sleeping' spin/rwlock. Note, that
- * SM_MASK_PREEMPT for !RT has all bits set which allows the compiler to
+ * preemption from blocking on an 'sleeping' spin/rwlock. Note that
+ * SM_MASK_PREEMPT for !RT has all bits set, which allows the compiler to
  * optimize the AND operation out and just check for zero.
  */
 #define SM_NONE			0x0

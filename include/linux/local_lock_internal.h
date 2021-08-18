@@ -101,7 +101,7 @@ do {								\
 #else /* !CONFIG_PREEMPT_RT */
 
 /*
- * On PREEMPT_RT local_lock maps to a per CPU spinlock which protects the
+ * On PREEMPT_RT local_lock maps to a per CPU spinlock, which protects the
  * critical section while staying preemptible.
  */
 typedef spinlock_t local_lock_t;

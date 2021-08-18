@@ -1097,7 +1097,7 @@ static int __sched task_blocks_on_rt_mutex(struct rt_mutex_base *lock,
 	if (build_ww_mutex() && ww_ctx) {
 		struct rt_mutex *rtm;
 
-		/* Check whether the waiter should backout immediately */
+		/* Check whether the waiter should back out immediately */
 		rtm = container_of(lock, struct rt_mutex, rtmutex);
 		res = __ww_mutex_add_waiter(waiter, rtm, ww_ctx);
 		if (res)
@@ -1631,7 +1631,7 @@ static __always_inline int __rt_mutex_lock(struct rt_mutex_base *lock,
 
 /**
  * rtlock_slowlock_locked - Slow path lock acquisition for RT locks
- * @lock:	The underlying rt mutex
+ * @lock:	The underlying RT mutex
  */
 static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock)
 {
@@ -1651,7 +1651,7 @@ static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock)
 	task_blocks_on_rt_mutex(lock, &waiter, current, NULL, RT_MUTEX_MIN_CHAINWALK);
 
 	for (;;) {
-		/* Try to acquire the lock again. */
+		/* Try to acquire the lock again */
 		if (try_to_take_rt_mutex(lock, current, &waiter))
 			break;
 
@@ -1672,8 +1672,8 @@ static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock)
 	current_restore_rtlock_saved_state();
 
 	/*
-	 * try_to_take_rt_mutex() sets the waiter bit unconditionally. We
-	 * might have to fix that up:
+	 * try_to_take_rt_mutex() sets the waiter bit unconditionally.
+	 * We might have to fix that up:
 	 */
 	fixup_rt_mutex_waiters(lock);
 	debug_rt_mutex_free_waiter(&waiter);

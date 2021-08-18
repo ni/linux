@@ -2116,18 +2116,18 @@ static int futex_requeue(u32 __user *uaddr1, unsigned int flags,
 		/*
 		 * futex_requeue() allows the caller to define the number
 		 * of waiters to wake up via the @nr_wake argument. With
-		 * REQUEUE_PI waking up more than one waiter is creating
+		 * REQUEUE_PI, waking up more than one waiter is creating
 		 * more problems than it solves. Waking up a waiter makes
 		 * only sense if the PI futex @uaddr2 is uncontended as
 		 * this allows the requeue code to acquire the futex
 		 * @uaddr2 before waking the waiter. The waiter can then
 		 * return to user space without further action. A secondary
 		 * wakeup would just make the futex_wait_requeue_pi()
-		 * handling more complex because that code would have to
+		 * handling more complex, because that code would have to
 		 * look up pi_state and do more or less all the handling
 		 * which the requeue code has to do for the to be requeued
 		 * waiters. So restrict the number of waiters to wake to
-		 * one and only wake it up when the PI futex is
+		 * one, and only wake it up when the PI futex is
 		 * uncontended. Otherwise requeue it and let the unlock of
 		 * the PI futex handle the wakeup.
 		 *

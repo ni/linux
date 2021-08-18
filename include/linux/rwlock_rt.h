@@ -3,7 +3,7 @@
 #define __LINUX_RWLOCK_RT_H
 
 #ifndef __LINUX_SPINLOCK_RT_H
-#error Do not include directly. Use spinlock.h
+#error Do not #include directly. Use <linux/spinlock.h>.
 #endif
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
@@ -20,7 +20,7 @@ static inline void __rt_rwlock_init(rwlock_t *rwlock, char *name,
 do {							\
 	static struct lock_class_key __key;		\
 							\
-	init_rwbase_rt(&(rwl)->rwbase);		\
+	init_rwbase_rt(&(rwl)->rwbase);			\
 	__rt_rwlock_init(rwl, #rwl, &__key);		\
 } while (0)
 
@@ -137,4 +137,4 @@ static __always_inline void write_unlock_irqrestore(rwlock_t *rwlock,
 
 #define rwlock_is_contended(lock)		(((void)(lock), 0))
 
-#endif
+#endif /* __LINUX_RWLOCK_RT_H */

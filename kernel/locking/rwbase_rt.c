@@ -6,17 +6,17 @@
  * down_write/write_lock()
  *  1) Lock rtmutex
  *  2) Remove the reader BIAS to force readers into the slow path
- *  3) Wait until all readers have left the critical region
+ *  3) Wait until all readers have left the critical section
  *  4) Mark it write locked
  *
  * up_write/write_unlock()
  *  1) Remove the write locked marker
- *  2) Set the reader BIAS so readers can use the fast path again
- *  3) Unlock rtmutex to release blocked readers
+ *  2) Set the reader BIAS, so readers can use the fast path again
+ *  3) Unlock rtmutex, to release blocked readers
  *
  * down_read/read_lock()
  *  1) Try fast path acquisition (reader BIAS is set)
- *  2) Take tmutex::wait_lock which protects the writelocked flag
+ *  2) Take tmutex::wait_lock, which protects the writelocked flag
  *  3) If !writelocked, acquire it for read
  *  4) If writelocked, block on tmutex
  *  5) unlock rtmutex, goto 1)
@@ -67,7 +67,7 @@ static int __sched __rwbase_read_lock(struct rwbase_rt *rwb,
 
 	raw_spin_lock_irq(&rtm->wait_lock);
 	/*
-	 * Allow readers as long as the writer has not completely
+	 * Allow readers, as long as the writer has not completely
 	 * acquired the semaphore for write.
 	 */
 	if (atomic_read(&rwb->readers) != WRITER_BIAS) {
@@ -103,7 +103,7 @@ static int __sched __rwbase_read_lock(struct rwbase_rt *rwb,
 	 * rtmutex_lock(m)
 	 *
 	 * That would put Reader1 behind the writer waiting on
-	 * Reader2 to call up_read() which might be unbound.
+	 * Reader2 to call up_read(), which might be unbound.
 	 */
 
 	/*
@@ -161,7 +161,7 @@ static __always_inline void rwbase_read_unlock(struct rwbase_rt *rwb,
 {
 	/*
 	 * rwb->readers can only hit 0 when a writer is waiting for the
-	 * active readers to leave the critical region.
+	 * active readers to leave the critical section.
 	 */
 	if (unlikely(atomic_dec_and_test(&rwb->readers)))
 		__rwbase_read_unlock(rwb, state);
@@ -216,7 +216,7 @@ static int __sched rwbase_write_lock(struct rwbase_rt *rwb,
 	 */
 	rwbase_set_and_save_current_state(state);
 
-	/* Block until all readers have left the critical region. */
+	/* Block until all readers have left the critical section. */
 	for (; atomic_read(&rwb->readers);) {
 		/* Optimized out for rwlocks */
 		if (rwbase_signal_pending_state(state, current)) {

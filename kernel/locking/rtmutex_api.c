@@ -241,11 +241,11 @@ void __sched rt_mutex_init_proxy_locked(struct rt_mutex_base *lock,
 	__rt_mutex_base_init(lock);
 	/*
 	 * On PREEMPT_RT the futex hashbucket spinlock becomes 'sleeping'
-	 * and rtmutex based. That causes a lockdep false positive because
+	 * and rtmutex based. That causes a lockdep false positive, because
 	 * some of the futex functions invoke spin_unlock(&hb->lock) with
 	 * the wait_lock of the rtmutex associated to the pi_futex held.
 	 * spin_unlock() in turn takes wait_lock of the rtmutex on which
-	 * the spinlock is based which makes lockdep notice a lock
+	 * the spinlock is based, which makes lockdep notice a lock
 	 * recursion. Give the futex/rtmutex wait_lock a separate key.
 	 */
 	lockdep_set_class(&lock->wait_lock, &pi_futex_key);

@@ -326,7 +326,7 @@ static inline void do_raw_spin_unlock(raw_spinlock_t *lock) __releases(lock)
 # include <linux/spinlock_api_up.h>
 #endif
 
-/* Non PREEMPT_RT kernel map to raw spinlocks */
+/* Non PREEMPT_RT kernel, map to raw spinlocks: */
 #ifndef CONFIG_PREEMPT_RT
 
 /*

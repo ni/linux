@@ -2,16 +2,16 @@
 /*
  * PREEMPT_RT substitution for spin/rw_locks
  *
- * spin_lock and rw_lock on RT are based on rtmutex with a few twists to
- * resemble the non RT semantics
+ * spinlocks and rwlocks on RT are based on rtmutexes, with a few twists to
+ * resemble the non RT semantics:
  *
- * - Contrary to a plain rtmutex, spin_lock and rw_lock are state
+ * - Contrary to plain rtmutexes, spinlocks and rwlocks are state
  *   preserving. The task state is saved before blocking on the underlying
- *   rtmutex and restored when the lock has been acquired. Regular wakeups
+ *   rtmutex, and restored when the lock has been acquired. Regular wakeups
  *   during that time are redirected to the saved state so no wake up is
  *   missed.
  *
- * - Non RT spin/rw_locks disable preemption and eventually interrupts.
+ * - Non RT spin/rwlocks disable preemption and eventually interrupts.
  *   Disabling preemption has the side effect of disabling migration and
  *   preventing RCU grace periods.
  *
