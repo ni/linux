@@ -21,6 +21,11 @@ static inline int rcu_lockdep_is_held_nocb(struct rcu_data *rdp)
 	return lockdep_is_held(&rdp->nocb_lock);
 }
 
+static inline int rcu_lockdep_is_held_nocb_local(struct rcu_data *rdp)
+{
+	return lockdep_is_held(&rdp->nocb_local_lock);
+}
+
 static inline bool rcu_current_is_nocb_kthread(struct rcu_data *rdp)
 {
 	/* Race on early boot between thread creation and assignment */
@@ -38,7 +43,10 @@ static inline int rcu_lockdep_is_held_nocb(struct rcu_data *rdp)
 {
 	return 0;
 }
-
+static inline int rcu_lockdep_is_held_nocb_local(struct rcu_data *rdp)
+{
+	return 0;
+}
 static inline bool rcu_current_is_nocb_kthread(struct rcu_data *rdp)
 {
 	return false;
@@ -46,22 +54,44 @@ static inline bool rcu_current_is_nocb_kthread(struct rcu_data *rdp)
 
 #endif /* #ifdef CONFIG_RCU_NOCB_CPU */
 
+/*
+ * Is a local read of the rdp's offloaded state safe and stable?
+ * See rcu_nocb_local_lock() & family.
+ */
+static inline bool rcu_local_offload_access_safe(struct rcu_data *rdp)
+{
+	if (!preemptible())
+		return true;
+
+	if (!is_migratable()) {
+		if (!IS_ENABLED(CONFIG_RCU_NOCB))
+			return true;
+
+		return rcu_lockdep_is_held_nocb_local(rdp);
+	}
+
+	return false;
+}
+
 static bool rcu_rdp_is_offloaded(struct rcu_data *rdp)
 {
 	/*
-	 * In order to read the offloaded state of an rdp is a safe
-	 * and stable way and prevent from its value to be changed
-	 * under us, we must either hold the barrier mutex, the cpu
-	 * hotplug lock (read or write) or the nocb lock. Local
-	 * non-preemptible reads are also safe. NOCB kthreads and
-	 * timers have their own means of synchronization against the
-	 * offloaded state updaters.
+	 * In order to read the offloaded state of an rdp is a safe and stable
+	 * way and prevent from its value to be changed under us, we must either...
 	 */
 	RCU_LOCKDEP_WARN(
+		// ...hold the barrier mutex...
 		!(lockdep_is_held(&rcu_state.barrier_mutex) ||
+		  // ... the cpu hotplug lock (read or write)...
 		  (IS_ENABLED(CONFIG_HOTPLUG_CPU) && lockdep_is_cpus_held()) ||
+		  // ... or the NOCB lock.
 		  rcu_lockdep_is_held_nocb(rdp) ||
-		  (rdp == this_cpu_ptr(&rcu_data) && is_pcpu_safe()) ||
+		  // Local reads still require the local state to remain stable
+		  // (preemption disabled / local lock held)
+		  (rdp == this_cpu_ptr(&rcu_data) &&
+		   rcu_local_offload_access_safe(rdp)) ||
+		  // NOCB kthreads and timers have their own means of synchronization
+		  // against the offloaded state updaters.
 		  rcu_current_is_nocb_kthread(rdp)),
 		"Unsafe read of RCU_NOCB offloaded state"
 	);
@@ -1628,6 +1658,22 @@ static void rcu_nocb_unlock_irqrestore(struct rcu_data *rdp,
 	}
 }
 
+/*
+ * The invocation of rcu_core() within the RCU core kthreads remains preemptible
+ * under PREEMPT_RT, thus the offload state of a CPU could change while
+ * said kthreads are preempted. Prevent this from happening by protecting the
+ * offload state with a local_lock().
+ */
+static void rcu_nocb_local_lock(struct rcu_data *rdp)
+{
+	local_lock(&rcu_data.nocb_local_lock);
+}
+
+static void rcu_nocb_local_unlock(struct rcu_data *rdp)
+{
+	local_unlock(&rcu_data.nocb_local_lock);
+}
+
 /* Lockdep check that ->cblist may be safely accessed. */
 static void rcu_lockdep_assert_cblist_protected(struct rcu_data *rdp)
 {
@@ -2395,6 +2441,7 @@ static int rdp_offload_toggle(struct rcu_data *rdp,
 	if (rdp->nocb_cb_sleep)
 		rdp->nocb_cb_sleep = false;
 	rcu_nocb_unlock_irqrestore(rdp, flags);
+	rcu_nocb_local_unlock(rdp);
 
 	/*
 	 * Ignore former value of nocb_cb_sleep and force wake up as it could
@@ -2426,6 +2473,7 @@ static long rcu_nocb_rdp_deoffload(void *arg)
 
 	pr_info("De-offloading %d\n", rdp->cpu);
 
+	rcu_nocb_local_lock(rdp);
 	rcu_nocb_lock_irqsave(rdp, flags);
 	/*
 	 * Flush once and for all now. This suffices because we are
@@ -2508,6 +2556,7 @@ static long rcu_nocb_rdp_offload(void *arg)
 	 * Can't use rcu_nocb_lock_irqsave() while we are in
 	 * SEGCBLIST_SOFTIRQ_ONLY mode.
 	 */
+	rcu_nocb_local_lock(rdp);
 	raw_spin_lock_irqsave(&rdp->nocb_lock, flags);
 
 	/*
@@ -2865,6 +2914,16 @@ static void rcu_nocb_unlock_irqrestore(struct rcu_data *rdp,
 				       unsigned long flags)
 {
 	local_irq_restore(flags);
+}
+
+/* No ->nocb_local_lock to acquire. */
+static void rcu_nocb_local_lock(struct rcu_data *rdp)
+{
+}
+
+/* No ->nocb_local_lock to release. */
+static void rcu_nocb_local_unlock(struct rcu_data *rdp)
+{
 }
 
 /* Lockdep check that ->cblist may be safely accessed. */

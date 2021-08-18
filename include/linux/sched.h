@@ -1715,13 +1715,13 @@ static inline bool is_percpu_thread(void)
 #endif
 }
 
-/* Is the current task guaranteed not to be migrated elsewhere? */
-static inline bool is_pcpu_safe(void)
+/* Is the current task guaranteed to stay on its current CPU? */
+static inline bool is_migratable(void)
 {
 #ifdef CONFIG_SMP
-	return !preemptible() || is_percpu_thread() || current->migration_disabled;
+	return preemptible() && !current->migration_disabled;
 #else
-	return true;
+	return false;
 #endif
 }
 
