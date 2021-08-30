@@ -1271,6 +1271,8 @@ static void register_dell_lis3lv02d_i2c_device(struct i801_priv *priv)
 /* Register optional slaves */
 static void i801_probe_optional_slaves(struct i801_priv *priv)
 {
+	const char *product;
+
 	/* Only register slaves on main SMBus channel */
 	if (priv->features & FEATURE_IDF)
 		return;
@@ -1290,11 +1292,17 @@ static void i801_probe_optional_slaves(struct i801_priv *priv)
 	if (is_dell_system_with_lis3lv02d())
 		register_dell_lis3lv02d_i2c_device(priv);
 
-	/* Instantiate SPD EEPROMs unless the SMBus is multiplexed */
+	/* Instantiate SPD EEPROMs unless the SMBus is multiplexed or it's a cRIO-903x */
+	product = dmi_get_system_info(DMI_PRODUCT_NAME);
+	if(strncmp(product, "NI cRIO-903", 11)) {
 #if IS_ENABLED(CONFIG_I2C_MUX_GPIO)
-	if (!priv->mux_drvdata)
+		if (!priv->mux_drvdata)
 #endif
-		i2c_register_spd(&priv->adapter);
+			i2c_register_spd(&priv->adapter);
+	}
+	else {
+		dev_info(&priv->adapter.dev, "Found %s, skipping SPD registration.", product);
+	}
 }
 #else
 static void __init input_apanel_init(void) {}
