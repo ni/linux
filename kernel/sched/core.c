@@ -8686,7 +8686,7 @@ static void balance_push(struct rq *rq)
 	 * Only active while going offline and when invoked on the outgoing
 	 * CPU.
 	 */
-	if (!cpu_dying(rq->cpu) && rq == this_rq())
+	if (!cpu_dying(rq->cpu) || rq != this_rq())
 		return;
 
 	/*
