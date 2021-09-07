@@ -780,7 +780,7 @@ static int video_register_media_controller(struct video_device *vdev)
 	vdev->entity.function = MEDIA_ENT_F_UNKNOWN;
 
 	switch (vdev->vfl_type) {
-	case VFL_TYPE_VIDEO:
+	case VFL_TYPE_GRABBER:
 		intf_type = MEDIA_INTF_T_V4L_VIDEO;
 		vdev->entity.function = MEDIA_ENT_F_IO_V4L;
 		break;
@@ -888,7 +888,7 @@ int __video_register_device(struct video_device *vdev,
 
 	/* Part 1: check device type */
 	switch (type) {
-	case VFL_TYPE_VIDEO:
+	case VFL_TYPE_GRABBER:
 		name_base = "video";
 		break;
 	case VFL_TYPE_VBI:
@@ -932,7 +932,7 @@ int __video_register_device(struct video_device *vdev,
 	 * of 128-191 and just pick the first free minor there
 	 * (new style). */
 	switch (type) {
-	case VFL_TYPE_VIDEO:
+	case VFL_TYPE_GRABBER:
 		minor_offset = 0;
 		minor_cnt = 64;
 		break;
