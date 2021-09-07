@@ -417,41 +417,43 @@ static inline unsigned int oo_objects(struct kmem_cache_order_objects x)
 /*
  * Per slab locking using the pagelock
  */
-static __always_inline void
-__slab_lock(struct page *page, unsigned long *flags, bool disable_irqs)
+static __always_inline void __slab_lock(struct page *page)
 {
 	VM_BUG_ON_PAGE(PageTail(page), page);
-	if (disable_irqs)
-		local_irq_save(*flags);
 	bit_spin_lock(PG_locked, &page->flags);
 }
 
-static __always_inline void
-__slab_unlock(struct page *page, unsigned long *flags, bool disable_irqs)
+static __always_inline void __slab_unlock(struct page *page)
 {
 	VM_BUG_ON_PAGE(PageTail(page), page);
 	__bit_spin_unlock(PG_locked, &page->flags);
-	if (disable_irqs)
-		local_irq_restore(*flags);
 }
 
-static __always_inline void
-slab_lock(struct page *page, unsigned long *flags)
+static __always_inline void slab_lock(struct page *page, unsigned long *flags)
 {
-	__slab_lock(page, flags, IS_ENABLED(CONFIG_PREEMPT_RT));
+	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+		local_irq_save(*flags);
+	__slab_lock(page);
 }
 
 static __always_inline void slab_unlock(struct page *page, unsigned long *flags)
 {
-	__slab_unlock(page, flags, IS_ENABLED(CONFIG_PREEMPT_RT));
+	__slab_unlock(page);
+	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+		local_irq_restore(*flags);
 }
 
-static inline bool ___cmpxchg_double_slab(struct kmem_cache *s, struct page *page,
+/*
+ * Interrupts must be disabled (for the fallback code to work right), typically
+ * by an _irqsave() lock variant. Except on PREEMPT_RT where locks are different
+ * so we disable interrupts as part of slab_[un]lock().
+ */
+static inline bool __cmpxchg_double_slab(struct kmem_cache *s, struct page *page,
 		void *freelist_old, unsigned long counters_old,
 		void *freelist_new, unsigned long counters_new,
-		const char *n, bool disable_irqs)
+		const char *n)
 {
-	if (!disable_irqs)
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
 		lockdep_assert_irqs_disabled();
 #if defined(CONFIG_HAVE_CMPXCHG_DOUBLE) && \
     defined(CONFIG_HAVE_ALIGNED_STRUCT_PAGE)
@@ -466,15 +468,15 @@ static inline bool ___cmpxchg_double_slab(struct kmem_cache *s, struct page *pag
 		/* init to 0 to prevent spurious warnings */
 		unsigned long flags = 0;
 
-		__slab_lock(page, &flags, disable_irqs);
+		slab_lock(page, &flags);
 		if (page->freelist == freelist_old &&
 					page->counters == counters_old) {
 			page->freelist = freelist_new;
 			page->counters = counters_new;
-			__slab_unlock(page, &flags, disable_irqs);
+			slab_unlock(page, &flags);
 			return true;
 		}
-		__slab_unlock(page, &flags, disable_irqs);
+		slab_unlock(page, &flags);
 	}
 
 	cpu_relax();
@@ -487,28 +489,45 @@ static inline bool ___cmpxchg_double_slab(struct kmem_cache *s, struct page *pag
 	return false;
 }
 
-/*
- * Interrupts must be disabled (for the fallback code to work right), typically
- * by an _irqsave() lock variant. Except on PREEMPT_RT where locks are different
- * so we disable interrupts explicitly here.
- */
-static inline bool __cmpxchg_double_slab(struct kmem_cache *s, struct page *page,
-		void *freelist_old, unsigned long counters_old,
-		void *freelist_new, unsigned long counters_new,
-		const char *n)
-{
-	return ___cmpxchg_double_slab(s, page, freelist_old, counters_old,
-				      freelist_new, counters_new, n,
-				      IS_ENABLED(CONFIG_PREEMPT_RT));
-}
-
 static inline bool cmpxchg_double_slab(struct kmem_cache *s, struct page *page,
 		void *freelist_old, unsigned long counters_old,
 		void *freelist_new, unsigned long counters_new,
 		const char *n)
 {
-	return ___cmpxchg_double_slab(s, page, freelist_old, counters_old,
-				      freelist_new, counters_new, n, true);
+#if defined(CONFIG_HAVE_CMPXCHG_DOUBLE) && \
+    defined(CONFIG_HAVE_ALIGNED_STRUCT_PAGE)
+	if (s->flags & __CMPXCHG_DOUBLE) {
+		if (cmpxchg_double(&page->freelist, &page->counters,
+				   freelist_old, counters_old,
+				   freelist_new, counters_new))
+			return true;
+	} else
+#endif
+	{
+		unsigned long flags;
+
+		local_irq_save(flags);
+		__slab_lock(page);
+		if (page->freelist == freelist_old &&
+					page->counters == counters_old) {
+			page->freelist = freelist_new;
+			page->counters = counters_new;
+			__slab_unlock(page);
+			local_irq_restore(flags);
+			return true;
+		}
+		__slab_unlock(page);
+		local_irq_restore(flags);
+	}
+
+	cpu_relax();
+	stat(s, CMPXCHG_DOUBLE_FAIL);
+
+#ifdef SLUB_DEBUG_CMPXCHG
+	pr_info("%s %s: cmpxchg double redo ", n, s->name);
+#endif
+
+	return false;
 }
 
 #ifdef CONFIG_SLUB_DEBUG
@@ -2566,38 +2585,43 @@ static inline void unfreeze_partials_cpu(struct kmem_cache *s,
 
 #endif	/* CONFIG_SLUB_CPU_PARTIAL */
 
-static inline void flush_slab(struct kmem_cache *s, struct kmem_cache_cpu *c,
-			      bool lock)
+static inline void flush_slab(struct kmem_cache *s, struct kmem_cache_cpu *c)
 {
 	unsigned long flags;
-	void *freelist;
 	struct page *page;
+	void *freelist;
 
-	if (lock)
-		local_lock_irqsave(&s->cpu_slab->lock, flags);
+	local_lock_irqsave(&s->cpu_slab->lock, flags);
 
-	freelist = c->freelist;
 	page = c->page;
+	freelist = c->freelist;
 
 	c->page = NULL;
 	c->freelist = NULL;
 	c->tid = next_tid(c->tid);
 
-	if (lock)
-		local_unlock_irqrestore(&s->cpu_slab->lock, flags);
+	local_unlock_irqrestore(&s->cpu_slab->lock, flags);
 
-	if (page)
+	if (page) {
 		deactivate_slab(s, page, freelist);
-
-	stat(s, CPUSLAB_FLUSH);
+		stat(s, CPUSLAB_FLUSH);
+	}
 }
 
 static inline void __flush_cpu_slab(struct kmem_cache *s, int cpu)
 {
 	struct kmem_cache_cpu *c = per_cpu_ptr(s->cpu_slab, cpu);
+	void *freelist = c->freelist;
+	struct page *page = c->page;
 
-	if (c->page)
-		flush_slab(s, c, false);
+	c->page = NULL;
+	c->freelist = NULL;
+	c->tid = next_tid(c->tid);
+
+	if (page) {
+		deactivate_slab(s, page, freelist);
+		stat(s, CPUSLAB_FLUSH);
+	}
 
 	unfreeze_partials_cpu(s, c);
 }
@@ -2625,7 +2649,7 @@ static void flush_cpu_slab(struct work_struct *w)
 	c = this_cpu_ptr(s->cpu_slab);
 
 	if (c->page)
-		flush_slab(s, c, true);
+		flush_slab(s, c);
 
 	unfreeze_partials(s);
 }
@@ -2798,14 +2822,14 @@ static inline bool pfmemalloc_match_unsafe(struct page *page, gfp_t gfpflags)
  * The page is still frozen if the return value is not NULL.
  *
  * If this function returns NULL then the page has been unfrozen.
- *
- * This function must be called with interrupt disabled.
  */
 static inline void *get_freelist(struct kmem_cache *s, struct page *page)
 {
 	struct page new;
 	unsigned long counters;
 	void *freelist;
+
+	lockdep_assert_held(this_cpu_ptr(&s->cpu_slab->lock));
 
 	do {
 		freelist = page->freelist;
@@ -4189,9 +4213,9 @@ static void list_slab_objects(struct kmem_cache *s, struct page *page,
 {
 #ifdef CONFIG_SLUB_DEBUG
 	void *addr = page_address(page);
+	unsigned long flags;
 	unsigned long *map;
 	void *p;
-	unsigned long flags;
 
 	slab_err(s, page, text, s->name);
 	slab_lock(page, &flags);
