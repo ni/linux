@@ -1265,7 +1265,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
 	 * and context switches) submission.
 	 */
 
-	spin_lock(&engine->active.lock);
+	spin_lock_irq(&engine->active.lock);
 
 	/*
 	 * If the queue is higher priority than the last
@@ -1365,7 +1365,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
 				 * Even if ELSP[1] is occupied and not worthy
 				 * of timeslices, our queue might be.
 				 */
-				spin_unlock(&engine->active.lock);
+				spin_unlock_irq(&engine->active.lock);
 				return;
 			}
 		}
@@ -1391,7 +1391,7 @@ static void execlists_dequeue(struct intel_engine_cs *engine)
 
 		if (last && !can_merge_rq(last, rq)) {
 			spin_unlock(&ve->base.active.lock);
-			spin_unlock(&engine->active.lock);
+			spin_unlock_irq(&engine->active.lock);
 			return; /* leave this for another sibling */
 		}
 
@@ -1552,7 +1552,7 @@ done:
 	 * interrupt for secondary ports).
 	 */
 	execlists->queue_priority_hint = queue_prio(execlists);
-	spin_unlock(&engine->active.lock);
+	spin_unlock_irq(&engine->active.lock);
 
 	/*
 	 * We can skip poking the HW if we ended up with exactly the same set
@@ -1576,13 +1576,6 @@ done:
 			i915_request_put(*port);
 		*execlists->pending = NULL;
 	}
-}
-
-static void execlists_dequeue_irq(struct intel_engine_cs *engine)
-{
-	local_irq_disable(); /* Suspend interrupts across request submission */
-	execlists_dequeue(engine);
-	local_irq_enable(); /* flush irq_work (e.g. breadcrumb enabling) */
 }
 
 static void clear_ports(struct i915_request **ports, int count)
@@ -2377,7 +2370,7 @@ static void execlists_submission_tasklet(struct tasklet_struct *t)
 	}
 
 	if (!engine->execlists.pending[0]) {
-		execlists_dequeue_irq(engine);
+		execlists_dequeue(engine);
 		start_timeslice(engine);
 	}
 
