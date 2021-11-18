@@ -4927,11 +4927,10 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 			prev->sched_class->task_dead(prev);
 
 		/*
-		 * Release VMAP'ed task stack immediate for reuse. On RT
-		 * enabled kernels this is delayed for latency reasons.
+		 * Cache only the VMAP stack. The final deallocation is in
+		 * delayed_put_task_struct.
 		 */
-		if (!IS_ENABLED(CONFIG_PREEMPT_RT))
-			put_task_stack(prev);
+		put_task_stack_sched(prev);
 
 		put_task_struct_rcu_user(prev);
 	}
