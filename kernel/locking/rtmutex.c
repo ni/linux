@@ -1103,27 +1103,12 @@ static int __sched task_blocks_on_rt_mutex(struct rt_mutex_base *lock,
 	 * the other will detect the deadlock and return -EDEADLOCK,
 	 * which is wrong, as the other waiter is not in a deadlock
 	 * situation.
+	 *
+	 * Except for ww_mutex, in that case the chain walk must already deal
+	 * with spurious cycles, see the comments at [3] and [6].
 	 */
-	if (owner == task) {
-#if defined(DEBUG_WW_MUTEXES) && defined(CONFIG_DEBUG_LOCKING_API_SELFTESTS)
-		/*
-		 * The lockdep selftest for ww-mutex assumes in a few cases
-		 * the ww_ctx->contending_lock assignment via
-		 * __ww_mutex_check_kill() which does not happen if the rtmutex
-		 * detects the deadlock early.
-		 */
-		if (build_ww_mutex() && ww_ctx) {
-			struct rt_mutex *rtm;
-
-			/* Check whether the waiter should backout immediately */
-			rtm = container_of(lock, struct rt_mutex, rtmutex);
-
-			__ww_mutex_add_waiter(waiter, rtm, ww_ctx);
-			__ww_mutex_check_kill(rtm, waiter, ww_ctx);
-		}
-#endif
+	if (owner == task && !(build_ww_mutex() && ww_ctx))
 		return -EDEADLK;
-	}
 
 	raw_spin_lock(&task->pi_lock);
 	waiter->task = task;
