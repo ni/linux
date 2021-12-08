@@ -135,7 +135,25 @@ EOF
 
 		sed -i "s/populate-device-codes/`echo ${TARGET_DEVCODES} | sed 's/[ \t]*\([^ \t]*\)/0x\1 /g' | sed 's/[ \t]*$//'`/" ${bootdir}/linux.its
 		cat <<EOF > ${bootdir}/bootscript.txt
-setenv set_args 'setenv bootargs \${consoleparam} \$mtdparts ubi.mtd=boot-config ubi.mtd=root root=ubi1:rootfs rw rootfstype=ubifs kthreadd_pri=25 ksoftirqd_pri=8 irqthread_pri=15 \${usb_gadget_args} \$othbootargs'
+if test \${DeviceCode} -eq 0x7AAE; then
+  setenv set_args 'setenv bootargs \${consoleparam} root=/dev/mmcblk0p3 rw \${usb_gadget_args} rcu_nocbs=all rootdelay=1 \$othbootargs'
+else
+  setenv set_args 'setenv bootargs \${consoleparam} \$mtdparts ubi.mtd=boot-config ubi.mtd=root root=ubi1:rootfs rw rootfstype=ubifs \${usb_gadget_args} rcu_nocbs=all \$othbootargs'
+fi
+
+# usb host or device mode switching
+if test -n \${otg_usb_en} && test \${otg_usb_en} -eq 1; then
+  fdt addr \${loadaddr} && fdt get value fdtname /configurations/config_\${DeviceCode} fdt && fdt get addr fdtaddr /images/\${fdtname} data && fdt addr \${fdtaddr} && if itest.l \${usb_otgsc_id:-ffffffff} == 0; then
+    fdt set /amba@0/usb@\${otg_usb_base_addr} dr_mode host;
+  elif itest.l \${usb_otgsc_id:-ffffffff} == 100; then
+    fdt set /amba@0/usb@\${otg_usb_base_addr} dr_mode peripheral;
+  fi;
+fi
+
+# wireless region switching
+if test -n \${wirelessRegionFactory} && test -n \${wireless_board_id} && test -n \${wlan_sdio_base_addr}; then
+  fdt addr \${loadaddr} && fdt get value fdtname /configurations/config_\${DeviceCode} fdt && fdt get addr fdtaddr /images/\${fdtname} data && fdt addr \${fdtaddr} && fdt set /amba@0/sdhci@\${wlan_sdio_base_addr}/wlan@0 atheros,board-id \${wireless_board_id} && fdt set /amba@0/sdhci@\${wlan_sdio_base_addr}/wlan@0 atheros,region-code \${wirelessRegionFactory};
+fi
 
 # cRIO-9068 doesn't have USB gadget, so skip it on that device
 if test \${DeviceCode} != 0x76D6; then
@@ -146,8 +164,13 @@ if test -n \"\$bootscriptenvrun\" ; then run bootscriptenvrun; fi
 
 silent_tmp=\${silent}
 setenv silent
-echo "Booting LabVIEW RT (custom kernel)..."
+echo "Booting LabVIEW RT..."
 setenv silent \${silent_tmp}
+
+test -n "\$manufacturer" ||
+    setenv manufacturer National Instruments &&
+    setenv .flags manufacturer:so &&
+    saveenv;
 
 run set_args
 bootm \${loadaddr}#config_\${DeviceCode}
