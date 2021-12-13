@@ -66,7 +66,7 @@
 #include <linux/seqlock.h>
 
 struct u64_stats_sync {
-#if BITS_PER_LONG==32 && (defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT))
+#if BITS_PER_LONG == 32 && (defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT))
 	seqcount_t	seq;
 #endif
 };
