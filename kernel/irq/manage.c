@@ -1281,12 +1281,9 @@ static int irq_thread(void *data)
 		if (action_ret == IRQ_WAKE_THREAD)
 			irq_wake_secondary(desc, action);
 
-		if (IS_ENABLED(CONFIG_PREEMPT_RT)) {
-			migrate_disable();
-			add_interrupt_randomness(action->irq, 0,
-				 desc->random_ip ^ (unsigned long) action);
-			migrate_enable();
-		}
+		if (IS_ENABLED(CONFIG_PREEMPT_RT))
+			process_interrupt_randomness();
+
 		wake_threads_waitq(desc);
 	}
 
