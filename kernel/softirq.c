@@ -1029,7 +1029,7 @@ void raise_timer_softirq(void)
 }
 #endif
 
-struct smp_hotplug_thread timer_threads = {
+static struct smp_hotplug_thread timer_threads = {
         .store                  = &timersd,
         .setup                  = timersd_setup,
         .thread_should_run      = timersd_should_run,
