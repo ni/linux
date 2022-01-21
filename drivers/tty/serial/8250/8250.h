@@ -142,12 +142,12 @@ static inline void serial8250_set_IER(struct uart_8250_port *up,
 	is_console = uart_console(port);
 
 	if (is_console)
-		console_atomic_lock(flags);
+		printk_cpu_sync_get_irqsave(flags);
 
 	serial_out(up, UART_IER, ier);
 
 	if (is_console)
-		console_atomic_unlock(flags);
+		printk_cpu_sync_put_irqrestore(flags);
 }
 
 static inline unsigned char serial8250_clear_IER(struct uart_8250_port *up)
@@ -164,13 +164,13 @@ static inline unsigned char serial8250_clear_IER(struct uart_8250_port *up)
 		clearval = UART_IER_UUE;
 
 	if (is_console)
-		console_atomic_lock(flags);
+		printk_cpu_sync_get_irqsave(flags);
 
 	prior = serial_port_in(port, UART_IER);
 	serial_port_out(port, UART_IER, clearval);
 
 	if (is_console)
-		console_atomic_unlock(flags);
+		printk_cpu_sync_put_irqrestore(flags);
 
 	return prior;
 }

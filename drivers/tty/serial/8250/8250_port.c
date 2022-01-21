@@ -3318,9 +3318,9 @@ static void serial8250_console_putchar(struct uart_port *port, int ch)
 
 	wait_for_xmitr(up, UART_LSR_THRE);
 
-	console_atomic_lock(flags);
+	printk_cpu_sync_get_irqsave(flags);
 	serial8250_console_putchar_locked(port, ch);
-	console_atomic_unlock(flags);
+	printk_cpu_sync_put_irqrestore(flags);
 }
 
 /*
@@ -3351,7 +3351,7 @@ void serial8250_console_write_atomic(struct uart_8250_port *up,
 	unsigned long flags;
 	unsigned int ier;
 
-	console_atomic_lock(flags);
+	printk_cpu_sync_get_irqsave(flags);
 
 	touch_nmi_watchdog();
 
@@ -3367,7 +3367,7 @@ void serial8250_console_write_atomic(struct uart_8250_port *up,
 	wait_for_xmitr(up, BOTH_EMPTY);
 	serial8250_set_IER(up, ier);
 
-	console_atomic_unlock(flags);
+	printk_cpu_sync_put_irqrestore(flags);
 }
 
 /*

@@ -226,13 +226,13 @@ static void mtk8250_disable_intrs(struct uart_8250_port *up, int mask)
 	is_console = uart_console(port);
 
 	if (is_console)
-		console_atomic_lock(flags);
+		printk_cpu_sync_get_irqsave(flags);
 
 	ier = serial_in(up, UART_IER);
 	serial_out(up, UART_IER, ier & (~mask));
 
 	if (is_console)
-		console_atomic_unlock(flags);
+		printk_cpu_sync_put_irqrestore(flags);
 }
 
 static void mtk8250_enable_intrs(struct uart_8250_port *up, int mask)
@@ -242,13 +242,13 @@ static void mtk8250_enable_intrs(struct uart_8250_port *up, int mask)
 	unsigned int ier;
 
 	if (uart_console(port))
-		console_atomic_lock(flags);
+		printk_cpu_sync_get_irqsave(flags);
 
 	ier = serial_in(up, UART_IER);
 	serial_out(up, UART_IER, ier | mask);
 
 	if (uart_console(port))
-		console_atomic_unlock(flags);
+		printk_cpu_sync_put_irqrestore(flags);
 }
 
 static void mtk8250_set_flow_ctrl(struct uart_8250_port *up, int mode)
