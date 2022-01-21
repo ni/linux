@@ -4845,7 +4845,9 @@ void show_one_workqueue(struct workqueue_struct *wq)
 			 * drivers that queue work while holding locks
 			 * also taken in their write paths.
 			 */
+			printk_deferred_enter();
 			show_pwq(pwq);
+			printk_deferred_exit();
 		}
 		raw_spin_unlock_irqrestore(&pwq->pool->lock, flags);
 		/*
@@ -4876,6 +4878,7 @@ static void show_one_worker_pool(struct worker_pool *pool)
 	 * queue work while holding locks also taken in their write
 	 * paths.
 	 */
+	printk_deferred_enter();
 	pr_info("pool %d:", pool->id);
 	pr_cont_pool_info(pool);
 	pr_cont(" hung=%us workers=%d",
@@ -4890,6 +4893,7 @@ static void show_one_worker_pool(struct worker_pool *pool)
 		first = false;
 	}
 	pr_cont("\n");
+	printk_deferred_exit();
 next_pool:
 	raw_spin_unlock_irqrestore(&pool->lock, flags);
 	/*

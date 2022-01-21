@@ -63,10 +63,10 @@ int fsl8250_handle_irq(struct uart_port *port)
 		is_console = uart_console(port);
 
 		if (is_console)
-			console_atomic_lock(flags);
+			printk_cpu_sync_get_irqsave(flags);
 		up->ier = port->serial_in(port, UART_IER);
 		if (is_console)
-			console_atomic_unlock(flags);
+			printk_cpu_sync_put_irqrestore(flags);
 
 		if (up->ier & (UART_IER_RLSI | UART_IER_RDI)) {
 			port->ops->stop_rx(port);
