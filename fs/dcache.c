@@ -2709,18 +2709,30 @@ mismatch:
 }
 EXPORT_SYMBOL(d_alloc_parallel);
 
-void __d_lookup_done(struct dentry *dentry)
+static wait_queue_head_t *__d_lookup_clear_d_wait(struct dentry *dentry)
 {
+	wait_queue_head_t *d_wait;
 	struct hlist_bl_head *b = in_lookup_hash(dentry->d_parent,
 						 dentry->d_name.hash);
 	hlist_bl_lock(b);
 	dentry->d_flags &= ~DCACHE_PAR_LOOKUP;
 	__hlist_bl_del(&dentry->d_u.d_in_lookup_hash);
-	wake_up_all(dentry->d_wait);
+	d_wait = dentry->d_wait;
 	dentry->d_wait = NULL;
 	hlist_bl_unlock(b);
 	INIT_HLIST_NODE(&dentry->d_u.d_alias);
 	INIT_LIST_HEAD(&dentry->d_lru);
+	return d_wait;
+}
+
+void __d_lookup_done(struct dentry *dentry)
+{
+	wait_queue_head_t *wq_head;
+
+	spin_lock(&dentry->d_lock);
+	wq_head = __d_lookup_clear_d_wait(dentry);
+	spin_unlock(&dentry->d_lock);
+	wake_up_all(wq_head);
 }
 EXPORT_SYMBOL(__d_lookup_done);
 
@@ -2728,13 +2740,15 @@ EXPORT_SYMBOL(__d_lookup_done);
 
 static inline void __d_add(struct dentry *dentry, struct inode *inode)
 {
+	wait_queue_head_t *d_wait = NULL;
 	struct inode *dir = NULL;
+
 	unsigned n;
 	spin_lock(&dentry->d_lock);
 	if (unlikely(d_in_lookup(dentry))) {
 		dir = dentry->d_parent->d_inode;
 		n = start_dir_add(dir);
-		__d_lookup_done(dentry);
+		d_wait = __d_lookup_clear_d_wait(dentry);
 	}
 	if (inode) {
 		unsigned add_flags = d_flags_for_inode(inode);
@@ -2748,6 +2762,8 @@ static inline void __d_add(struct dentry *dentry, struct inode *inode)
 	if (dir)
 		end_dir_add(dir, n);
 	spin_unlock(&dentry->d_lock);
+	if (d_wait)
+		wake_up_all(d_wait);
 	if (inode)
 		spin_unlock(&inode->i_lock);
 }
@@ -2892,6 +2908,7 @@ static void copy_name(struct dentry *dentry, struct dentry *target)
 static void __d_move(struct dentry *dentry, struct dentry *target,
 		     bool exchange)
 {
+	wait_queue_head_t *d_wait = NULL;
 	struct dentry *old_parent, *p;
 	struct inode *dir = NULL;
 	unsigned n;
@@ -2923,7 +2940,7 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 	if (unlikely(d_in_lookup(target))) {
 		dir = target->d_parent->d_inode;
 		n = start_dir_add(dir);
-		__d_lookup_done(target);
+		d_wait = __d_lookup_clear_d_wait(target);
 	}
 
 	write_seqcount_begin(&dentry->d_seq);
@@ -2967,6 +2984,8 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 		spin_unlock(&old_parent->d_lock);
 	spin_unlock(&target->d_lock);
 	spin_unlock(&dentry->d_lock);
+	if (d_wait)
+		wake_up_all(d_wait);
 }
 
 /*
