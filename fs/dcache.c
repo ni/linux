@@ -2564,9 +2564,11 @@ EXPORT_SYMBOL(d_rehash);
 static inline unsigned start_dir_add(struct inode *dir)
 {
 	/*
-	 * The caller has a spinlock_t (dentry::d_lock) acquired which disables
-	 * preemption on !PREEMPT_RT. On PREEMPT_RT the lock does not disable
-	 * preemption and it has be done explicitly.
+	 * The caller holds a spinlock (dentry::d_lock). On !PREEMPT_RT
+	 * kernels spin_lock() implicitly disables preemption, but not on
+	 * PREEMPT_RT.  So for RT it has to be done explicitly to protect
+	 * the sequence count write side critical section against a reader
+	 * or another writer preempting, which would result in a live lock.
 	 */
 	if (IS_ENABLED(CONFIG_PREEMPT_RT))
 		preempt_disable();
@@ -2709,11 +2711,19 @@ mismatch:
 }
 EXPORT_SYMBOL(d_alloc_parallel);
 
-static wait_queue_head_t *__d_lookup_clear_d_wait(struct dentry *dentry)
+/*
+ * - Unhash the dentry
+ * - Retrieve and clear the waitqueue head in dentry
+ * - Return the waitqueue head
+ */
+static wait_queue_head_t *__d_lookup_unhash(struct dentry *dentry)
 {
 	wait_queue_head_t *d_wait;
-	struct hlist_bl_head *b = in_lookup_hash(dentry->d_parent,
-						 dentry->d_name.hash);
+	struct hlist_bl_head *b;
+
+	lockdep_assert_held(&dentry->d_lock);
+
+	b = in_lookup_hash(dentry->d_parent, dentry->d_name.hash);
 	hlist_bl_lock(b);
 	dentry->d_flags &= ~DCACHE_PAR_LOOKUP;
 	__hlist_bl_del(&dentry->d_u.d_in_lookup_hash);
@@ -2727,12 +2737,9 @@ static wait_queue_head_t *__d_lookup_clear_d_wait(struct dentry *dentry)
 
 void __d_lookup_done(struct dentry *dentry)
 {
-	wait_queue_head_t *wq_head;
-
 	spin_lock(&dentry->d_lock);
-	wq_head = __d_lookup_clear_d_wait(dentry);
+	wake_up_all(__d_lookup_unhash(dentry));
 	spin_unlock(&dentry->d_lock);
-	wake_up_all(wq_head);
 }
 EXPORT_SYMBOL(__d_lookup_done);
 
@@ -2740,15 +2747,15 @@ EXPORT_SYMBOL(__d_lookup_done);
 
 static inline void __d_add(struct dentry *dentry, struct inode *inode)
 {
-	wait_queue_head_t *d_wait = NULL;
+	wait_queue_head_t *d_wait;
 	struct inode *dir = NULL;
-
 	unsigned n;
+
 	spin_lock(&dentry->d_lock);
 	if (unlikely(d_in_lookup(dentry))) {
 		dir = dentry->d_parent->d_inode;
 		n = start_dir_add(dir);
-		d_wait = __d_lookup_clear_d_wait(dentry);
+		d_wait = __d_lookup_unhash(dentry);
 	}
 	if (inode) {
 		unsigned add_flags = d_flags_for_inode(inode);
@@ -2759,11 +2766,11 @@ static inline void __d_add(struct dentry *dentry, struct inode *inode)
 		fsnotify_update_flags(dentry);
 	}
 	__d_rehash(dentry);
-	if (dir)
+	if (dir) {
 		end_dir_add(dir, n);
-	spin_unlock(&dentry->d_lock);
-	if (d_wait)
 		wake_up_all(d_wait);
+	}
+	spin_unlock(&dentry->d_lock);
 	if (inode)
 		spin_unlock(&inode->i_lock);
 }
@@ -2908,8 +2915,8 @@ static void copy_name(struct dentry *dentry, struct dentry *target)
 static void __d_move(struct dentry *dentry, struct dentry *target,
 		     bool exchange)
 {
-	wait_queue_head_t *d_wait = NULL;
 	struct dentry *old_parent, *p;
+	wait_queue_head_t *d_wait;
 	struct inode *dir = NULL;
 	unsigned n;
 
@@ -2940,7 +2947,7 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 	if (unlikely(d_in_lookup(target))) {
 		dir = target->d_parent->d_inode;
 		n = start_dir_add(dir);
-		d_wait = __d_lookup_clear_d_wait(target);
+		d_wait = __d_lookup_unhash(target);
 	}
 
 	write_seqcount_begin(&dentry->d_seq);
@@ -2975,8 +2982,10 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 	write_seqcount_end(&target->d_seq);
 	write_seqcount_end(&dentry->d_seq);
 
-	if (dir)
+	if (dir) {
 		end_dir_add(dir, n);
+		wake_up_all(d_wait);
+	}
 
 	if (dentry->d_parent != old_parent)
 		spin_unlock(&dentry->d_parent->d_lock);
@@ -2984,8 +2993,6 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 		spin_unlock(&old_parent->d_lock);
 	spin_unlock(&target->d_lock);
 	spin_unlock(&dentry->d_lock);
-	if (d_wait)
-		wake_up_all(d_wait);
 }
 
 /*
