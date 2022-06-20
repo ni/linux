@@ -301,6 +301,7 @@ void panic(const char *fmt, ...)
 		 * unfortunately means it may not be hardened to work in a
 		 * panic situation.
 		 */
+		try_block_console_kthreads(10000);
 		smp_send_stop();
 	} else {
 		/*
@@ -308,6 +309,7 @@ void panic(const char *fmt, ...)
 		 * kmsg_dump, we will need architecture dependent extra
 		 * works in addition to stopping other CPUs.
 		 */
+		try_block_console_kthreads(10000);
 		crash_smp_send_stop();
 	}
 
