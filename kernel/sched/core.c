@@ -3345,20 +3345,22 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
 		 * is actually now running somewhere else!
 		 */
 		while (task_running(rq, p)) {
+
 			if (match_state) {
+				bool mismatch = false;
+#ifndef CONFIG_PREEMPT_RT
+				if (READ_ONCE(p->__state != match_state)
+					mismatch = true;
+#else
 				unsigned long flags;
-				bool missmatch = false;
 
 				raw_spin_lock_irqsave(&p->pi_lock, flags);
-#ifdef CONFIG_PREEMPT_RT
-				if ((READ_ONCE(p->__state) != match_state) &&
-				    (READ_ONCE(p->saved_state) != match_state))
-#else
-				if (READ_ONCE(p->__state) != match_state)
-#endif
-					missmatch = true;
+				if (READ_ONCE(p->__state) != match_state &&
+				    READ_ONCE(p->saved_state) != match_state)
+					mismatch = true;
 				raw_spin_unlock_irqrestore(&p->pi_lock, flags);
-				if (missmatch)
+#endif
+				if (mismatch)
 					return 0;
 			}
 			cpu_relax();
