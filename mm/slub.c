@@ -726,18 +726,24 @@ static struct track *get_track(struct kmem_cache *s, void *object,
 	return kasan_reset_tag(p + alloc);
 }
 
+#ifdef CONFIG_STACKDEPOT
 static noinline depot_stack_handle_t set_track_prepare(void)
 {
-	depot_stack_handle_t handle = 0;
-#ifdef CONFIG_STACKDEPOT
+	depot_stack_handle_t handle;
 	unsigned long entries[TRACK_ADDRS_COUNT];
 	unsigned int nr_entries;
 
 	nr_entries = stack_trace_save(entries, ARRAY_SIZE(entries), 3);
 	handle = stack_depot_save(entries, nr_entries, GFP_NOWAIT);
-#endif
+
 	return handle;
 }
+#else
+static inline depot_stack_handle_t set_track_prepare(void)
+{
+	return 0;
+}
+#endif
 
 static void set_track_update(struct kmem_cache *s, void *object,
 			     enum track_item alloc, unsigned long addr,
@@ -757,15 +763,9 @@ static void set_track_update(struct kmem_cache *s, void *object,
 static __always_inline void set_track(struct kmem_cache *s, void *object,
 				      enum track_item alloc, unsigned long addr)
 {
-	struct track *p = get_track(s, object, alloc);
+	depot_stack_handle_t handle = set_track_prepare();
 
-#ifdef CONFIG_STACKDEPOT
-	p->handle = set_track_prepare();
-#endif
-	p->addr = addr;
-	p->cpu = smp_processor_id();
-	p->pid = current->pid;
-	p->when = jiffies;
+	set_track_update(s, object, alloc, addr, handle);
 }
 
 static void init_tracking(struct kmem_cache *s, void *object)
@@ -2963,6 +2963,7 @@ redo:
 
 	if (!freelist) {
 		c->slab = NULL;
+		c->tid = next_tid(c->tid);
 		local_unlock_irqrestore(&s->cpu_slab->lock, flags);
 		stat(s, DEACTIVATE_BYPASS);
 		goto new_slab;
@@ -2995,6 +2996,7 @@ deactivate_slab:
 	freelist = c->freelist;
 	c->slab = NULL;
 	c->freelist = NULL;
+	c->tid = next_tid(c->tid);
 	local_unlock_irqrestore(&s->cpu_slab->lock, flags);
 	deactivate_slab(s, slab, freelist);
 
