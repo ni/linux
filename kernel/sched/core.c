@@ -3299,6 +3299,40 @@ out:
 }
 #endif /* CONFIG_NUMA_BALANCING */
 
+#ifdef CONFIG_PREEMPT_RT
+static __always_inline bool state_mismatch(struct task_struct *p, unsigned int match_state)
+{
+	unsigned long flags;
+	bool mismatch;
+
+	raw_spin_lock_irqsave(&p->pi_lock, flags);
+	mismatch = READ_ONCE(p->__state) != match_state &&
+		READ_ONCE(p->saved_state) != match_state;
+	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
+	return mismatch;
+}
+static __always_inline bool state_match(struct task_struct *p, unsigned int match_state,
+					bool *wait)
+{
+	if (READ_ONCE(p->__state) == match_state)
+		return true;
+	if (READ_ONCE(p->saved_state) != match_state)
+		return false;
+	*wait = true;
+	return true;
+}
+#else
+static __always_inline bool state_mismatch(struct task_struct *p, unsigned int match_state)
+{
+	return READ_ONCE(p->__state) != match_state;
+}
+static __always_inline bool state_match(struct task_struct *p, unsigned int match_state,
+					bool *wait)
+{
+	return READ_ONCE(p->__state) == match_state;
+}
+#endif
+
 /*
  * wait_task_inactive - wait for a thread to unschedule.
  *
@@ -3317,12 +3351,10 @@ out:
  */
 unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state)
 {
-	int running, queued;
+	bool running, wait;
 	struct rq_flags rf;
 	unsigned long ncsw;
 	struct rq *rq;
-	bool saved_state_match;
-	bool update_ncsw;
 
 	for (;;) {
 		/*
@@ -3345,24 +3377,8 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
 		 * is actually now running somewhere else!
 		 */
 		while (task_running(rq, p)) {
-
-			if (match_state) {
-				bool mismatch = false;
-#ifndef CONFIG_PREEMPT_RT
-				if (READ_ONCE(p->__state != match_state)
-					mismatch = true;
-#else
-				unsigned long flags;
-
-				raw_spin_lock_irqsave(&p->pi_lock, flags);
-				if (READ_ONCE(p->__state) != match_state &&
-				    READ_ONCE(p->saved_state) != match_state)
-					mismatch = true;
-				raw_spin_unlock_irqrestore(&p->pi_lock, flags);
-#endif
-				if (mismatch)
-					return 0;
-			}
+			if (match_state && state_mismatch(p, match_state))
+				return 0;
 			cpu_relax();
 		}
 
@@ -3374,24 +3390,12 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
 		rq = task_rq_lock(p, &rf);
 		trace_sched_wait_task(p);
 		running = task_running(rq, p);
-		queued = task_on_rq_queued(p);
+		wait = task_on_rq_queued(p);
 		ncsw = 0;
-		update_ncsw = false;
-		saved_state_match = false;
 
-		if (!match_state) {
-			update_ncsw = true;
-		} else if (READ_ONCE(p->__state) == match_state) {
-			update_ncsw = true;
-#ifdef CONFIG_PREEMPT_RT
-		} else if (READ_ONCE(p->saved_state) == match_state) {
-			update_ncsw = true;
-			saved_state_match = true;
-#endif
-		}
-
-		if (update_ncsw)
+		if (!match_state || state_match(p, match_state, &wait))
 			ncsw = p->nvcsw | LONG_MIN; /* sets MSB */
+
 		task_rq_unlock(rq, p, &rf);
 
 		/*
@@ -3420,7 +3424,7 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
 		 * running right now), it's preempted, and we should
 		 * yield - it could be a while.
 		 */
-		if (unlikely(queued) || saved_state_match) {
+		if (unlikely(wait)) {
 			ktime_t to = NSEC_PER_SEC / HZ;
 
 			set_current_state(TASK_UNINTERRUPTIBLE);
