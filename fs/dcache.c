@@ -2239,6 +2239,7 @@ struct dentry *d_add_ci(struct dentry *dentry, struct inode *inode,
 		} 
 	}
 	res = d_splice_alias(inode, found);
+	d_lookup_done(found);
 	if (res) {
 		dput(found);
 		return res;
@@ -2580,11 +2581,13 @@ static inline unsigned start_dir_add(struct inode *dir)
 	}
 }
 
-static inline void end_dir_add(struct inode *dir, unsigned n)
+static inline void end_dir_add(struct inode *dir, unsigned int n,
+			       wait_queue_head_t *d_wait)
 {
 	smp_store_release(&dir->i_dir_seq, n + 2);
 	if (IS_ENABLED(CONFIG_PREEMPT_RT))
 		preempt_enable();
+	wake_up_all(d_wait);
 }
 
 static void d_wait_lookup(struct dentry *dentry)
@@ -2735,13 +2738,13 @@ static wait_queue_head_t *__d_lookup_unhash(struct dentry *dentry)
 	return d_wait;
 }
 
-void __d_lookup_done(struct dentry *dentry)
+void __d_lookup_unhash_wake(struct dentry *dentry)
 {
 	spin_lock(&dentry->d_lock);
 	wake_up_all(__d_lookup_unhash(dentry));
 	spin_unlock(&dentry->d_lock);
 }
-EXPORT_SYMBOL(__d_lookup_done);
+EXPORT_SYMBOL(__d_lookup_unhash_wake);
 
 /* inode->i_lock held if inode is non-NULL */
 
@@ -2750,7 +2753,6 @@ static inline void __d_add(struct dentry *dentry, struct inode *inode)
 	wait_queue_head_t *d_wait;
 	struct inode *dir = NULL;
 	unsigned n;
-
 	spin_lock(&dentry->d_lock);
 	if (unlikely(d_in_lookup(dentry))) {
 		dir = dentry->d_parent->d_inode;
@@ -2766,10 +2768,8 @@ static inline void __d_add(struct dentry *dentry, struct inode *inode)
 		fsnotify_update_flags(dentry);
 	}
 	__d_rehash(dentry);
-	if (dir) {
-		end_dir_add(dir, n);
-		wake_up_all(d_wait);
-	}
+	if (dir)
+		end_dir_add(dir, n, d_wait);
 	spin_unlock(&dentry->d_lock);
 	if (inode)
 		spin_unlock(&inode->i_lock);
@@ -2982,10 +2982,8 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 	write_seqcount_end(&target->d_seq);
 	write_seqcount_end(&dentry->d_seq);
 
-	if (dir) {
-		end_dir_add(dir, n);
-		wake_up_all(d_wait);
-	}
+	if (dir)
+		end_dir_add(dir, n, d_wait);
 
 	if (dentry->d_parent != old_parent)
 		spin_unlock(&dentry->d_parent->d_lock);
