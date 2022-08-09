@@ -193,6 +193,13 @@ void ni16550_config_prescaler(unsigned long iobase, uint8_t prescaler)
 	outb(prescaler, iobase + UART_ICR);
 }
 
+void ni16550_set_mctrl(struct uart_port *port, unsigned int mctrl)
+{
+	mctrl |= UART_MCR_CLKSEL;
+
+	serial8250_do_set_mctrl(port, mctrl);
+}
+
 static struct txvr_ops ni16550_txvr_ops = {
 	.enable_transceivers = ni16550_enable_transceivers,
 	.disable_transceivers = ni16550_disable_transceivers,
