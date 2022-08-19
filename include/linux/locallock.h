@@ -23,6 +23,8 @@ struct local_irq_lock {
 	unsigned long		flags;
 };
 
+#define INIT_LOCAL_LOCK(lvar)			{ .lock = __SPIN_LOCK_UNLOCKED((lvar).lock.lock) }
+
 #define DEFINE_LOCAL_IRQ_LOCK(lvar)					\
 	DEFINE_PER_CPU(struct local_irq_lock, lvar) = {			\
 		.lock = __SPIN_LOCK_UNLOCKED((lvar).lock) }
@@ -240,6 +242,9 @@ static inline int __local_unlock_irqrestore(struct local_irq_lock *lv,
 #define local_unlock_cpu(lvar)			local_unlock(lvar)
 
 #else /* PREEMPT_RT_BASE */
+
+struct local_irq_lock { };
+#define INIT_LOCAL_LOCK(lvar)			{ }
 
 #define DEFINE_LOCAL_IRQ_LOCK(lvar)		__typeof__(const int) lvar
 #define DECLARE_LOCAL_IRQ_LOCK(lvar)		extern __typeof__(const int) lvar
