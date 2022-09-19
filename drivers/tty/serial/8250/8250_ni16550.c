@@ -174,11 +174,10 @@ void ni16550_config_prescaler(unsigned long iobase, uint8_t prescaler)
 	 * Sets EFR[4] for Enhanced Mode.
 	 */
 	uint8_t lcr_value;
+	uint8_t efr_value;
 
 	lcr_value = inb(iobase + UART_LCR);
 	outb(UART_LCR_CONF_MODE_B, iobase + UART_LCR);
-
-	uint8_t efr_value;
 
 	efr_value = inb(iobase + UART_EFR);
 	efr_value |= UART_EFR_ECB;
