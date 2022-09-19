@@ -2461,7 +2461,8 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
 				spin_lock_irq(&uport->lock);
 				if (uport->rs485_config)
 					uport->rs485_config(uport,
-							    &uport->rs485);
+							(tty) ? &tty->termios : NULL,
+							&uport->rs485);
 				ops->set_mctrl(uport, uport->mctrl);
 				ops->start_tx(uport);
 				spin_unlock_irq(&uport->lock);

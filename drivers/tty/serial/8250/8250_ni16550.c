@@ -92,7 +92,8 @@ static int ni16550_disable_transceivers(struct uart_port *port)
 }
 
 static int ni16550_config_rs485(struct uart_port *port,
-		struct serial_rs485 *rs485)
+				struct ktermios *termios,
+				struct serial_rs485 *rs485)
 {
 	uint8_t pcr;
 
