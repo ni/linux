@@ -380,7 +380,8 @@ static void imx_uart_rts_active(struct imx_port *sport, u32 *ucr2)
 {
 	*ucr2 &= ~(UCR2_CTSC | UCR2_CTS);
 
-	mctrl_gpio_set(sport->gpios, sport->port.mctrl | TIOCM_RTS);
+	sport->port.mctrl |= TIOCM_RTS;
+	mctrl_gpio_set(sport->gpios, sport->port.mctrl);
 }
 
 /* called with port.lock taken and irqs caller dependent */
@@ -389,7 +390,8 @@ static void imx_uart_rts_inactive(struct imx_port *sport, u32 *ucr2)
 	*ucr2 &= ~UCR2_CTSC;
 	*ucr2 |= UCR2_CTS;
 
-	mctrl_gpio_set(sport->gpios, sport->port.mctrl & ~TIOCM_RTS);
+	sport->port.mctrl &= ~TIOCM_RTS;
+	mctrl_gpio_set(sport->gpios, sport->port.mctrl);
 }
 
 static void start_hrtimer_ms(struct hrtimer *hrt, unsigned long msec)
@@ -2315,6 +2317,8 @@ static int imx_uart_probe(struct platform_device *pdev)
 	     !(sport->port.rs485.flags & SER_RS485_RX_DURING_TX)))
 		dev_err(&pdev->dev,
 			"low-active RTS not possible when receiver is off, enabling receiver\n");
+
+	imx_uart_rs485_config(&sport->port, &sport->port.rs485);
 
 	/* Disable interrupts before requesting them */
 	ucr1 = imx_uart_readl(sport, UCR1);
