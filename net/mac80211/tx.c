@@ -2934,7 +2934,7 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
 
 		if (pre_conf_link_id != link_id &&
 		    link_id != IEEE80211_LINK_UNSPECIFIED) {
-#ifdef CPTCFG_MAC80211_VERBOSE_DEBUG
+#ifdef CONFIG_MAC80211_VERBOSE_DEBUG
 			net_info_ratelimited("%s: dropped frame to %pM with bad link ID request (%d vs. %d)\n",
 					     sdata->name, hdr.addr1,
 					     pre_conf_link_id, link_id);
@@ -4378,6 +4378,11 @@ netdev_tx_t ieee80211_subif_start_xmit(struct sk_buff *skb,
 
 	if (likely(!is_multicast_ether_addr(eth->h_dest)))
 		goto normal;
+
+	if (unlikely(!ieee80211_sdata_running(sdata))) {
+		kfree_skb(skb);
+		return NETDEV_TX_OK;
+	}
 
 	if (unlikely(ieee80211_multicast_to_unicast(skb, dev))) {
 		struct sk_buff_head queue;

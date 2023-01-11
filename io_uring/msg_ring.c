@@ -95,6 +95,9 @@ static int io_msg_send_fd(struct io_kiocb *req, unsigned int issue_flags)
 
 	msg->src_fd = array_index_nospec(msg->src_fd, ctx->nr_user_files);
 	file_ptr = io_fixed_file_slot(&ctx->file_table, msg->src_fd)->file_ptr;
+	if (!file_ptr)
+		goto out_unlock;
+
 	src_file = (struct file *) (file_ptr & FFS_MASK);
 	get_file(src_file);
 
@@ -161,12 +164,10 @@ int io_msg_ring(struct io_kiocb *req, unsigned int issue_flags)
 	}
 
 done:
+	if (ret == -EAGAIN)
+		return -EAGAIN;
 	if (ret < 0)
 		req_set_fail(req);
 	io_req_set_res(req, ret, 0);
-	/* put file to avoid an attempt to IOPOLL the req */
-	if (!(req->flags & REQ_F_FIXED_FILE))
-		io_put_file(req->file);
-	req->file = NULL;
 	return IOU_OK;
 }

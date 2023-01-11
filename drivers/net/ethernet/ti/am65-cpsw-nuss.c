@@ -562,13 +562,13 @@ static int am65_cpsw_nuss_ndo_slave_open(struct net_device *ndev)
 	ret = netif_set_real_num_tx_queues(ndev, common->tx_ch_num);
 	if (ret) {
 		dev_err(common->dev, "cannot set real number of tx queues\n");
-		return ret;
+		goto runtime_put;
 	}
 
 	ret = netif_set_real_num_rx_queues(ndev, AM65_CPSW_MAX_RX_QUEUES);
 	if (ret) {
 		dev_err(common->dev, "cannot set real number of rx queues\n");
-		return ret;
+		goto runtime_put;
 	}
 
 	for (i = 0; i < common->tx_ch_num; i++)
@@ -576,7 +576,7 @@ static int am65_cpsw_nuss_ndo_slave_open(struct net_device *ndev)
 
 	ret = am65_cpsw_nuss_common_open(common, ndev->features);
 	if (ret)
-		return ret;
+		goto runtime_put;
 
 	common->usage_count++;
 
@@ -608,6 +608,10 @@ static int am65_cpsw_nuss_ndo_slave_open(struct net_device *ndev)
 
 error_cleanup:
 	am65_cpsw_nuss_ndo_slave_stop(ndev);
+	return ret;
+
+runtime_put:
+	pm_runtime_put(common->dev);
 	return ret;
 }
 
@@ -1450,7 +1454,7 @@ static void am65_cpsw_nuss_mac_link_up(struct phylink_config *config, struct phy
 
 	if (speed == SPEED_1000)
 		mac_control |= CPSW_SL_CTL_GIG;
-	if (speed == SPEED_10 && interface == PHY_INTERFACE_MODE_RGMII)
+	if (speed == SPEED_10 && phy_interface_mode_is_rgmii(interface))
 		/* Can be used with in band mode only */
 		mac_control |= CPSW_SL_CTL_EXT_EN;
 	if (speed == SPEED_100 && interface == PHY_INTERFACE_MODE_RMII)
@@ -2061,7 +2065,7 @@ static void am65_cpsw_nuss_cleanup_ndev(struct am65_cpsw_common *common)
 
 	for (i = 0; i < common->port_num; i++) {
 		port = &common->ports[i];
-		if (port->ndev)
+		if (port->ndev && port->ndev->reg_state == NETREG_REGISTERED)
 			unregister_netdev(port->ndev);
 	}
 }
@@ -2791,7 +2795,6 @@ static int am65_cpsw_nuss_remove(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
-	am65_cpsw_nuss_phylink_cleanup(common);
 	am65_cpsw_unregister_devlink(common);
 	am65_cpsw_unregister_notifiers(common);
 
@@ -2799,6 +2802,7 @@ static int am65_cpsw_nuss_remove(struct platform_device *pdev)
 	 * dma_deconfigure(dev) before devres_release_all(dev)
 	 */
 	am65_cpsw_nuss_cleanup_ndev(common);
+	am65_cpsw_nuss_phylink_cleanup(common);
 
 	of_platform_device_destroy(common->mdio_dev, NULL);
 
