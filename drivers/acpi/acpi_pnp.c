@@ -218,10 +218,12 @@ static const struct acpi_device_id acpi_pnp_device_ids[] = {
 	{"MVX00A1"},		/*  Deskline K56 Phone System PnP */
 	{"MVX00F2"},		/* PC Rider K56 Phone System PnP */
 	{"nEC8241"},		/* NEC 98NOTE SPEAKER PHONE FAX MODEM(33600bps) */
+#ifdef CONFIG_SERIAL_8250_NI16550
 	{"NIC7750"},		/* National Instruments (NI) 16550 PNP */
 	{"NIC7772"},		/* National Instruments (NI) 16550 PNP */
 	{"NIC792B"},		/* National Instruments (NI) 16550 PNP */
 	{"NIC7A69"},		/* National Instruments (NI) 16550 PNP */
+#endif
 	{"PMC2430"},		/* Pace 56 Voice Internal Plug & Play Modem */
 	{"PNP0500"},		/* Generic standard PC COM port     */
 	{"PNP0501"},		/* Generic 16550A-compatible COM port */
