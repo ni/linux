@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/serial/ni,ni16550.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: NI 16550 asynchronous serial interface (UART)
+
+maintainers:
+  - Brenda Streiff <brenda.streiff@ni.com>
+
+allOf:
+  - $ref: serial.yaml#
+
+properties:
+  compatible:
+    items:
+      - enum:
+          - ni,ni16550
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  clock-frequency: true
+
+  transceiver:
+    items:
+      - enum:
+          - RS-232
+          - RS-485
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - clock-frequency
+
+unevaluatedProperties: false
+
+examples:
+  - |
+      serial@80000000 {
+        compatible = "ni,ni16550", "ns16550a";
+        reg = <0x80000000 0x8>;
+        interrupts = <0 30 4>;
+        clock-frequency = <58824000>;
+        transceiver = "RS-485";
+      };
+
+...
