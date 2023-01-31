@@ -567,7 +567,7 @@ struct uart_port {
 	unsigned int		frame_time;		/* frame timing in ns */
 	unsigned int		type;			/* port type */
 	const struct uart_ops	*ops;
-	const struct txvr_ops	*txvr_ops;		/* transceiver ops */
+	const struct txvr_ops	*txvr_ops;		/* transceiver ops (deprecated) */
 	unsigned int		custom_divisor;
 	unsigned int		line;			/* port index */
 	unsigned int		minor;
