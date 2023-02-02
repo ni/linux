@@ -700,6 +700,9 @@ static struct console univ8250_console = {
 
 static int __init univ8250_console_init(void)
 {
+	if (nr_uarts == 0)
+		return -ENODEV;
+
 	serial8250_isa_init_ports();
 	register_console(&univ8250_console);
 	return 0;
@@ -730,7 +733,7 @@ int __init early_serial_setup(struct uart_port *port)
 {
 	struct uart_port *p;
 
-	if (port->line >= ARRAY_SIZE(serial8250_ports))
+	if (port->line >= ARRAY_SIZE(serial8250_ports) || nr_uarts == 0)
 		return -ENODEV;
 
 	serial8250_isa_init_ports();
@@ -1188,6 +1191,9 @@ EXPORT_SYMBOL(serial8250_unregister_port);
 static int __init serial8250_init(void)
 {
 	int ret;
+
+	if (nr_uarts == 0)
+		return -ENODEV;
 
 	serial8250_isa_init_ports();
 
