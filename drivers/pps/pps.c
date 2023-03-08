@@ -354,7 +354,7 @@ int pps_register_cdev(struct pps_device *pps)
 	 * Get new ID for the new PPS source.  After idr_alloc() calling
 	 * the new source will be freely available into the kernel.
 	 */
-	err = idr_alloc(&pps_idr, pps, 0, PPS_MAX_SOURCES, GFP_KERNEL);
+	err = idr_alloc(&pps_idr, pps, 0, CONFIG_PPS_MAX_SOURCES, GFP_KERNEL);
 	if (err < 0) {
 		if (err == -ENOSPC) {
 			pr_err("%s: too many PPS sources in the system\n",
@@ -449,7 +449,7 @@ EXPORT_SYMBOL(pps_lookup_dev);
 static void __exit pps_exit(void)
 {
 	class_destroy(pps_class);
-	unregister_chrdev_region(pps_devt, PPS_MAX_SOURCES);
+	unregister_chrdev_region(pps_devt, CONFIG_PPS_MAX_SOURCES);
 }
 
 static int __init pps_init(void)
@@ -463,7 +463,7 @@ static int __init pps_init(void)
 	}
 	pps_class->dev_groups = pps_groups;
 
-	err = alloc_chrdev_region(&pps_devt, 0, PPS_MAX_SOURCES, "pps");
+	err = alloc_chrdev_region(&pps_devt, 0, CONFIG_PPS_MAX_SOURCES, "pps");
 	if (err < 0) {
 		pr_err("failed to allocate char device region\n");
 		goto remove_class;
