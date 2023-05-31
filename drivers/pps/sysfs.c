@@ -8,6 +8,7 @@
 
 #include <linux/device.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/string.h>
 #include <linux/pps_kernel.h>
 
@@ -97,3 +98,12 @@ const struct attribute_group *pps_groups[] = {
 	&pps_group,
 	NULL,
 };
+
+/*
+ * Module parameters
+ */
+
+unsigned int pps_max_sources = 16;
+
+MODULE_PARM_DESC(pps_max_sources, "Maximum number of pps sources that can be allocated.");
+module_param(pps_max_sources, uint, 0664);

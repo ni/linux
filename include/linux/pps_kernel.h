@@ -67,6 +67,7 @@ struct pps_device {
  */
 
 extern const struct attribute_group *pps_groups[];
+extern unsigned int pps_max_sources;
 
 /*
  * Internal functions.
