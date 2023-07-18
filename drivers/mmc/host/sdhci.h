@@ -482,9 +482,7 @@ struct sdhci_host {
 /* Issue CMD and DATA reset together */
 #define SDHCI_QUIRK2_ISSUE_CMD_DAT_RESET_TOGETHER	(1<<19)
 /* Controller requires delay between card clock disable and param change */
-#define SDHCI_QUIRK2_NEED_DELAY_AFTER_CLK_DISABLE	(1<<20)
-/* Controller may interrupt multiple times for card insert */
-#define SDHCI_QUIRK2_SPURIOUS_CARD_INSERT_INTERRUPT	(1<<21)
+#define SDHCI_QUIRK2_NEED_DELAY_AFTER_CLK_DISABLE	(1<<19)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */
