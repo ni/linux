@@ -268,8 +268,9 @@ static u8 ni16550_read_fifo_size(struct uart_8250_port *uart, int reg)
 
 static void ni16550_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
-	mctrl |= UART_MCR_CLKSEL;
+	struct uart_8250_port *up = up_to_u8250p(port);
 
+	up->mcr |= UART_MCR_CLKSEL;
 	serial8250_do_set_mctrl(port, mctrl);
 }
 
