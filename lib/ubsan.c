@@ -143,10 +143,6 @@ static void val_to_string(char *str, size_t size, struct type_descriptor *type,
 	}
 }
 
-static bool location_is_valid(struct source_location *loc)
-{
-	return loc->file_name != NULL;
-}
 static void ubsan_prologue(struct source_location *location)
 {
 	current->in_ubsan++;
@@ -339,23 +335,6 @@ void __ubsan_handle_type_mismatch_v1(struct type_mismatch_data_v1 *data,
 	ubsan_type_mismatch_common(&common_data, (unsigned long)ptr);
 }
 EXPORT_SYMBOL(__ubsan_handle_type_mismatch_v1);
-
-void __ubsan_handle_nonnull_return(struct nonnull_return_data *data)
-{
-	if (suppress_report(&data->location))
-		return;
-
-	ubsan_prologue(&data->location);
-
-	pr_err("null pointer returned from function declared to never return null\n");
-
-	if (location_is_valid(&data->attr_location))
-		print_source_location("returns_nonnull attribute specified in",
-				&data->attr_location);
-
-	ubsan_epilogue();
-}
-EXPORT_SYMBOL(__ubsan_handle_nonnull_return);
 
 void __ubsan_handle_vla_bound_not_positive(struct vla_bound_data *data,
 					void *bound)
