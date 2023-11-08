@@ -103,6 +103,8 @@ static void smc_lgr_unregister_conn(struct smc_connection *conn)
 	struct smc_link_group *lgr = conn->lgr;
 	int reduced = 0;
 
+	if (!lgr)
+		return;
 	write_lock_bh(&lgr->conns_lock);
 	if (conn->alert_token_local) {
 		reduced = 1;
@@ -237,8 +239,8 @@ void smc_conn_free(struct smc_connection *conn)
 	if (!lgr)
 		return;
 	smc_cdc_tx_dismiss_slots(conn);
-	smc_lgr_unregister_conn(conn);
 	smc_buf_unuse(conn);
+	smc_lgr_unregister_conn(conn);
 }
 
 static void smc_link_clear(struct smc_link *lnk)
@@ -426,11 +428,14 @@ int smc_conn_create(struct smc_sock *smc, __be32 peer_in_addr,
 		    (lgr->role == role) &&
 		    (lgr->vlan_id == vlan_id) &&
 		    ((role == SMC_CLNT) ||
-		     (lgr->conns_num < SMC_RMBS_PER_LGR_MAX))) {
+		     (lgr->conns_num < SMC_RMBS_PER_LGR_MAX &&
+		      !bitmap_full(lgr->rtokens_used_mask, SMC_RMBS_PER_LGR_MAX)))) {
 			/* link group found */
 			local_contact = SMC_REUSE_CONTACT;
 			conn->lgr = lgr;
 			smc_lgr_register_conn(conn); /* add smc conn to lgr */
+			if (delayed_work_pending(&lgr->free_work))
+				cancel_delayed_work(&lgr->free_work);
 			write_unlock_bh(&lgr->conns_lock);
 			break;
 		}
@@ -494,7 +499,7 @@ struct smc_buf_desc *smc_buf_get_slot(struct smc_link_group *lgr,
  */
 static inline int smc_rmb_wnd_update_limit(int rmbe_size)
 {
-	return min_t(int, rmbe_size / 10, SOCK_MIN_SNDBUF / 2);
+	return max_t(int, rmbe_size / 10, SOCK_MIN_SNDBUF / 2);
 }
 
 static struct smc_buf_desc *smc_new_buf_create(struct smc_link_group *lgr,

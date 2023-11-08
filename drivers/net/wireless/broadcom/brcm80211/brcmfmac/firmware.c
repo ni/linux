@@ -216,6 +216,8 @@ static int brcmf_init_nvram_parser(struct nvram_parser *nvp,
 		size = BRCMF_FW_MAX_NVRAM_SIZE;
 	else
 		size = data_len;
+	/* Add space for properties we may add */
+	size += strlen(BRCMF_FW_DEFAULT_BOARDREV) + 1;
 	/* Alloc for extra 0 byte + roundup by 4 + length field */
 	size += 1 + 3 + sizeof(u32);
 	nvp->nvram = kzalloc(size, GFP_KERNEL);
@@ -569,6 +571,11 @@ int brcmf_fw_map_chip_to_name(u32 chip, u32 chiprev,
 {
 	u32 i;
 	char end;
+
+	if (chiprev >= BITS_PER_TYPE(u32)) {
+		brcmf_err("Invalid chip revision %u\n", chiprev);
+		return -EINVAL;
+	}
 
 	for (i = 0; i < table_size; i++) {
 		if (mapping_table[i].chipid == chip &&

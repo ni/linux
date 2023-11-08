@@ -3,6 +3,7 @@
 
 #include <linux/percpu.h>
 #include <linux/spinlock.h>
+#include <asm/current.h>
 
 #ifdef CONFIG_PREEMPT_RT_BASE
 
@@ -21,6 +22,8 @@ struct local_irq_lock {
 	int			nestcnt;
 	unsigned long		flags;
 };
+
+#define INIT_LOCAL_LOCK(lvar)			{ .lock = __SPIN_LOCK_UNLOCKED((lvar).lock.lock) }
 
 #define DEFINE_LOCAL_IRQ_LOCK(lvar)					\
 	DEFINE_PER_CPU(struct local_irq_lock, lvar) = {			\
@@ -239,6 +242,9 @@ static inline int __local_unlock_irqrestore(struct local_irq_lock *lv,
 #define local_unlock_cpu(lvar)			local_unlock(lvar)
 
 #else /* PREEMPT_RT_BASE */
+
+struct local_irq_lock { };
+#define INIT_LOCAL_LOCK(lvar)			{ }
 
 #define DEFINE_LOCAL_IRQ_LOCK(lvar)		__typeof__(const int) lvar
 #define DECLARE_LOCAL_IRQ_LOCK(lvar)		extern __typeof__(const int) lvar

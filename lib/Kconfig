@@ -16,7 +16,6 @@ config BITREVERSE
 config HAVE_ARCH_BITREVERSE
 	bool
 	default n
-	depends on BITREVERSE
 	help
 	  This option enables the use of hardware bit-reversal instructions on
 	  architectures which support such operations.
@@ -412,6 +411,10 @@ config HAS_DMA
 	bool
 	depends on !NO_DMA
 	default y
+
+config SGL_ALLOC
+	bool
+	default n
 
 config DMA_NOOP_OPS
 	bool

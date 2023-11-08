@@ -1102,7 +1102,7 @@ static void audit_log_execve_info(struct audit_context *context,
 		}
 
 		/* write as much as we can to the audit log */
-		if (len_buf > 0) {
+		if (len_buf >= 0) {
 			/* NOTE: some magic numbers here - basically if we
 			 *       can't fit a reasonable amount of data into the
 			 *       existing audit buffer, flush it and start with
@@ -1898,6 +1898,8 @@ void __audit_inode_child(struct inode *parent,
 			break;
 		}
 	}
+
+	cond_resched();
 
 	/* is there a matching child entry? */
 	list_for_each_entry(n, &context->names_list, list) {

@@ -135,7 +135,7 @@ int f2fs_convert_inline_page(struct dnode_of_data *dn, struct page *page)
 			"%s: corrupted inline inode ino=%lx, i_addr[0]:0x%x, "
 			"run fsck to fix.",
 			__func__, dn->inode->i_ino, dn->data_blkaddr);
-		return -EINVAL;
+		return -EFSCORRUPTED;
 	}
 
 	f2fs_bug_on(F2FS_P_SB(page), PageWriteback(page));
@@ -203,7 +203,8 @@ out:
 
 	f2fs_put_page(page, 1);
 
-	f2fs_balance_fs(sbi, dn.node_changed);
+	if (!err)
+		f2fs_balance_fs(sbi, dn.node_changed);
 
 	return err;
 }
@@ -382,7 +383,7 @@ static int f2fs_move_inline_dirents(struct inode *dir, struct page *ipage,
 			"%s: corrupted inline inode ino=%lx, i_addr[0]:0x%x, "
 			"run fsck to fix.",
 			__func__, dir->i_ino, dn.data_blkaddr);
-		err = -EINVAL;
+		err = -EFSCORRUPTED;
 		goto out;
 	}
 
@@ -391,18 +392,17 @@ static int f2fs_move_inline_dirents(struct inode *dir, struct page *ipage,
 
 	dentry_blk = kmap_atomic(page);
 
+	/*
+	 * Start by zeroing the full block, to ensure that all unused space is
+	 * zeroed and no uninitialized memory is leaked to disk.
+	 */
+	memset(dentry_blk, 0, F2FS_BLKSIZE);
+
 	make_dentry_ptr_inline(dir, &src, inline_dentry);
 	make_dentry_ptr_block(dir, &dst, dentry_blk);
 
 	/* copy data from inline dentry block to new dentry block */
 	memcpy(dst.bitmap, src.bitmap, src.nr_bitmap);
-	memset(dst.bitmap + src.nr_bitmap, 0, dst.nr_bitmap - src.nr_bitmap);
-	/*
-	 * we do not need to zero out remainder part of dentry and filename
-	 * field, since we have used bitmap for marking the usage status of
-	 * them, besides, we can also ignore copying/zeroing reserved space
-	 * of dentry block, because them haven't been used so far.
-	 */
 	memcpy(dst.dentry, src.dentry, SIZE_OF_DIR_ENTRY * src.max);
 	memcpy(dst.filename, src.filename, src.max * F2FS_SLOT_LEN);
 

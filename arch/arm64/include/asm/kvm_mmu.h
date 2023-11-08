@@ -296,6 +296,11 @@ static inline bool __kvm_cpu_uses_extended_idmap(void)
 	return __cpu_uses_extended_idmap();
 }
 
+/*
+ * Can't use pgd_populate here, because the extended idmap adds an extra level
+ * above CONFIG_PGTABLE_LEVELS (which is 2 or 3 if we're using the extended
+ * idmap), and pgd_populate is only available if CONFIG_PGTABLE_LEVELS = 4.
+ */
 static inline void __kvm_extend_hypmap(pgd_t *boot_hyp_pgd,
 				       pgd_t *hyp_pgd,
 				       pgd_t *merged_hyp_pgd,
@@ -353,7 +358,7 @@ static inline void *kvm_get_hyp_vector(void)
 	struct bp_hardening_data *data = arm64_get_bp_hardening_data();
 	void *vect = kvm_ksym_ref(__kvm_hyp_vector);
 
-	if (data->fn) {
+	if (data->template_start) {
 		vect = __bp_harden_hyp_vecs_start +
 		       data->hyp_vectors_slot * SZ_2K;
 

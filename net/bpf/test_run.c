@@ -78,6 +78,7 @@ static void *bpf_test_init(const union bpf_attr *kattr, u32 size,
 	if (size < ETH_HLEN || size > PAGE_SIZE - headroom - tailroom)
 		return ERR_PTR(-EINVAL);
 
+	size = SKB_DATA_ALIGN(size);
 	data = kzalloc(size + headroom + tailroom, GFP_USER);
 	if (!data)
 		return ERR_PTR(-ENOMEM);
@@ -96,6 +97,7 @@ int bpf_prog_test_run_skb(struct bpf_prog *prog, const union bpf_attr *kattr,
 	u32 size = kattr->test.data_size_in;
 	u32 repeat = kattr->test.repeat;
 	u32 retval, duration;
+	int hh_len = ETH_HLEN;
 	struct sk_buff *skb;
 	void *data;
 	int ret;
@@ -131,12 +133,22 @@ int bpf_prog_test_run_skb(struct bpf_prog *prog, const union bpf_attr *kattr,
 	skb_reset_network_header(skb);
 
 	if (is_l2)
-		__skb_push(skb, ETH_HLEN);
+		__skb_push(skb, hh_len);
 	if (is_direct_pkt_access)
 		bpf_compute_data_end(skb);
 	retval = bpf_test_run(prog, skb, repeat, &duration);
-	if (!is_l2)
-		__skb_push(skb, ETH_HLEN);
+	if (!is_l2) {
+		if (skb_headroom(skb) < hh_len) {
+			int nhead = HH_DATA_ALIGN(hh_len - skb_headroom(skb));
+
+			if (pskb_expand_head(skb, nhead, 0, GFP_USER)) {
+				kfree_skb(skb);
+				return -ENOMEM;
+			}
+		}
+		memset(__skb_push(skb, hh_len), 0, hh_len);
+	}
+
 	size = skb->len;
 	/* bpf program can never convert linear skb to non-linear */
 	if (WARN_ON_ONCE(skb_is_nonlinear(skb)))
