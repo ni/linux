@@ -951,6 +951,7 @@ static struct gpio_desc *acpi_get_gpiod_from_data(struct fwnode_handle *fwnode,
 	if (!propname)
 		return ERR_PTR(-EINVAL);
 
+	memset(&lookup, 0, sizeof(lookup));
 	lookup.index = index;
 
 	ret = acpi_gpio_property_lookup(fwnode, propname, index, &lookup);
@@ -1652,6 +1653,26 @@ static const struct dmi_system_id gpiolib_acpi_quirks[] __initconst = {
 		},
 		.driver_data = &(struct acpi_gpiolib_dmi_quirk) {
 			.ignore_wake = "SYNA1202:00@16",
+		},
+	},
+	{
+		/*
+		 * On the Peaq C1010 2-in-1 INT33FC:00 pin 3 is connected to
+		 * a "dolby" button. At the ACPI level an _AEI event-handler
+		 * is connected which sets an ACPI variable to 1 on both
+		 * edges. This variable can be polled + cleared to 0 using
+		 * WMI. But since the variable is set on both edges the WMI
+		 * interface is pretty useless even when polling.
+		 * So instead the x86-android-tablets code instantiates
+		 * a gpio-keys platform device for it.
+		 * Ignore the _AEI handler for the pin, so that it is not busy.
+		 */
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "PEAQ"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "PEAQ PMM C1010 MD99187"),
+		},
+		.driver_data = &(struct acpi_gpiolib_dmi_quirk) {
+			.ignore_interrupt = "INT33FC:00@3",
 		},
 	},
 	{} /* Terminating entry */

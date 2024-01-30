@@ -952,6 +952,8 @@ static int tls_sw_sendmsg_splice(struct sock *sk, struct msghdr *msg,
 		}
 
 		sk_msg_page_add(msg_pl, page, part, off);
+		msg_pl->sg.copybreak = 0;
+		msg_pl->sg.curr = msg_pl->sg.end;
 		sk_mem_charge(sk, part);
 		*copied += part;
 		try_to_copy -= part;
@@ -1050,7 +1052,11 @@ alloc_encrypted:
 			if (ret < 0)
 				goto send_end;
 			tls_ctx->pending_open_record_frags = true;
-			if (full_record || eor || sk_msg_full(msg_pl))
+
+			if (sk_msg_full(msg_pl))
+				full_record = true;
+
+			if (full_record || eor)
 				goto copied;
 			continue;
 		}
@@ -1232,11 +1238,14 @@ void tls_sw_splice_eof(struct socket *sock)
 	lock_sock(sk);
 
 retry:
+	/* same checks as in tls_sw_push_pending_record() */
 	rec = ctx->open_rec;
 	if (!rec)
 		goto unlock;
 
 	msg_pl = &rec->msg_plaintext;
+	if (msg_pl->sg.size == 0)
+		goto unlock;
 
 	/* Check the BPF advisor and perform transmission. */
 	ret = bpf_exec_tx_verdict(msg_pl, sk, false, TLS_RECORD_TYPE_DATA,
@@ -1291,6 +1300,7 @@ tls_rx_rec_wait(struct sock *sk, struct sk_psock *psock, bool nonblock,
 	struct tls_context *tls_ctx = tls_get_ctx(sk);
 	struct tls_sw_context_rx *ctx = tls_sw_ctx_rx(tls_ctx);
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
+	int ret = 0;
 	long timeo;
 
 	timeo = sock_rcvtimeo(sk, nonblock);
@@ -1301,6 +1311,9 @@ tls_rx_rec_wait(struct sock *sk, struct sk_psock *psock, bool nonblock,
 
 		if (sk->sk_err)
 			return sock_error(sk);
+
+		if (ret < 0)
+			return ret;
 
 		if (!skb_queue_empty(&sk->sk_receive_queue)) {
 			tls_strp_check_rcv(&ctx->strp);
@@ -1320,10 +1333,10 @@ tls_rx_rec_wait(struct sock *sk, struct sk_psock *psock, bool nonblock,
 		released = true;
 		add_wait_queue(sk_sleep(sk), &wait);
 		sk_set_bit(SOCKWQ_ASYNC_WAITDATA, sk);
-		sk_wait_event(sk, &timeo,
-			      tls_strp_msg_ready(ctx) ||
-			      !sk_psock_queue_empty(psock),
-			      &wait);
+		ret = sk_wait_event(sk, &timeo,
+				    tls_strp_msg_ready(ctx) ||
+				    !sk_psock_queue_empty(psock),
+				    &wait);
 		sk_clear_bit(SOCKWQ_ASYNC_WAITDATA, sk);
 		remove_wait_queue(sk_sleep(sk), &wait);
 
@@ -1487,7 +1500,7 @@ static int tls_decrypt_sg(struct sock *sk, struct iov_iter *out_iov,
 	 */
 	aead_size = sizeof(*aead_req) + crypto_aead_reqsize(ctx->aead_recv);
 	aead_size = ALIGN(aead_size, __alignof__(*dctx));
-	mem = kmalloc(aead_size + struct_size(dctx, sg, n_sgin + n_sgout),
+	mem = kmalloc(aead_size + struct_size(dctx, sg, size_add(n_sgin, n_sgout)),
 		      sk->sk_allocation);
 	if (!mem) {
 		err = -ENOMEM;
@@ -1852,6 +1865,7 @@ static int tls_rx_reader_acquire(struct sock *sk, struct tls_sw_context_rx *ctx,
 				 bool nonblock)
 {
 	long timeo;
+	int ret;
 
 	timeo = sock_rcvtimeo(sk, nonblock);
 
@@ -1861,14 +1875,16 @@ static int tls_rx_reader_acquire(struct sock *sk, struct tls_sw_context_rx *ctx,
 		ctx->reader_contended = 1;
 
 		add_wait_queue(&ctx->wq, &wait);
-		sk_wait_event(sk, &timeo,
-			      !READ_ONCE(ctx->reader_present), &wait);
+		ret = sk_wait_event(sk, &timeo,
+				    !READ_ONCE(ctx->reader_present), &wait);
 		remove_wait_queue(&ctx->wq, &wait);
 
 		if (timeo <= 0)
 			return -EAGAIN;
 		if (signal_pending(current))
 			return sock_intr_errno(timeo);
+		if (ret < 0)
+			return ret;
 	}
 
 	WRITE_ONCE(ctx->reader_present, 1);

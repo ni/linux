@@ -2790,11 +2790,13 @@ ieee80211_he_oper_size(const u8 *he_oper_ie)
 static inline const struct ieee80211_he_6ghz_oper *
 ieee80211_he_6ghz_oper(const struct ieee80211_he_operation *he_oper)
 {
-	const u8 *ret = (const void *)&he_oper->optional;
+	const u8 *ret;
 	u32 he_oper_params;
 
 	if (!he_oper)
 		return NULL;
+
+	ret = (const void *)&he_oper->optional;
 
 	he_oper_params = le32_to_cpu(he_oper->he_oper_params);
 
@@ -4353,6 +4355,36 @@ static inline bool ieee80211_is_public_action(struct ieee80211_hdr *hdr,
 	if (!ieee80211_is_action(hdr->frame_control))
 		return false;
 	return mgmt->u.action.category == WLAN_CATEGORY_PUBLIC;
+}
+
+/**
+ * ieee80211_is_protected_dual_of_public_action - check if skb contains a
+ * protected dual of public action management frame
+ * @skb: the skb containing the frame, length will be checked
+ *
+ * Return: true if the skb contains a protected dual of public action
+ * management frame, false otherwise.
+ */
+static inline bool
+ieee80211_is_protected_dual_of_public_action(struct sk_buff *skb)
+{
+	u8 action;
+
+	if (!ieee80211_is_public_action((void *)skb->data, skb->len) ||
+	    skb->len < IEEE80211_MIN_ACTION_SIZE + 1)
+		return false;
+
+	action = *(u8 *)(skb->data + IEEE80211_MIN_ACTION_SIZE);
+
+	return action != WLAN_PUB_ACTION_20_40_BSS_COEX &&
+		action != WLAN_PUB_ACTION_DSE_REG_LOC_ANN &&
+		action != WLAN_PUB_ACTION_MSMT_PILOT &&
+		action != WLAN_PUB_ACTION_TDLS_DISCOVER_RES &&
+		action != WLAN_PUB_ACTION_LOC_TRACK_NOTI &&
+		action != WLAN_PUB_ACTION_FTM_REQUEST &&
+		action != WLAN_PUB_ACTION_FTM_RESPONSE &&
+		action != WLAN_PUB_ACTION_FILS_DISCOVERY &&
+		action != WLAN_PUB_ACTION_VENDOR_SPECIFIC;
 }
 
 /**

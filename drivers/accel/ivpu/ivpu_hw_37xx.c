@@ -53,9 +53,11 @@
 
 #define ICB_0_1_IRQ_MASK ((((u64)ICB_1_IRQ_MASK) << 32) | ICB_0_IRQ_MASK)
 
-#define BUTTRESS_IRQ_MASK ((REG_FLD(VPU_37XX_BUTTRESS_INTERRUPT_STAT, FREQ_CHANGE)) | \
-			   (REG_FLD(VPU_37XX_BUTTRESS_INTERRUPT_STAT, ATS_ERR)) | \
+#define BUTTRESS_IRQ_MASK ((REG_FLD(VPU_37XX_BUTTRESS_INTERRUPT_STAT, ATS_ERR)) | \
 			   (REG_FLD(VPU_37XX_BUTTRESS_INTERRUPT_STAT, UFI_ERR)))
+
+#define BUTTRESS_ALL_IRQ_MASK (BUTTRESS_IRQ_MASK | \
+			       (REG_FLD(VPU_37XX_BUTTRESS_INTERRUPT_STAT, FREQ_CHANGE)))
 
 #define BUTTRESS_IRQ_ENABLE_MASK ((u32)~BUTTRESS_IRQ_MASK)
 #define BUTTRESS_IRQ_DISABLE_MASK ((u32)-1)
@@ -102,8 +104,17 @@ static void ivpu_hw_wa_init(struct ivpu_device *vdev)
 	vdev->wa.clear_runtime_mem = false;
 	vdev->wa.d3hot_after_power_off = true;
 
-	if (ivpu_device_id(vdev) == PCI_DEVICE_ID_MTL && ivpu_revision(vdev) < 4)
+	REGB_WR32(VPU_37XX_BUTTRESS_INTERRUPT_STAT, BUTTRESS_ALL_IRQ_MASK);
+	if (REGB_RD32(VPU_37XX_BUTTRESS_INTERRUPT_STAT) == BUTTRESS_ALL_IRQ_MASK) {
+		/* Writing 1s does not clear the interrupt status register */
 		vdev->wa.interrupt_clear_with_0 = true;
+		REGB_WR32(VPU_37XX_BUTTRESS_INTERRUPT_STAT, 0x0);
+	}
+
+	IVPU_PRINT_WA(punit_disabled);
+	IVPU_PRINT_WA(clear_runtime_mem);
+	IVPU_PRINT_WA(d3hot_after_power_off);
+	IVPU_PRINT_WA(interrupt_clear_with_0);
 }
 
 static void ivpu_hw_timeouts_init(struct ivpu_device *vdev)
@@ -536,6 +547,16 @@ static int ivpu_boot_pwr_domain_enable(struct ivpu_device *vdev)
 	return ret;
 }
 
+static int ivpu_boot_pwr_domain_disable(struct ivpu_device *vdev)
+{
+	ivpu_boot_dpu_active_drive(vdev, false);
+	ivpu_boot_pwr_island_isolation_drive(vdev, true);
+	ivpu_boot_pwr_island_trickle_drive(vdev, false);
+	ivpu_boot_pwr_island_drive(vdev, false);
+
+	return ivpu_boot_wait_for_pwr_island_status(vdev, 0x0);
+}
+
 static void ivpu_boot_no_snoop_enable(struct ivpu_device *vdev)
 {
 	u32 val = REGV_RD32(VPU_37XX_HOST_IF_TCU_PTW_OVERRIDES);
@@ -625,30 +646,26 @@ static int ivpu_hw_37xx_info_init(struct ivpu_device *vdev)
 	ivpu_hw_init_range(&hw->ranges.shave, 0x180000000, SZ_2G);
 	ivpu_hw_init_range(&hw->ranges.dma,   0x200000000, SZ_8G);
 
+	ivpu_hw_read_platform(vdev);
+	ivpu_hw_wa_init(vdev);
+	ivpu_hw_timeouts_init(vdev);
+
 	return 0;
 }
 
 static int ivpu_hw_37xx_reset(struct ivpu_device *vdev)
 {
-	int ret;
-	u32 val;
+	int ret = 0;
 
-	if (IVPU_WA(punit_disabled))
-		return 0;
-
-	ret = REGB_POLL_FLD(VPU_37XX_BUTTRESS_VPU_IP_RESET, TRIGGER, 0, TIMEOUT_US);
-	if (ret) {
-		ivpu_err(vdev, "Timed out waiting for TRIGGER bit\n");
-		return ret;
+	if (ivpu_boot_pwr_domain_disable(vdev)) {
+		ivpu_err(vdev, "Failed to disable power domain\n");
+		ret = -EIO;
 	}
 
-	val = REGB_RD32(VPU_37XX_BUTTRESS_VPU_IP_RESET);
-	val = REG_SET_FLD(VPU_37XX_BUTTRESS_VPU_IP_RESET, TRIGGER, val);
-	REGB_WR32(VPU_37XX_BUTTRESS_VPU_IP_RESET, val);
-
-	ret = REGB_POLL_FLD(VPU_37XX_BUTTRESS_VPU_IP_RESET, TRIGGER, 0, TIMEOUT_US);
-	if (ret)
-		ivpu_err(vdev, "Timed out waiting for RESET completion\n");
+	if (ivpu_pll_disable(vdev)) {
+		ivpu_err(vdev, "Failed to disable PLL\n");
+		ret = -EIO;
+	}
 
 	return ret;
 }
@@ -680,14 +697,6 @@ static int ivpu_hw_37xx_d0i3_disable(struct ivpu_device *vdev)
 static int ivpu_hw_37xx_power_up(struct ivpu_device *vdev)
 {
 	int ret;
-
-	ivpu_hw_read_platform(vdev);
-	ivpu_hw_wa_init(vdev);
-	ivpu_hw_timeouts_init(vdev);
-
-	ret = ivpu_hw_37xx_reset(vdev);
-	if (ret)
-		ivpu_warn(vdev, "Failed to reset HW: %d\n", ret);
 
 	ret = ivpu_hw_37xx_d0i3_disable(vdev);
 	if (ret)
@@ -756,11 +765,11 @@ static int ivpu_hw_37xx_power_down(struct ivpu_device *vdev)
 {
 	int ret = 0;
 
-	if (!ivpu_hw_37xx_is_idle(vdev) && ivpu_hw_37xx_reset(vdev))
-		ivpu_err(vdev, "Failed to reset the VPU\n");
+	if (!ivpu_hw_37xx_is_idle(vdev))
+		ivpu_warn(vdev, "VPU not idle during power down\n");
 
-	if (ivpu_pll_disable(vdev)) {
-		ivpu_err(vdev, "Failed to disable PLL\n");
+	if (ivpu_hw_37xx_reset(vdev)) {
+		ivpu_err(vdev, "Failed to reset VPU\n");
 		ret = -EIO;
 	}
 
@@ -940,9 +949,6 @@ static u32 ivpu_hw_37xx_irqb_handler(struct ivpu_device *vdev, int irq)
 	if (status == 0)
 		return 0;
 
-	/* Disable global interrupt before handling local buttress interrupts */
-	REGB_WR32(VPU_37XX_BUTTRESS_GLOBAL_INT_MASK, 0x1);
-
 	if (REG_TEST_FLD(VPU_37XX_BUTTRESS_INTERRUPT_STAT, FREQ_CHANGE, status))
 		ivpu_dbg(vdev, IRQ, "FREQ_CHANGE irq: %08x",
 			 REGB_RD32(VPU_37XX_BUTTRESS_CURRENT_PLL));
@@ -974,9 +980,6 @@ static u32 ivpu_hw_37xx_irqb_handler(struct ivpu_device *vdev, int irq)
 	else
 		REGB_WR32(VPU_37XX_BUTTRESS_INTERRUPT_STAT, status);
 
-	/* Re-enable global interrupt */
-	REGB_WR32(VPU_37XX_BUTTRESS_GLOBAL_INT_MASK, 0x0);
-
 	if (schedule_recovery)
 		ivpu_pm_schedule_recovery(vdev);
 
@@ -988,8 +991,13 @@ static irqreturn_t ivpu_hw_37xx_irq_handler(int irq, void *ptr)
 	struct ivpu_device *vdev = ptr;
 	u32 ret_irqv, ret_irqb;
 
+	REGB_WR32(VPU_37XX_BUTTRESS_GLOBAL_INT_MASK, 0x1);
+
 	ret_irqv = ivpu_hw_37xx_irqv_handler(vdev, irq);
 	ret_irqb = ivpu_hw_37xx_irqb_handler(vdev, irq);
+
+	/* Re-enable global interrupts to re-trigger MSI for pending interrupts */
+	REGB_WR32(VPU_37XX_BUTTRESS_GLOBAL_INT_MASK, 0x0);
 
 	return IRQ_RETVAL(ret_irqb | ret_irqv);
 }
@@ -1029,6 +1037,7 @@ const struct ivpu_hw_ops ivpu_hw_37xx_ops = {
 	.power_up = ivpu_hw_37xx_power_up,
 	.is_idle = ivpu_hw_37xx_is_idle,
 	.power_down = ivpu_hw_37xx_power_down,
+	.reset = ivpu_hw_37xx_reset,
 	.boot_fw = ivpu_hw_37xx_boot_fw,
 	.wdt_disable = ivpu_hw_37xx_wdt_disable,
 	.diagnose_failure = ivpu_hw_37xx_diagnose_failure,

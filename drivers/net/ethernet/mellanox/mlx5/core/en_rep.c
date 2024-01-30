@@ -71,13 +71,17 @@ static void mlx5e_rep_get_drvinfo(struct net_device *dev,
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5_core_dev *mdev = priv->mdev;
+	int count;
 
 	strscpy(drvinfo->driver, mlx5e_rep_driver_name,
 		sizeof(drvinfo->driver));
-	snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
-		 "%d.%d.%04d (%.16s)",
-		 fw_rev_maj(mdev), fw_rev_min(mdev),
-		 fw_rev_sub(mdev), mdev->board_id);
+	count = snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
+			 "%d.%d.%04d (%.16s)", fw_rev_maj(mdev),
+			 fw_rev_min(mdev), fw_rev_sub(mdev), mdev->board_id);
+	if (count >= sizeof(drvinfo->fw_version))
+		snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
+			 "%d.%d.%04d", fw_rev_maj(mdev),
+			 fw_rev_min(mdev), fw_rev_sub(mdev));
 }
 
 static const struct counter_desc sw_rep_stats_desc[] = {
@@ -701,7 +705,7 @@ mlx5e_rep_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 
 	/* update HW stats in background for next time */
 	mlx5e_queue_update_stats(priv);
-	memcpy(stats, &priv->stats.vf_vport, sizeof(*stats));
+	mlx5e_stats_copy_rep_stats(stats, &priv->stats.rep_stats);
 }
 
 static int mlx5e_rep_change_mtu(struct net_device *netdev, int new_mtu)
@@ -769,6 +773,7 @@ static int mlx5e_rep_max_nch_limit(struct mlx5_core_dev *mdev)
 
 static void mlx5e_build_rep_params(struct net_device *netdev)
 {
+	const bool take_rtnl = netdev->reg_state == NETREG_REGISTERED;
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch_rep *rep = rpriv->rep;
@@ -794,8 +799,15 @@ static void mlx5e_build_rep_params(struct net_device *netdev)
 	/* RQ */
 	mlx5e_build_rq_params(mdev, params);
 
+	/* If netdev is already registered (e.g. move from nic profile to uplink,
+	 * RTNL lock must be held before triggering netdev notifiers.
+	 */
+	if (take_rtnl)
+		rtnl_lock();
 	/* update XDP supported features */
 	mlx5e_set_xdp_feature(netdev);
+	if (take_rtnl)
+		rtnl_unlock();
 
 	/* CQ moderation params */
 	params->rx_dim_enabled = MLX5_CAP_GEN(mdev, cq_moderation);
@@ -1491,7 +1503,7 @@ mlx5e_vport_vf_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 
 	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch,
 						 rpriv->rep->vport);
-	if (dl_port) {
+	if (!IS_ERR(dl_port)) {
 		SET_NETDEV_DEVLINK_PORT(netdev, dl_port);
 		mlx5e_rep_vnic_reporter_create(priv, dl_port);
 	}

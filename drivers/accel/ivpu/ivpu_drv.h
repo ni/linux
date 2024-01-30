@@ -76,6 +76,11 @@
 
 #define IVPU_WA(wa_name) (vdev->wa.wa_name)
 
+#define IVPU_PRINT_WA(wa_name) do {					\
+	if (IVPU_WA(wa_name))						\
+		ivpu_dbg(vdev, MISC, "Using WA: " #wa_name "\n");	\
+} while (0)
+
 struct ivpu_wa_table {
 	bool punit_disabled;
 	bool clear_runtime_mem;
@@ -151,6 +156,7 @@ void ivpu_file_priv_put(struct ivpu_file_priv **link);
 
 int ivpu_boot(struct ivpu_device *vdev);
 int ivpu_shutdown(struct ivpu_device *vdev);
+void ivpu_prepare_for_reset(struct ivpu_device *vdev);
 
 static inline u8 ivpu_revision(struct ivpu_device *vdev)
 {

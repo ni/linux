@@ -339,7 +339,7 @@ static int kiocb_done(struct io_kiocb *req, ssize_t ret,
 	struct io_rw *rw = io_kiocb_to_cmd(req, struct io_rw);
 	unsigned final_ret = io_fixup_rw_res(req, ret);
 
-	if (req->flags & REQ_F_CUR_POS)
+	if (ret >= 0 && req->flags & REQ_F_CUR_POS)
 		req->file->f_pos = rw->kiocb.ki_pos;
 	if (ret >= 0 && (rw->kiocb.ki_complete == io_complete_rw)) {
 		if (!__io_complete_rw_common(req, ret)) {
@@ -549,15 +549,19 @@ static inline int io_rw_prep_async(struct io_kiocb *req, int rw)
 	struct iovec *iov;
 	int ret;
 
+	iorw->bytes_done = 0;
+	iorw->free_iovec = NULL;
+
 	/* submission path, ->uring_lock should already be taken */
 	ret = io_import_iovec(rw, req, &iov, &iorw->s, 0);
 	if (unlikely(ret < 0))
 		return ret;
 
-	iorw->bytes_done = 0;
-	iorw->free_iovec = iov;
-	if (iov)
+	if (iov) {
+		iorw->free_iovec = iov;
 		req->flags |= REQ_F_NEED_CLEANUP;
+	}
+
 	return 0;
 }
 
@@ -912,15 +916,6 @@ int io_write(struct io_kiocb *req, unsigned int issue_flags)
 	if (req->flags & REQ_F_ISREG)
 		kiocb_start_write(kiocb);
 	kiocb->ki_flags |= IOCB_WRITE;
-
-	/*
-	 * For non-polled IO, set IOCB_DIO_CALLER_COMP, stating that our handler
-	 * groks deferring the completion to task context. This isn't
-	 * necessary and useful for polled IO as that can always complete
-	 * directly.
-	 */
-	if (!(kiocb->ki_flags & IOCB_HIPRI))
-		kiocb->ki_flags |= IOCB_DIO_CALLER_COMP;
 
 	if (likely(req->file->f_op->write_iter))
 		ret2 = call_write_iter(req->file, kiocb, &s->iter);

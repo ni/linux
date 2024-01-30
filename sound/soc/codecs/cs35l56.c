@@ -706,7 +706,7 @@ static void cs35l56_patch(struct cs35l56_private *cs35l56)
 
 	mutex_lock(&cs35l56->base.irq_lock);
 
-	init_completion(&cs35l56->init_completion);
+	reinit_completion(&cs35l56->init_completion);
 
 	cs35l56->soft_resetting = true;
 	cs35l56_system_reset(&cs35l56->base, !!cs35l56->sdw_peripheral);
@@ -772,8 +772,19 @@ static int cs35l56_component_probe(struct snd_soc_component *component)
 {
 	struct cs35l56_private *cs35l56 = snd_soc_component_get_drvdata(component);
 	struct dentry *debugfs_root = component->debugfs_root;
+	unsigned short vendor, device;
 
 	BUILD_BUG_ON(ARRAY_SIZE(cs35l56_tx_input_texts) != ARRAY_SIZE(cs35l56_tx_input_values));
+
+	if (!cs35l56->dsp.system_name &&
+	    (snd_soc_card_get_pci_ssid(component->card, &vendor, &device) == 0)) {
+		cs35l56->dsp.system_name = devm_kasprintf(cs35l56->base.dev,
+							  GFP_KERNEL,
+							  "%04x%04x",
+							  vendor, device);
+		if (!cs35l56->dsp.system_name)
+			return -ENOMEM;
+	}
 
 	if (!wait_for_completion_timeout(&cs35l56->init_completion,
 					 msecs_to_jiffies(5000))) {
@@ -1185,6 +1196,12 @@ post_soft_reset:
 
 	/* Registers could be dirty after soft reset or SoundWire enumeration */
 	regcache_sync(cs35l56->base.regmap);
+
+	/* Set ASP1 DOUT to high-impedance when it is not transmitting audio data. */
+	ret = regmap_set_bits(cs35l56->base.regmap, CS35L56_ASP1_CONTROL3,
+			      CS35L56_ASP1_DOUT_HIZ_CTRL_MASK);
+	if (ret)
+		return dev_err_probe(cs35l56->base.dev, ret, "Failed to write ASP1_CONTROL3\n");
 
 	cs35l56->base.init_done = true;
 	complete(&cs35l56->init_completion);

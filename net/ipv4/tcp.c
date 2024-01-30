@@ -831,7 +831,9 @@ ssize_t tcp_splice_read(struct socket *sock, loff_t *ppos,
 			 */
 			if (!skb_queue_empty(&sk->sk_receive_queue))
 				break;
-			sk_wait_data(sk, &timeo, NULL);
+			ret = sk_wait_data(sk, &timeo, NULL);
+			if (ret < 0)
+				break;
 			if (signal_pending(current)) {
 				ret = sock_intr_errno(timeo);
 				break;
@@ -925,10 +927,11 @@ int tcp_send_mss(struct sock *sk, int *size_goal, int flags)
 	return mss_now;
 }
 
-/* In some cases, both sendmsg() could have added an skb to the write queue,
- * but failed adding payload on it.  We need to remove it to consume less
+/* In some cases, sendmsg() could have added an skb to the write queue,
+ * but failed adding payload on it. We need to remove it to consume less
  * memory, but more importantly be able to generate EPOLLOUT for Edge Trigger
- * epoll() users.
+ * epoll() users. Another reason is that tcp_write_xmit() does not like
+ * finding an empty skb in the write queue.
  */
 void tcp_remove_empty_skb(struct sock *sk)
 {
@@ -1287,6 +1290,7 @@ new_segment:
 
 wait_for_space:
 		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+		tcp_remove_empty_skb(sk);
 		if (copied)
 			tcp_push(sk, flags & ~MSG_MORE, mss_now,
 				 TCP_NAGLE_PUSH, size_goal);
@@ -2442,7 +2446,11 @@ static int tcp_recvmsg_locked(struct sock *sk, struct msghdr *msg, size_t len,
 			__sk_flush_backlog(sk);
 		} else {
 			tcp_cleanup_rbuf(sk, copied);
-			sk_wait_data(sk, &timeo, last);
+			err = sk_wait_data(sk, &timeo, last);
+			if (err < 0) {
+				err = copied ? : err;
+				goto out;
+			}
 		}
 
 		if ((flags & MSG_PEEK) &&
@@ -2966,12 +2974,6 @@ int tcp_disconnect(struct sock *sk, int flags)
 	int old_state = sk->sk_state;
 	u32 seq;
 
-	/* Deny disconnect if other threads are blocked in sk_wait_event()
-	 * or inet_wait_for_connect().
-	 */
-	if (sk->sk_wait_pending)
-		return -EBUSY;
-
 	if (old_state != TCP_CLOSE)
 		tcp_set_state(sk, TCP_CLOSE);
 
@@ -3366,9 +3368,25 @@ int tcp_set_window_clamp(struct sock *sk, int val)
 			return -EINVAL;
 		tp->window_clamp = 0;
 	} else {
-		tp->window_clamp = val < SOCK_MIN_RCVBUF / 2 ?
-			SOCK_MIN_RCVBUF / 2 : val;
-		tp->rcv_ssthresh = min(tp->rcv_wnd, tp->window_clamp);
+		u32 new_rcv_ssthresh, old_window_clamp = tp->window_clamp;
+		u32 new_window_clamp = val < SOCK_MIN_RCVBUF / 2 ?
+						SOCK_MIN_RCVBUF / 2 : val;
+
+		if (new_window_clamp == old_window_clamp)
+			return 0;
+
+		tp->window_clamp = new_window_clamp;
+		if (new_window_clamp < old_window_clamp) {
+			/* need to apply the reserved mem provisioning only
+			 * when shrinking the window clamp
+			 */
+			__tcp_adjust_rcv_ssthresh(sk, tp->window_clamp);
+
+		} else {
+			new_rcv_ssthresh = min(tp->rcv_wnd, tp->window_clamp);
+			tp->rcv_ssthresh = max(new_rcv_ssthresh,
+					       tp->rcv_ssthresh);
+		}
 	}
 	return 0;
 }
@@ -3756,7 +3774,8 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 		info->tcpi_options |= TCPI_OPT_SYN_DATA;
 
 	info->tcpi_rto = jiffies_to_usecs(icsk->icsk_rto);
-	info->tcpi_ato = jiffies_to_usecs(icsk->icsk_ack.ato);
+	info->tcpi_ato = jiffies_to_usecs(min(icsk->icsk_ack.ato,
+					      tcp_delack_max(sk)));
 	info->tcpi_snd_mss = tp->mss_cache;
 	info->tcpi_rcv_mss = icsk->icsk_ack.rcv_mss;
 

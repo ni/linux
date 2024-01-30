@@ -466,6 +466,7 @@ static bool handle_useless_nodes(struct reloc_control *rc,
  * cached.
  */
 static noinline_for_stack struct btrfs_backref_node *build_backref_tree(
+			struct btrfs_trans_handle *trans,
 			struct reloc_control *rc, struct btrfs_key *node_key,
 			int level, u64 bytenr)
 {
@@ -499,8 +500,8 @@ static noinline_for_stack struct btrfs_backref_node *build_backref_tree(
 
 	/* Breadth-first search to build backref cache */
 	do {
-		ret = btrfs_backref_add_tree_node(cache, path, iter, node_key,
-						  cur);
+		ret = btrfs_backref_add_tree_node(trans, cache, path, iter,
+						  node_key, cur);
 		if (ret < 0) {
 			err = ret;
 			goto out;
@@ -1180,7 +1181,7 @@ int replace_file_extents(struct btrfs_trans_handle *trans,
 		}
 	}
 	if (dirty)
-		btrfs_mark_buffer_dirty(leaf);
+		btrfs_mark_buffer_dirty(trans, leaf);
 	if (inode)
 		btrfs_add_delayed_iput(BTRFS_I(inode));
 	return ret;
@@ -1373,13 +1374,13 @@ again:
 		 */
 		btrfs_set_node_blockptr(parent, slot, new_bytenr);
 		btrfs_set_node_ptr_generation(parent, slot, new_ptr_gen);
-		btrfs_mark_buffer_dirty(parent);
+		btrfs_mark_buffer_dirty(trans, parent);
 
 		btrfs_set_node_blockptr(path->nodes[level],
 					path->slots[level], old_bytenr);
 		btrfs_set_node_ptr_generation(path->nodes[level],
 					      path->slots[level], old_ptr_gen);
-		btrfs_mark_buffer_dirty(path->nodes[level]);
+		btrfs_mark_buffer_dirty(trans, path->nodes[level]);
 
 		btrfs_init_generic_ref(&ref, BTRFS_ADD_DELAYED_REF, old_bytenr,
 				       blocksize, path->nodes[level]->start);
@@ -2516,7 +2517,7 @@ static int do_relocation(struct btrfs_trans_handle *trans,
 						node->eb->start);
 			btrfs_set_node_ptr_generation(upper->eb, slot,
 						      trans->transid);
-			btrfs_mark_buffer_dirty(upper->eb);
+			btrfs_mark_buffer_dirty(trans, upper->eb);
 
 			btrfs_init_generic_ref(&ref, BTRFS_ADD_DELAYED_REF,
 					       node->eb->start, blocksize,
@@ -2803,7 +2804,7 @@ int relocate_tree_blocks(struct btrfs_trans_handle *trans,
 
 	/* Do tree relocation */
 	rbtree_postorder_for_each_entry_safe(block, next, blocks, rb_node) {
-		node = build_backref_tree(rc, &block->key,
+		node = build_backref_tree(trans, rc, &block->key,
 					  block->level, block->bytenr);
 		if (IS_ERR(node)) {
 			err = PTR_ERR(node);
@@ -3834,7 +3835,7 @@ static int __insert_orphan_inode(struct btrfs_trans_handle *trans,
 	btrfs_set_inode_mode(leaf, item, S_IFREG | 0600);
 	btrfs_set_inode_flags(leaf, item, BTRFS_INODE_NOCOMPRESS |
 					  BTRFS_INODE_PREALLOC);
-	btrfs_mark_buffer_dirty(leaf);
+	btrfs_mark_buffer_dirty(trans, leaf);
 out:
 	btrfs_free_path(path);
 	return ret;
