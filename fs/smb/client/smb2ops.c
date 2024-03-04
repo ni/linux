@@ -614,11 +614,12 @@ parse_server_interfaces(struct network_interface_info_ioctl_rsp *buf,
 				 "multichannel not available\n"
 				 "Empty network interface list returned by server %s\n",
 				 ses->server->hostname);
-		rc = -EINVAL;
+		rc = -EOPNOTSUPP;
+		ses->iface_last_update = jiffies;
 		goto out;
 	}
 
-	while (bytes_left >= sizeof(*p)) {
+	while (bytes_left >= (ssize_t)sizeof(*p)) {
 		memset(&tmp_iface, 0, sizeof(tmp_iface));
 		tmp_iface.speed = le64_to_cpu(p->LinkSpeed);
 		tmp_iface.rdma_capable = le32_to_cpu(p->Capability & RDMA_CAPABLE) ? 1 : 0;
@@ -712,7 +713,6 @@ parse_server_interfaces(struct network_interface_info_ioctl_rsp *buf,
 
 		ses->iface_count++;
 		spin_unlock(&ses->iface_lock);
-		ses->iface_last_update = jiffies;
 next_iface:
 		nb_iface++;
 		next = le32_to_cpu(p->Next);
@@ -734,11 +734,7 @@ next_iface:
 	if ((bytes_left > 8) || p->Next)
 		cifs_dbg(VFS, "%s: incomplete interface info\n", __func__);
 
-
-	if (!ses->iface_count) {
-		rc = -EINVAL;
-		goto out;
-	}
+	ses->iface_last_update = jiffies;
 
 out:
 	/*
