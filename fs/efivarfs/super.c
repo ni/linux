@@ -35,7 +35,8 @@ static int efivarfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 	/* Some UEFI firmware does not implement QueryVariableInfo() */
 	storage_space = remaining_space = 0;
-	if (efi_rt_services_supported(EFI_RT_SUPPORTED_QUERY_VARIABLE_INFO)) {
+	if (efi_rt_services_supported(EFI_RT_SUPPORTED_QUERY_VARIABLE_INFO) &&
+	    !IS_ENABLED(CONFIG_PREEMPT_RT)) {
 		status = efivar_query_variable_info(attr, &storage_space,
 						    &remaining_space,
 						    &max_variable_size);
