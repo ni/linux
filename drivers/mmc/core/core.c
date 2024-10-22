@@ -147,7 +147,7 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
 	    (err == -EILSEQ || (mrq->sbc && mrq->sbc->error == -EILSEQ) ||
 	    (mrq->data && mrq->data->error == -EILSEQ) ||
 	    (mrq->stop && mrq->stop->error == -EILSEQ)))
-		mmc_retune_needed(host);
+		mmc_retune_recheck(host);
 
 	if (err && cmd->retries && mmc_host_is_spi(host)) {
 		if (cmd->resp[0] & R1_SPI_ILLEGAL_COMMAND)

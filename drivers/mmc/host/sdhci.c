@@ -32,7 +32,6 @@
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/slot-gpio.h>
 
-#include "../core/host.h"
 #include "sdhci.h"
 
 #define DRIVER_NAME "sdhci"
@@ -305,7 +304,7 @@ static void sdhci_set_default_irqs(struct sdhci_host *host)
 
 	if (host->tuning_mode == SDHCI_TUNING_MODE_2 ||
 	    host->tuning_mode == SDHCI_TUNING_MODE_3)
-		host->ier |= SDHCI_INT_RETUNE | SDHCI_INT_TUNING_ERR;
+		host->ier |= SDHCI_INT_RETUNE;
 
 	sdhci_writel(host, host->ier, SDHCI_INT_ENABLE);
 	sdhci_writel(host, host->ier, SDHCI_SIGNAL_ENABLE);
@@ -3612,6 +3611,31 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 			result = IRQ_WAKE_THREAD;
 		}
 
+		if ((intmask & SDHCI_INT_TUNING_ERROR) &&
+			SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))
+			!= MMC_BUS_TEST_R) {
+			u16 ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+			if (host->data) {
+				host->data->error = -EILSEQ;
+			}
+			else if (host->cmd) {
+				host->cmd->error = -EILSEQ;
+			}
+			else if (host->data_cmd) {
+				host->data_cmd->error = -EILSEQ;
+			}
+			else {
+				pr_err("%s: tuning error code failed to be set\n", mmc_hostname(host->mmc));
+			}
+			if (!mmc_op_tuning(SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))))
+				sdhci_err_stats_inc(host, TUNING);
+			ctrl2 &= ~SDHCI_CTRL_TUNED_CLK;
+			sdhci_writew(host, ctrl2, SDHCI_HOST_CONTROL2);
+			sdhci_writel(host, SDHCI_INT_TUNING_ERROR,
+				SDHCI_INT_STATUS);
+		}
+
+
 		if (intmask & SDHCI_INT_CMD_MASK)
 			sdhci_cmd_irq(host, intmask & SDHCI_INT_CMD_MASK, &intmask);
 
@@ -3625,24 +3649,6 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 		if (intmask & SDHCI_INT_RETUNE)
 			mmc_retune_needed(host->mmc);
 
-		if (intmask & SDHCI_INT_TUNING_ERR) {
-			u16 ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
-			/*
-			 * Only complain and retune if we're actually using the
-			 * host's tuning circuits.
-			 */
-			if (ctrl2 & SDHCI_CTRL_TUNED_CLK) {
-				sdhci_writew(host,
-					     ctrl2 & ~SDHCI_CTRL_TUNED_CLK,
-					     SDHCI_HOST_CONTROL2);
-				mmc_retune_recheck(host->mmc);
-				pr_err("%s: Unrecoverable error in tuning circuit\n",
-				       mmc_hostname(host->mmc));
-			}
-			sdhci_writel(host, SDHCI_INT_TUNING_ERR,
-				     SDHCI_INT_STATUS);
-		}
-
 		if ((intmask & SDHCI_INT_CARD_INT) &&
 		    (host->ier & SDHCI_INT_CARD_INT)) {
 			sdhci_enable_sdio_irq_nolock(host, false);
@@ -3652,8 +3658,9 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 		intmask &= ~(SDHCI_INT_CARD_INSERT | SDHCI_INT_CARD_REMOVE |
 			     SDHCI_INT_CMD_MASK | SDHCI_INT_DATA_MASK |
 			     SDHCI_INT_ERROR | SDHCI_INT_BUS_POWER |
-			     SDHCI_INT_RETUNE | SDHCI_INT_TUNING_ERR |
-			     SDHCI_INT_CARD_INT);
+			     SDHCI_INT_RETUNE | SDHCI_INT_CARD_INT |
+			     SDHCI_INT_TUNING_ERROR);
+
 
 		if (intmask) {
 			unexpected |= intmask;
@@ -4044,6 +4051,17 @@ bool sdhci_cqe_irq(struct sdhci_host *host, u32 intmask, int *cmd_error,
 		sdhci_err_stats_inc(host, ADMA);
 	} else
 		*data_error = 0;
+
+	if (intmask & SDHCI_INT_TUNING_ERROR) {
+		if (host->data) {
+			*data_error = -EILSEQ;
+		}
+		else {
+			*cmd_error = -EILSEQ;
+		}
+		if (!mmc_op_tuning(SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))))
+			sdhci_err_stats_inc(host, TUNING);
+	}
 
 	/* Clear selected interrupts. */
 	mask = intmask & host->cqe_ier;
