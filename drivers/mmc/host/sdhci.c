@@ -2973,7 +2973,8 @@ int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 
 	sdhci_start_tuning(host);
 
-	host->tuning_err = __sdhci_execute_tuning(host, opcode);
+	err = __sdhci_execute_tuning(host, opcode);
+	host->tuning_err = err;
 
 	sdhci_end_tuning(host);
 out:
