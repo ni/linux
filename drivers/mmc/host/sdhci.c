@@ -2898,6 +2898,7 @@ int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	unsigned int tuning_count = 0;
 	bool hs400_tuning;
 
+	trace_printk("mmc: Begin tuning");
 	hs400_tuning = host->flags & SDHCI_HS400_TUNING;
 
 	if (host->tuning_mode == SDHCI_TUNING_MODE_1)
@@ -2952,11 +2953,19 @@ int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 
 	err = __sdhci_execute_tuning(host, opcode);
 	host->tuning_err = err;
-
+	//if (err) {
+		//trace_printk("Abort tuning");
+		//sdhci_abort_tuning(host, opcode);
+	//}
+	//else {
+		//sdhci_end_tuning(host);
+	//}
 	sdhci_end_tuning(host);
+
 out:
 	host->flags &= ~SDHCI_HS400_TUNING;
 
+	trace_printk("mmc: Finish tuning");
 	return err;
 }
 EXPORT_SYMBOL_GPL(sdhci_execute_tuning);
@@ -3444,6 +3453,7 @@ static void sdhci_data_irq(struct sdhci_host *host, u32 intmask)
 	}
 
 	if (intmask & SDHCI_INT_DATA_TIMEOUT) {
+		trace_printk("mmc: request timed out");
 		host->data->error = -ETIMEDOUT;
 		sdhci_err_stats_inc(host, DAT_TIMEOUT);
 	} else if (intmask & SDHCI_INT_DATA_END_BIT) {

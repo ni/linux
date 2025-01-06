@@ -2025,9 +2025,12 @@ int mmc_hw_reset(struct mmc_card *card)
 	struct mmc_host *host = card->host;
 	int ret;
 
+	trace_printk("mmc: Calling hw_reset");
 	ret = host->bus_ops->hw_reset(host);
+	pr_err("mmc_hw_reset: Disable tracing");
+	tracing_off();
 	if (ret < 0)
-		pr_warn("%s: tried to HW reset card, got error %d\n",
+		pr_err("%s: tried to HW reset card, got error %d\n",
 			mmc_hostname(host), ret);
 
 	return ret;
@@ -2277,6 +2280,8 @@ void mmc_rescan(struct work_struct *work)
  out:
 	if (host->caps & MMC_CAP_NEEDS_POLL)
 		mmc_schedule_delayed_work(&host->detect, HZ);
+	pr_err("mmc_rescan: Disable tracing");
+	tracing_off();
 }
 
 void mmc_start_host(struct mmc_host *host)

@@ -430,14 +430,20 @@ int mmc_spi_set_crc(struct mmc_host *host, int use_crc)
 static int mmc_switch_status_error(struct mmc_host *host, u32 status)
 {
 	if (mmc_host_is_spi(host)) {
-		if (status & R1_SPI_ILLEGAL_COMMAND)
+		if (status & R1_SPI_ILLEGAL_COMMAND) {
+			trace_printk("Returning bad message error 1: -84");
+			dump_stack();
 			return -EBADMSG;
+		}
 	} else {
 		if (R1_STATUS(status))
 			pr_warn("%s: unexpected status %#x after switch\n",
 				mmc_hostname(host), status);
-		if (status & R1_SWITCH_ERROR)
+		if (status & R1_SWITCH_ERROR) {
+			trace_printk("Returning bad message error 2: -84");
+			dump_stack();
 			return -EBADMSG;
+		}
 	}
 	return 0;
 }
