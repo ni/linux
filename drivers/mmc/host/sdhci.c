@@ -32,7 +32,6 @@
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/slot-gpio.h>
 
-#include "../core/host.h"
 #include "sdhci.h"
 
 #define DRIVER_NAME "sdhci"
@@ -305,7 +304,7 @@ static void sdhci_set_default_irqs(struct sdhci_host *host)
 
 	if (host->tuning_mode == SDHCI_TUNING_MODE_2 ||
 	    host->tuning_mode == SDHCI_TUNING_MODE_3)
-		host->ier |= SDHCI_INT_RETUNE | SDHCI_INT_TUNING_ERR;
+		host->ier |= SDHCI_INT_RETUNE;
 
 	sdhci_writel(host, host->ier, SDHCI_INT_ENABLE);
 	sdhci_writel(host, host->ier, SDHCI_SIGNAL_ENABLE);
@@ -2899,6 +2898,7 @@ int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	unsigned int tuning_count = 0;
 	bool hs400_tuning;
 
+	trace_printk("mmc: Begin tuning");
 	hs400_tuning = host->flags & SDHCI_HS400_TUNING;
 
 	if (host->tuning_mode == SDHCI_TUNING_MODE_1)
@@ -2951,12 +2951,21 @@ int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 
 	sdhci_start_tuning(host);
 
-	host->tuning_err = __sdhci_execute_tuning(host, opcode);
-
+	err = __sdhci_execute_tuning(host, opcode);
+	host->tuning_err = err;
+	//if (err) {
+		//trace_printk("Abort tuning");
+		//sdhci_abort_tuning(host, opcode);
+	//}
+	//else {
+		//sdhci_end_tuning(host);
+	//}
 	sdhci_end_tuning(host);
+
 out:
 	host->flags &= ~SDHCI_HS400_TUNING;
 
+	trace_printk("mmc: Finish tuning");
 	return err;
 }
 EXPORT_SYMBOL_GPL(sdhci_execute_tuning);
@@ -3444,18 +3453,25 @@ static void sdhci_data_irq(struct sdhci_host *host, u32 intmask)
 	}
 
 	if (intmask & SDHCI_INT_DATA_TIMEOUT) {
+		trace_printk("mmc: request timed out");
 		host->data->error = -ETIMEDOUT;
 		sdhci_err_stats_inc(host, DAT_TIMEOUT);
 	} else if (intmask & SDHCI_INT_DATA_END_BIT) {
 		host->data->error = -EILSEQ;
 		if (!mmc_op_tuning(SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))))
 			sdhci_err_stats_inc(host, DAT_CRC);
-	} else if ((intmask & SDHCI_INT_DATA_CRC) &&
+	} else if ((intmask & (SDHCI_INT_DATA_CRC | SDHCI_INT_TUNING_ERROR)) &&
 		SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))
 			!= MMC_BUS_TEST_R) {
 		host->data->error = -EILSEQ;
 		if (!mmc_op_tuning(SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))))
 			sdhci_err_stats_inc(host, DAT_CRC);
+		if (intmask & SDHCI_INT_TUNING_ERROR) {
+			u16 ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+
+			ctrl2 &= ~SDHCI_CTRL_TUNED_CLK;
+			sdhci_writew(host, ctrl2, SDHCI_HOST_CONTROL2);
+		}
 	} else if (intmask & SDHCI_INT_ADMA_ERROR) {
 		pr_err("%s: ADMA error: 0x%08x\n", mmc_hostname(host->mmc),
 		       intmask);
@@ -3602,24 +3618,6 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 		if (intmask & SDHCI_INT_RETUNE)
 			mmc_retune_needed(host->mmc);
 
-		if (intmask & SDHCI_INT_TUNING_ERR) {
-			u16 ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
-			/*
-			 * Only complain and retune if we're actually using the
-			 * host's tuning circuits.
-			 */
-			if (ctrl2 & SDHCI_CTRL_TUNED_CLK) {
-				sdhci_writew(host,
-					     ctrl2 & ~SDHCI_CTRL_TUNED_CLK,
-					     SDHCI_HOST_CONTROL2);
-				mmc_retune_recheck(host->mmc);
-				pr_err("%s: Unrecoverable error in tuning circuit\n",
-				       mmc_hostname(host->mmc));
-			}
-			sdhci_writel(host, SDHCI_INT_TUNING_ERR,
-				     SDHCI_INT_STATUS);
-		}
-
 		if ((intmask & SDHCI_INT_CARD_INT) &&
 		    (host->ier & SDHCI_INT_CARD_INT)) {
 			sdhci_enable_sdio_irq_nolock(host, false);
@@ -3629,8 +3627,7 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 		intmask &= ~(SDHCI_INT_CARD_INSERT | SDHCI_INT_CARD_REMOVE |
 			     SDHCI_INT_CMD_MASK | SDHCI_INT_DATA_MASK |
 			     SDHCI_INT_ERROR | SDHCI_INT_BUS_POWER |
-			     SDHCI_INT_RETUNE | SDHCI_INT_TUNING_ERR |
-			     SDHCI_INT_CARD_INT);
+			     SDHCI_INT_RETUNE | SDHCI_INT_CARD_INT);
 
 		if (intmask) {
 			unexpected |= intmask;
@@ -4009,7 +4006,7 @@ bool sdhci_cqe_irq(struct sdhci_host *host, u32 intmask, int *cmd_error,
 	} else
 		*cmd_error = 0;
 
-	if (intmask & (SDHCI_INT_DATA_END_BIT | SDHCI_INT_DATA_CRC)) {
+	if (intmask & (SDHCI_INT_DATA_END_BIT | SDHCI_INT_DATA_CRC | SDHCI_INT_TUNING_ERROR)) {
 		*data_error = -EILSEQ;
 		if (!mmc_op_tuning(SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))))
 			sdhci_err_stats_inc(host, DAT_CRC);
