@@ -668,7 +668,8 @@ static int mmc_sd_init_uhs_card(struct mmc_card *card)
 	if (!mmc_host_is_spi(card->host) &&
 		(card->host->ios.timing == MMC_TIMING_UHS_SDR50 ||
 		 card->host->ios.timing == MMC_TIMING_UHS_DDR50 ||
-		 card->host->ios.timing == MMC_TIMING_UHS_SDR104)) {
+		 card->host->ios.timing == MMC_TIMING_UHS_SDR104) &&
+		!card->host->skip_init_tune) {
 		err = mmc_execute_tuning(card);
 
 		/*
@@ -681,6 +682,7 @@ static int mmc_sd_init_uhs_card(struct mmc_card *card)
 		if (err && card->host->ios.timing == MMC_TIMING_UHS_DDR50) {
 			pr_warn("%s: ddr50 tuning failed\n",
 				mmc_hostname(card->host));
+			card->host->skip_init_tune = 1;
 			err = 0;
 		}
 	}
