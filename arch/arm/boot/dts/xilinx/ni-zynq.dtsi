@@ -21,26 +21,7 @@
 		#phy-cells = <0>;
 	};
 
-	cpus {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		cpu@0 {
-			compatible = "arm,cortex-a9";
-			device_type = "cpu";
-			reg = <0>;
-			clocks = <&clkc 3>;
-		};
-
-		cpu@1 {
-			compatible = "arm,cortex-a9";
-			device_type = "cpu";
-			reg = <1>;
-			clocks = <&clkc 3>;
-		};
-	};
-
-	amba@0 {
+	amba: axi {
 		ni_uart0: serial@80000000 {
 			device_type = "serial";
 			compatible = "ni16550-fifo128", "ns16550a";
@@ -124,108 +105,6 @@
 			clock-frequency = <58824000>;
 		};
 
-		can0: can@e0008000 {
-			compatible = "xlnx,zynq-can-1.00.a";
-			status = "disabled";
-			reg = <0xe0008000 0x1000>;
-			interrupts = <0 28 4>;
-		};
-
-		can1: can@e0009000 {
-			compatible = "xlnx,zynq-can-1.00.a";
-			status = "disabled";
-			reg = <0xe0009000 0x1000>;
-			interrupts = <0 51 4>;
-		};
-
-		fpgaperipheral@f8007000 {
-			compatible = "fpgaperipheral";
-			reg = <0xf8007000 0x100>;
-		};
-
-		smcc@e000e000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			arm,addr25 = <0x0>;
-			arm,nor-chip-sel0 = <0x0>;
-			arm,nor-chip-sel1 = <0x0>;
-			arm,sram-chip-sel0 = <0x0>;
-			arm,sram-chip-sel1 = <0x0>;
-			clock-names = "memclk", "aclk";
-			clocks = <&clkc 11>, <&clkc 44>;
-			compatible = "arm,pl353-smc-r2p1";
-			interrupts = <0 18 4>;
-			ranges ;
-			reg = <0xe000e000 0x1000>;
-			nand@e1000000 {
-				compatible = "arm,pl353-nand-r2p1";
-				reg = <0xe1000000 0x1000000>;
-				bank-width = <1>; /* 8-bit width */
-				xlnx,nand-width = <0x8>;
-
-				/* SLCR SMC_CLK_CTRL value, 83MHz clock, 12ns cycle time */
-				/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
-				xlnx,onfi-mode0 = <0x0001021 4 3 2 7 4 10 10>;
-
-				/* SLCR SMC_CLK_CTRL value, 166MHz clock, 6ns cycle time */
-				/* <t_rr t_ar t_clr t_wp t_rea t_wc t_rc> in cycles */
-				xlnx,onfi-mode1 = <0x0000821 4 2 2 7 4 10 10>;
-				xlnx,onfi-mode2 = <0x0000821 4 2 2 5 3 8 7>;
-				xlnx,onfi-mode3 = <0x0000821 4 2 2 5 2 7 6>;
-				xlnx,onfi-mode4 = <0x0000821 4 2 2 4 2 6 5>;
-				xlnx,onfi-mode5 = <0x0000821 4 2 2 3 2 5 4>;
-
-				#address-cells = <1>;
-				#size-cells = <1>;
-			};
-		};
-
-		gpio: gpio@e000a000 {
-			compatible = "xlnx,zynq-gpio-1.0";
-			reg = <0xe000a000 0x1000>;
-			#interrupt-cells = <0x2>;
-			interrupt-controller;
-			interrupts = <0 20 4>;
-			clocks = <&clkc 42>;
-			#gpio-cells = <2>;
-			gpio-controller;
-		};
-
-		i2c0: i2c@e0004000 {
-			compatible = "cdns,i2c-r1p10";
-			reg = <0xE0004000 0x1000>;
-			interrupts = <0 25 4>;
-			bus-id = <0>;
-			clocks = <&clkc 38>;
-			clock-frequency = <400000>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "okay";
-
-			nicpld@40 {
-				compatible = "ni,cpld";
-				reg = <0x40>;
-			};
-
-			ds3231_rtc@68 {
-				compatible = "ds3232";
-				status = "disabled";
-				reg = <0x68>;
-			};
-		};
-
-		i2c1: i2c@e0005000 {
-			compatible = "cdns,i2c-r1p10";
-			status = "disabled";
-			reg = <0xe0005000 0x1000>;
-			interrupts = <0 48 4>;
-			bus-id = <1>;
-			clocks = <&clkc 39>;
-			clock-frequency = <400000>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-		} ;
-
 		i2c2: i2c@81000000 {
 			compatible = "xlnx,xps-iic-2.00.a";
 			status = "disabled";
@@ -235,38 +114,41 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 		};
-
-		spi0: spi@e0006000 {
-			compatible = "cdns,spi-r1p6";
-			status = "disabled";
-			reg = <0xe0006000 0x1000>;
-			interrupts = <0 26 4>;
-			clock-names = "ref_clk", "pclk";
-			clocks = <&clkc 25>, <&clkc 34>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-		};
-
-		spi1: spi@e0007000 {
-			compatible = "cdns,spi-r1p6";
-			status = "disabled";
-			reg = <0xe0007000 0x1000>;
-			interrupts = <0 49 4>;
-			clock-names = "ref_clk", "pclk";
-			clocks = <&clkc 26>, <&clkc 35>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-		};
-
-		usb0: usb@e0002000 {
-			usb-phy = <&usb_phy0>;
-		};
-
-		usb1: usb@e0003000 {
-			usb-phy = <&usb_phy1>;
-		};
 	};
 
+};
+
+&smcc {
+	status = "okay";
+};
+
+&nfc0 {
+	status = "okay";
+
+	nand@0 {
+		reg = <0>;
+	};
+};
+
+&i2c0 {
+	nicpld@40 {
+		compatible = "ni,cpld";
+		reg = <0x40>;
+	};
+
+	ds3231_rtc@68 {
+		compatible = "ds3232";
+		status = "disabled";
+		reg = <0x68>;
+	};
+};
+
+&usb0 {
+	usb-phy = <&usb_phy0>;
+};
+
+&usb1 {
+	usb-phy = <&usb_phy1>;
 };
 
 &L2 {
