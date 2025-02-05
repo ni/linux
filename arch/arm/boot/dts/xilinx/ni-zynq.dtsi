@@ -138,6 +138,20 @@
 	};
 };
 
+&smcc {
+	status = "okay";
+};
+
+&nfc0 {
+	status = "okay";
+
+	nand@0 {
+		reg = <0>;
+		nand-on-flash-bbt;
+		nand-ecc-mode = "on-die";
+	};
+};
+
 &L2 {
 	prefetch-data = <1>;
 	prefetch-instr = <1>;
