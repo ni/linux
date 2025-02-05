@@ -681,6 +681,7 @@ static int mmc_sd_init_uhs_card(struct mmc_card *card)
 		if (err && card->host->ios.timing == MMC_TIMING_UHS_DDR50) {
 			pr_warn("%s: ddr50 tuning failed\n",
 				mmc_hostname(card->host));
+			card->disable_tuning = true;
 			err = 0;
 		}
 	}

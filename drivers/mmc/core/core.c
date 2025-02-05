@@ -928,6 +928,9 @@ int mmc_execute_tuning(struct mmc_card *card)
 	u32 opcode;
 	int err;
 
+	if (card->disable_tuning)
+		return 0;
+
 	if (!host->ops->execute_tuning)
 		return 0;
 
