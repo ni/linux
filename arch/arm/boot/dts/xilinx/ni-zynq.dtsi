@@ -105,19 +105,6 @@
 			clock-frequency = <58824000>;
 		};
 
-		i2c0: i2c@e0004000 {
-			nicpld@40 {
-				compatible = "ni,cpld";
-				reg = <0x40>;
-			};
-
-			ds3231_rtc@68 {
-				compatible = "ds3232";
-				status = "disabled";
-				reg = <0x68>;
-			};
-		};
-
 		i2c2: i2c@81000000 {
 			compatible = "xlnx,xps-iic-2.00.a";
 			status = "disabled";
@@ -127,15 +114,28 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 		};
-
-		usb0: usb@e0002000 {
-			usb-phy = <&usb_phy0>;
-		};
-
-		usb1: usb@e0003000 {
-			usb-phy = <&usb_phy1>;
-		};
 	};
+};
+
+&i2c0 {
+	nicpld@40 {
+		compatible = "ni,cpld";
+		reg = <0x40>;
+	};
+
+	ds3231_rtc@68 {
+		compatible = "ds3232";
+		status = "disabled";
+		reg = <0x68>;
+	};
+};
+
+&usb0 {
+	usb-phy = <&usb_phy0>;
+};
+
+&usb1 {
+	usb-phy = <&usb_phy1>;
 };
 
 &smcc {
