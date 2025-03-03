@@ -499,6 +499,14 @@ static int pl35x_nand_recover_data_hwecc(struct pl35x_nandc *nfc,
 	return max_bitflips;
 }
 
+static int pl35x_nand_write_subpage_raw(struct nand_chip *chip,
+					uint32_t offset, uint32_t data_len,
+					const uint8_t *data_buf,
+					int oob_required, int page)
+{
+	return nand_monolithic_write_page_raw(chip, data_buf, oob_required, page);
+}
+
 static int pl35x_nand_write_page_hwecc(struct nand_chip *chip,
 				       const u8 *buf, int oob_required,
 				       int page)
@@ -657,6 +665,12 @@ disable_ecc_engine:
 	pl35x_smc_set_ecc_mode(nfc, chip, PL35X_SMC_ECC_CFG_MODE_BYPASS);
 
 	return ret;
+}
+
+static int pl35x_nand_read_subpage_raw(struct nand_chip *chip, uint32_t data_offs,
+				       uint32_t readlen, uint8_t *bufpoi, int page)
+{
+	return nand_monolithic_read_page_raw(chip, bufpoi, 0, page);
 }
 
 static int pl35x_nand_exec_op(struct nand_chip *chip,
@@ -936,6 +950,29 @@ static int pl35x_nand_init_hw_ecc_controller(struct pl35x_nandc *nfc,
 	return ret;
 }
 
+static void pl35x_nand_init_ondie_ecc(struct pl35x_nandc *nfc,
+				      struct nand_chip *chip)
+{
+	struct mtd_info *mtd = nand_to_mtd(chip);
+
+	/* Bypass the controller ECC block */
+	pl35x_smc_set_ecc_mode(nfc, chip, PL35X_SMC_ECC_CFG_MODE_BYPASS);
+
+	chip->ecc.strength = 1;
+	chip->ecc.bytes = 0;
+	chip->ecc.read_page = nand_monolithic_read_page_raw;
+	chip->ecc.read_page_raw = nand_monolithic_read_page_raw;
+	chip->ecc.read_subpage = pl35x_nand_read_subpage_raw;
+	chip->ecc.write_page = nand_monolithic_write_page_raw;
+	chip->ecc.write_page_raw = nand_monolithic_write_page_raw;
+	chip->ecc.write_subpage = pl35x_nand_write_subpage_raw;
+	chip->ecc.size = mtd->writesize;
+
+	/* NAND with on-die ECC supports subpage reads and writes */
+	chip->options |= NAND_SUBPAGE_READ;
+	chip->options &= ~(NAND_NO_SUBPAGE_WRITE);
+}
+
 static int pl35x_nand_attach_chip(struct nand_chip *chip)
 {
 	const struct nand_ecc_props *requirements =
@@ -970,6 +1007,7 @@ static int pl35x_nand_attach_chip(struct nand_chip *chip)
 
 	switch (chip->ecc.engine_type) {
 	case NAND_ECC_ENGINE_TYPE_ON_DIE:
+		pl35x_nand_init_ondie_ecc(nfc, chip);
 		/* Keep these legacy BBT descriptors for ON_DIE situations */
 		chip->bbt_td = &bbt_main_descr;
 		chip->bbt_md = &bbt_mirror_descr;
