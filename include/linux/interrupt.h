@@ -21,6 +21,8 @@
 #include <asm/irq.h>
 #include <asm/sections.h>
 
+#include <linux/wait.h>
+
 /*
  * These correspond to the IORESOURCE_IRQ_* defines in
  * linux/ioport.h to select the interrupt line behaviour.  When
