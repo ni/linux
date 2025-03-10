@@ -14673,10 +14673,9 @@ F:	drivers/mtd/nand/
 F:	include/linux/mtd/*nand*.h
 
 NATIONAL INSTRUMENTS SERIAL DRIVER
-M:	Brenda Streiff <brenda.streiff@ni.com>
+M:	Chaitanya Vadrevu <chaitanya.vadrevu@emerson.com>
 L:	linux-serial@vger.kernel.org
 S:	Maintained
-F:	Documentation/devicetree/bindings/serial/ni,ni16550.yaml
 F:	drivers/tty/serial/8250/8250_ni.c
 
 NATIVE INSTRUMENTS USB SOUND INTERFACE DRIVER

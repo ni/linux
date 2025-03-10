@@ -31,6 +31,7 @@
 
 #include <linux/irq.h>
 #include <linux/uaccess.h>
+#include <linux/platform_device.h>
 
 #include "serial_base.h"
 
@@ -3404,6 +3405,22 @@ int serial_core_register_port(struct uart_driver *drv, struct uart_port *port)
 	 */
 	port->flags |= UPF_DEAD;
 
+	if (port->dev == NULL) {
+		static unsigned int next_port_number;
+		char port_name[21];
+		struct platform_device *pdev;
+
+		snprintf(port_name, sizeof(port_name), "anon_port_%u", next_port_number++);
+		pdev = platform_device_register_simple(port_name, -1, NULL, 0);
+
+		if (PTR_ERR_OR_ZERO(pdev)) {
+			ret = -EINVAL;
+			goto err_unlock;
+		}
+
+		port->dev = &pdev->dev;
+	}
+
 	/* Inititalize a serial core controller device if needed */
 	ctrl_dev = serial_core_ctrl_find(drv, port->dev, port->ctrl_id);
 	if (!ctrl_dev) {
@@ -3440,6 +3457,9 @@ err_unregister_port_dev:
 err_unregister_ctrl_dev:
 	serial_base_ctrl_device_remove(new_ctrl_dev);
 
+	if (strncmp(to_platform_device(port->dev)->name, "anon_port", 9) == 0)
+		platform_device_del(to_platform_device(port->dev));
+
 err_unlock:
 	mutex_unlock(&port_mutex);
 
@@ -3469,6 +3489,9 @@ void serial_core_unregister_port(struct uart_driver *drv, struct uart_port *port
 	/* Drop the serial core controller device if no ports are using it */
 	if (!serial_core_ctrl_find(drv, phys_dev, ctrl_id))
 		serial_base_ctrl_device_remove(ctrl_dev);
+
+	if (strncmp(to_platform_device(phys_dev)->name, "anon_port", 9) == 0)
+		platform_device_del(to_platform_device(phys_dev));
 
 	mutex_unlock(&port_mutex);
 }

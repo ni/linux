@@ -11,6 +11,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/bitfield.h>
 #include <linux/device.h>
 #include <linux/io.h>
 #include <linux/init.h>
@@ -32,15 +33,15 @@
 /* PMR - Port Mode Register */
 #define NI16550_PMR_OFFSET	0x0E
 /* PMR[1:0] - Port Capabilities */
-#define NI16550_PMR_CAP_MASK			GENMASK(1, 0)
-#define NI16550_PMR_NOT_IMPL			0x00 /* not implemented */
-#define NI16550_PMR_CAP_RS232			0x01 /* RS-232 capable */
-#define NI16550_PMR_CAP_RS485			0x02 /* RS-485 capable */
-#define NI16550_PMR_CAP_DUAL			0x03 /* dual-port */
+#define NI16550_PMR_CAP_MASK		GENMASK(1, 0)
+#define NI16550_PMR_NOT_IMPL		FIELD_PREP(NI16550_PMR_CAP_MASK, 0) /* not implemented */
+#define NI16550_PMR_CAP_RS232		FIELD_PREP(NI16550_PMR_CAP_MASK, 1) /* RS-232 capable */
+#define NI16550_PMR_CAP_RS485		FIELD_PREP(NI16550_PMR_CAP_MASK, 2) /* RS-485 capable */
+#define NI16550_PMR_CAP_DUAL		FIELD_PREP(NI16550_PMR_CAP_MASK, 3) /* dual-port */
 /* PMR[4] - Interface Mode */
-#define NI16550_PMR_MODE_MASK			GENMASK(4, 4)
-#define NI16550_PMR_MODE_RS232			0x00 /* currently 232 */
-#define NI16550_PMR_MODE_RS485			0x10 /* currently 485 */
+#define NI16550_PMR_MODE_MASK		GENMASK(4, 4)
+#define NI16550_PMR_MODE_RS232		FIELD_PREP(NI16550_PMR_MODE_MASK, 0) /* currently 232 */
+#define NI16550_PMR_MODE_RS485		FIELD_PREP(NI16550_PMR_MODE_MASK, 1) /* currently 485 */
 
 /* PCR - Port Control Register */
 /*
@@ -52,11 +53,11 @@
  * PCR_AUTO_RS485 | When data in TX FIFO | Disabled when TX enabled
  */
 #define NI16550_PCR_OFFSET	0x0F
-#define NI16550_PCR_RS422			0x00
-#define NI16550_PCR_ECHO_RS485			0x01
-#define NI16550_PCR_DTR_RS485			0x02
-#define NI16550_PCR_AUTO_RS485			0x03
 #define NI16550_PCR_WIRE_MODE_MASK		GENMASK(1, 0)
+#define NI16550_PCR_RS422			FIELD_PREP(NI16550_PCR_WIRE_MODE_MASK, 0)
+#define NI16550_PCR_ECHO_RS485			FIELD_PREP(NI16550_PCR_WIRE_MODE_MASK, 1)
+#define NI16550_PCR_DTR_RS485			FIELD_PREP(NI16550_PCR_WIRE_MODE_MASK, 2)
+#define NI16550_PCR_AUTO_RS485			FIELD_PREP(NI16550_PCR_WIRE_MODE_MASK, 3)
 #define NI16550_PCR_TXVR_ENABLE_BIT		BIT(3)
 #define NI16550_PCR_RS485_TERMINATION_BIT	BIT(6)
 
@@ -109,13 +110,11 @@ static int ni16550_rs485_config(struct uart_port *port,
 	pcr &= ~NI16550_PCR_WIRE_MODE_MASK;
 
 	if (rs485->flags & SER_RS485_ENABLED) {
-		/* RS-485 */
-		dev_dbg(port->dev, "2-wire Auto\n");
+		/* RS-485 2-wire Auto */
 		pcr |= NI16550_PCR_AUTO_RS485;
 		up->acr |= NI16550_ACR_AUTO_DTR_EN;
 	} else {
 		/* RS-422 */
-		dev_dbg(port->dev, "4-wire\n");
 		pcr |= NI16550_PCR_RS422;
 		up->acr &= ~NI16550_ACR_AUTO_DTR_EN;
 	}
@@ -251,13 +250,13 @@ static int ni16550_get_regs(struct platform_device *pdev,
 	return -EINVAL;
 }
 
+/*
+ * Very old implementations don't have the TFS or RFS registers
+ * defined, so we may read all-0s or all-1s. For such devices,
+ * assume a FIFO size of 128.
+ */
 static u8 ni16550_read_fifo_size(struct uart_8250_port *uart, int reg)
 {
-	/*
-	 * Very old implementations don't have the TFS or RFS registers
-	 * defined, so we may read all-0s or all-1s. For such devices,
-	 * assume a FIFO size of 128.
-	 */
 	u8 value = serial_in(uart, reg);
 
 	if (value == 0x00 || value == 0xFF)
@@ -282,8 +281,8 @@ static int ni16550_probe(struct platform_device *pdev)
 	unsigned int prescaler = 0;
 	struct ni16550_data *data;
 	const char *portmode;
-	int txfifosz, rxfifosz;
-	int rs232_property;
+	unsigned int txfifosz, rxfifosz;
+	bool rs232_property;
 	int ret;
 	int irq;
 
@@ -320,7 +319,7 @@ static int ni16550_probe(struct platform_device *pdev)
 	txfifosz = ni16550_read_fifo_size(&uart, NI16550_TFS_OFFSET);
 	rxfifosz = ni16550_read_fifo_size(&uart, NI16550_RFS_OFFSET);
 
-	dev_dbg(dev, "NI 16550 has TX FIFO size %d, RX FIFO size %d\n",
+	dev_dbg(dev, "NI 16550 has TX FIFO size %u, RX FIFO size %u\n",
 		txfifosz, rxfifosz);
 
 	uart.port.type		= PORT_16550A;
@@ -339,8 +338,8 @@ static int ni16550_probe(struct platform_device *pdev)
 		uart.port.uartclk = info->uartclk;
 	if (device_property_read_u32(dev, "clock-frequency",
 				     &uart.port.uartclk)) {
-		data->clk = devm_clk_get_optional_enabled(dev, NULL);
-		if (data->clk)
+		data->clk = devm_clk_get_enabled(dev, NULL);
+		if (!IS_ERR(data->clk))
 			uart.port.uartclk = clk_get_rate(data->clk);
 	}
 
@@ -373,17 +372,17 @@ static int ni16550_probe(struct platform_device *pdev)
 	    !device_property_read_string(dev, "transceiver", &portmode)) {
 		rs232_property = strncmp(portmode, "RS-232", 6) == 0;
 
-		dev_dbg(dev, "port is in %s mode (via device property)",
+		dev_dbg(dev, "port is in %s mode (via device property)\n",
 			rs232_property ? "RS-232" : "RS-485");
 	} else if (info->flags & NI_HAS_PMR) {
 		rs232_property = is_pmr_rs232_mode(&uart);
 
-		dev_dbg(dev, "port is in %s mode (via PMR)",
+		dev_dbg(dev, "port is in %s mode (via PMR)\n",
 			rs232_property ? "RS-232" : "RS-485");
 	} else {
 		rs232_property = 0;
 
-		dev_dbg(dev, "port is fixed as RS-485");
+		dev_dbg(dev, "port is fixed as RS-485\n");
 	}
 
 	if (!rs232_property) {
@@ -403,7 +402,6 @@ static int ni16550_probe(struct platform_device *pdev)
 	return 0;
 
 err:
-	clk_disable_unprepare(data->clk);
 	return ret;
 }
 
@@ -411,7 +409,6 @@ static int ni16550_remove(struct platform_device *pdev)
 {
 	struct ni16550_data *data = platform_get_drvdata(pdev);
 
-	clk_disable_unprepare(data->clk);
 	serial8250_unregister_port(data->line);
 	return 0;
 }
@@ -424,6 +421,7 @@ static const struct of_device_id ni16550_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, ni16550_of_match);
 
+#ifdef CONFIG_ACPI
 /* NI 16550 RS-485 Interface */
 static const struct ni16550_device_info nic7750 = {
 	.uartclk = 33333333,
@@ -448,8 +446,6 @@ static const struct ni16550_device_info nic7a69 = {
 	.uartclk = 29629629,
 	.prescaler = 0x09,
 };
-
-#ifdef CONFIG_ACPI
 static const struct acpi_device_id ni16550_acpi_match[] = {
 	{ "NIC7750",	(kernel_ulong_t)&nic7750 },
 	{ "NIC7772",	(kernel_ulong_t)&nic7772 },
@@ -472,7 +468,6 @@ static struct platform_driver ni16550_driver = {
 
 module_platform_driver(ni16550_driver);
 
-MODULE_AUTHOR("Jaeden Amero <jaeden.amero@ni.com>");
-MODULE_AUTHOR("Karthik Manamcheri <karthik.manamcheri@ni.com>");
+MODULE_AUTHOR("Emerson Electric Co.");
 MODULE_DESCRIPTION("NI 16550 Driver");
 MODULE_LICENSE("GPL");
