@@ -46,6 +46,10 @@ static DEFINE_MUTEX(port_mutex);
  */
 static struct lock_class_key port_lock_key;
 
+static struct device_type anon_dev_type = {
+	.name = "anon_port",
+};
+
 #define HIGH_BITS_OFFSET	((sizeof(long)-sizeof(int))*8)
 
 /*
@@ -3396,6 +3400,7 @@ int serial_core_register_port(struct uart_driver *drv, struct uart_port *port)
 {
 	struct serial_ctrl_device *ctrl_dev, *new_ctrl_dev = NULL;
 	int ret;
+	bool is_parent_anon_port = false;
 
 	mutex_lock(&port_mutex);
 
@@ -3419,6 +3424,8 @@ int serial_core_register_port(struct uart_driver *drv, struct uart_port *port)
 		}
 
 		port->dev = &pdev->dev;
+		port->dev->type = &anon_dev_type;
+		is_parent_anon_port = true;
 	}
 
 	/* Inititalize a serial core controller device if needed */
@@ -3457,7 +3464,7 @@ err_unregister_port_dev:
 err_unregister_ctrl_dev:
 	serial_base_ctrl_device_remove(new_ctrl_dev);
 
-	if (strncmp(to_platform_device(port->dev)->name, "anon_port", 9) == 0)
+	if (is_parent_anon_port)
 		platform_device_del(to_platform_device(port->dev));
 
 err_unlock:
@@ -3490,7 +3497,7 @@ void serial_core_unregister_port(struct uart_driver *drv, struct uart_port *port
 	if (!serial_core_ctrl_find(drv, phys_dev, ctrl_id))
 		serial_base_ctrl_device_remove(ctrl_dev);
 
-	if (strncmp(to_platform_device(phys_dev)->name, "anon_port", 9) == 0)
+	if (phys_dev->type == &anon_dev_type)
 		platform_device_del(to_platform_device(phys_dev));
 
 	mutex_unlock(&port_mutex);
