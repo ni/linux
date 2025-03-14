@@ -140,6 +140,16 @@
 
 &smcc {
 	status = "okay";
+	/*
+	 * NI Zynq based devices require different memclk frequency
+	 * for different timing modes
+	 */
+	memclk-timing-frequency = <0 83333333>,
+				<1 166666666>,
+				<2 166666666>,
+				<3 166666666>,
+				<4 166666666>,
+				<5 166666666>;
 };
 
 &nfc0 {

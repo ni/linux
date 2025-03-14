@@ -795,6 +795,28 @@ static int pl35x_nfc_exec_op(struct nand_chip *chip,
 				      op, check_only);
 }
 
+static unsigned long of_get_memclk_freq(const struct device_node *np, const int timing_mode)
+{
+	int memclk_frequency, i, total_elements;
+	u32 memclk_mode;
+
+	total_elements = of_property_count_u32_elems(np, "memclk-timing-frequency");
+	if (total_elements <= 0)
+		return 0;
+
+	for (i = 0; i < total_elements; i = i+2) {
+		of_property_read_u32_index(np, "memclk-timing-frequency", i, &memclk_mode);
+		if (memclk_mode == timing_mode) {
+			of_property_read_u32_index(np, "memclk-timing-frequency",
+				i+1, &memclk_frequency);
+			return memclk_frequency;
+		}
+	}
+
+	pr_err("Failed to find matching memclk timing mode %d\n", timing_mode);
+	return 0;
+}
+
 static int pl35x_nfc_setup_interface(struct nand_chip *chip, int cs,
 				     const struct nand_interface_config *conf)
 {
@@ -804,6 +826,8 @@ static int pl35x_nfc_setup_interface(struct nand_chip *chip, int cs,
 	const struct nand_sdr_timings *sdr;
 	unsigned int period_ns, val;
 	struct clk *mclk;
+	unsigned long memclk_of_timing_freq;
+	int ret = 0;
 
 	sdr = nand_get_sdr_timings(conf);
 	if (IS_ERR(sdr))
@@ -813,6 +837,23 @@ static int pl35x_nfc_setup_interface(struct nand_chip *chip, int cs,
 	if (IS_ERR(mclk)) {
 		dev_err(nfc->dev, "Failed to retrieve SMC memclk\n");
 		return PTR_ERR(mclk);
+	}
+
+	/*
+	 * NI Zynq based devices require different rates for different timing modes
+	 * so we need to set the rate according to the timing modes
+	 */
+	memclk_of_timing_freq = of_get_memclk_freq(
+		nfc->dev->parent->of_node,
+		conf->timings.mode);
+
+	if (memclk_of_timing_freq) {
+		ret = clk_set_rate(mclk, memclk_of_timing_freq);
+		if (ret) {
+			pr_err("Failed to set memclk timing frequency to %lu\n",
+				memclk_of_timing_freq);
+			return ret;
+		}
 	}
 
 	/*
