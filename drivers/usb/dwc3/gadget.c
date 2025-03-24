@@ -438,9 +438,17 @@ skip_status:
 			dwc3_gadget_ep_get_transfer_index(dep);
 	}
 
+	/*
+	 * mdelay below breaks USBLAN in cRIO-9041 and other devices. Commenting
+	 * out instead of removing so git doesn't drop this silently during
+	 * upstream merges if upstream moves this to a different place in
+	 * future.
+	 *
+	 * AB#2419039
+	 */
 	if (DWC3_DEPCMD_CMD(cmd) == DWC3_DEPCMD_ENDTRANSFER &&
 	    !(cmd & DWC3_DEPCMD_CMDIOC))
-		mdelay(1);
+		; /* mdelay(1); */
 
 	if (saved_config) {
 		reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
