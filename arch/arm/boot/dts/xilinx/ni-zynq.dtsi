@@ -118,6 +118,8 @@
 };
 
 &i2c0 {
+	status = "okay";
+
 	nicpld@40 {
 		compatible = "ni,cpld";
 		reg = <0x40>;
