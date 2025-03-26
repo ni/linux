@@ -105,19 +105,31 @@
 			port@1 {
 				reg = <1>;
 				label = "sw0";
-				fixed-link {
-					speed = <1000>;
-					full-duplex;
-				};
+				phy-handle = <&swphy1>;
 			};
 
 			port@2 {
 				reg = <2>;
 				label = "sw1";
-				fixed-link {
-					speed = <1000>;
-					full-duplex;
-				};
+				phy-handle = <&swphy2>;
+			};
+		};
+
+		mdio {
+			swphy1: ethernet-phy@11 {
+				reg = <0x11>;
+			};
+
+			swphy2: ethernet-phy@12 {
+				reg = <0x12>;
+			};
+
+			swphy3: ethernet-phy@13 {
+				reg = <0x13>;
+			};
+
+			swphy4: ethernet-phy@14 {
+				reg = <0x14>;
 			};
 		};
 	};
