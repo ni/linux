@@ -68,48 +68,6 @@
 			gpio57-settings  = "level-low";
 		};
 
-		i2c0: i2c@e0004000 {
-			nicpld@40 {
-				watchdogs {
-					boot-watchdog {
-						interrupt-parent = <&gpio>;
-						interrupts = <15 2 /* IRQ_TYPE_EDGE_FALLING */>;
-					};
-				};
-
-				leds {
-					status-0 {
-						label = "nilrt:status:yellow";
-						max-brightness = <0xFFFF>;
-					};
-					eth0-0 {
-						label = "nilrt:eth0:green";
-						linux,default-trigger =
-						  "e000b000.etherne:00:100Mb";
-					};
-					eth0-1 {
-						label = "nilrt:eth0:yellow";
-						linux,default-trigger =
-						  "e000b000.etherne:00:Gb";
-					};
-				};
-			};
-
-			ds3231_rtc@68 {
-				status = "okay";
-			};
-		};
-
-		i2c1: i2c@e0005000 {
-			status = "okay";
-
-			ad7291_adc@2c {
-				compatible = "ad7291";
-				status = "okay";
-				reg = <0x2C>;
-			};
-		} ;
-
 		spiController1: spi@0x80001000 {
 			compatible = "cdns,spi-r1p6";
 			status = "okay";
@@ -526,6 +484,50 @@
 				/* Set RX_CLK Pad Skew [4:0] to 0b00000. */
 				rxc-skew-ps = <0>;
 		};
+};
+
+&i2c0 {
+	/* Override ni-zynq.dtsi */
+	nicpld@40 {
+		watchdogs {
+			boot-watchdog {
+				interrupt-parent = <&gpio>;
+				interrupts = <15 2 /* IRQ_TYPE_EDGE_FALLING */>;
+			};
+		};
+
+		leds {
+			status-0 {
+				label = "nilrt:status:yellow";
+				max-brightness = <0xFFFF>;
+			};
+			eth0-0 {
+				label = "nilrt:eth0:green";
+				linux,default-trigger =
+				  "e000b000.etherne:00:100Mb";
+			};
+			eth0-1 {
+				label = "nilrt:eth0:yellow";
+				linux,default-trigger =
+				  "e000b000.etherne:00:Gb";
+			};
+		};
+	};
+
+	ds3231_rtc@68 {
+		status = "okay";
+	};
+};
+
+&i2c1 {
+	/* Override ni-zynq.dtsi */
+	status = "okay";
+
+	ad7291_adc@2c {
+		compatible = "ad7291";
+		status = "okay";
+		reg = <0x2C>;
+	};
 };
 
 &sdhci0 {
