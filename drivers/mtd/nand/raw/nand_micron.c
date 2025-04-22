@@ -366,6 +366,46 @@ out:
 }
 
 static int
+micron_nand_read_subpage_on_die_ecc(struct nand_chip *chip, uint32_t data_offs,
+				    uint32_t readlen, uint8_t *bufpoi, int page)
+{
+	struct mtd_info *mtd = nand_to_mtd(chip);
+	u8 status;
+	int ret, max_bitflips = 0;
+
+	ret = micron_nand_on_die_ecc_setup(chip, true);
+	if (ret)
+		return ret;
+
+	ret = nand_status_op(chip, &status);
+	if (ret)
+		goto out;
+
+	ret = nand_read_page_op(chip, page, data_offs,
+				bufpoi + data_offs, readlen);
+	if (ret)
+		goto out;
+
+	ret = nand_status_op(chip, &status);
+	if (ret)
+		goto out;
+
+	if (status & NAND_STATUS_FAIL) {
+		/* uncorrected */
+		mtd->ecc_stats.failed++;
+	} else if (status & NAND_ECC_STATUS_WRITE_RECOMMENDED) {
+		/* corrected */
+		max_bitflips = mtd->bitflip_threshold;
+		mtd->ecc_stats.corrected += max_bitflips;
+	}
+
+out:
+	micron_nand_on_die_ecc_setup(chip, false);
+
+	return ret ? ret : max_bitflips;
+}
+
+static int
 micron_nand_write_page_on_die_ecc(struct nand_chip *chip, const uint8_t *buf,
 				  int oob_required, int page)
 {
@@ -379,6 +419,15 @@ micron_nand_write_page_on_die_ecc(struct nand_chip *chip, const uint8_t *buf,
 	micron_nand_on_die_ecc_setup(chip, false);
 
 	return ret;
+}
+
+static int
+micron_nand_write_subpage_on_die_ecc(struct nand_chip *chip,
+				     uint32_t offset, uint32_t data_len,
+				     const uint8_t *data_buf,
+				     int oob_required, int page)
+{
+	return micron_nand_write_page_on_die_ecc(chip, data_buf, oob_required, page);
 }
 
 enum {
@@ -550,7 +599,9 @@ static int micron_nand_init(struct nand_chip *chip)
 		chip->ecc.strength = requirements->strength;
 		chip->ecc.algo = NAND_ECC_ALGO_BCH;
 		chip->ecc.read_page = micron_nand_read_page_on_die_ecc;
+		chip->ecc.read_subpage = micron_nand_read_subpage_on_die_ecc;
 		chip->ecc.write_page = micron_nand_write_page_on_die_ecc;
+		chip->ecc.write_subpage = micron_nand_write_subpage_on_die_ecc;
 
 		if (ondie == MICRON_ON_DIE_MANDATORY) {
 			chip->ecc.read_page_raw = nand_read_page_raw_notsupp;
