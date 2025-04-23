@@ -670,7 +670,7 @@ disable_ecc_engine:
 static int pl35x_nand_read_subpage_raw(struct nand_chip *chip, uint32_t data_offs,
 				       uint32_t readlen, uint8_t *bufpoi, int page)
 {
-	return nand_read_page_op(chip, page, data_offs, bufpoi + data_offs, readlen);
+	return nand_monolithic_read_page_raw(chip, bufpoi, 0, page);
 }
 
 static int pl35x_nand_exec_op(struct nand_chip *chip,
