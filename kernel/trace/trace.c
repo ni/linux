@@ -7322,85 +7322,19 @@ tracing_mark_raw_write(struct file *filp, const char __user *ubuf,
 }
 
 /*
- * rtollert: tracing_ni_ett_raw_write exists as part of LabVIEW RT's support of
- * the Execution Trace Toolkit. LabVIEW RT logs its own events through this
- * interface, so that they are stored in ftrace's ring buffers. Basically
- * tracing_ni_ett_raw_write is the same as tracing_mark_write, except all the
- * text processing code is ripped out for improved performance.
+ * tracing_ni_ett_raw_write was added as part of LabVIEW RT's support of the
+ * Execution Trace Toolkit (RTETT). But RTETT is being deprecated in favor of
+ * using open source tooling, including ftrace and kernelshark. Keep the
+ * trace_ni_ett_marker file and just enough implementation to not break existing
+ * VIs.
  *
- * These events will show up as BPRINT ftrace events, with ip and fmt set to
- * the fourcc 'lvrt'. The event data is generally a binary blob that is
- * processed later by LabVIEW RT (and ultimately the ETT). That data is not
- * meant to be parsed by third parties and is not documented (sorry).
- *
- * I'm a little embarrassed of this implementation, so this code goes out of
- * its way to scream "HACK!": The hardcoded settings for ip and fmt; the
- * name of the marker file (trace_ni_ett_marker), etc.
- *
- * Eventually I'd like to see a solution which would allow multiple programs
- * to each write to their own marker files, with dynamically allocated IDs,
- * without overloading BPRINT events, etc. However a lot of that is contingent
- * on if it's even a good idea to allow binary blobs to be logged to ftrace.
- * (a worthwhile discussion!)
+ * This can be completely removed when support is dropped for old LabVIEW
+ * versions shipping RTETT VIs.
  */
 static ssize_t
 tracing_ni_ett_raw_write(struct file *filp, const char __user *ubuf,
 					  size_t cnt, loff_t *fpos)
 {
-	struct trace_event_call *call = &event_bprint;
-	struct ring_buffer_event *event;
-	struct trace_array *tr = &global_trace;
-	struct trace_buffer *buffer = tr->array_buffer.buffer;
-	struct trace_array_cpu *data;
-	int cpu, size;
-	unsigned int trace_ctx;
-	struct bprint_entry *entry;
-	unsigned long irq_flags;
-	int disable;
-
-	const unsigned int ip = 0x6c767274; /* "lvrt" */
-	const char *fmt = "lvrt"; /* to avoid dereferencing NULL */
-
-	if (tracing_disabled || tracing_selftest_running)
-		return -EINVAL;
-
-	preempt_disable_notrace();
-	cpu = raw_smp_processor_id();
-	data = per_cpu_ptr(tr->array_buffer.data, cpu);
-	disable = atomic_inc_return(&data->disabled);
-	if (unlikely(disable != 1))
-		goto out;
-	pause_graph_tracing();
-	raw_local_irq_save(irq_flags);
-
-	trace_ctx = tracing_gen_ctx_flags(irq_flags);
-	size = sizeof(*entry) + cnt;
-	event = __trace_buffer_lock_reserve(buffer, TRACE_BPRINT, size,
-					trace_ctx);
-	if (!event)
-		goto out_unlock;
-	entry = ring_buffer_event_data(event);
-	entry->ip = ip;
-	entry->fmt = fmt;
-
-	if (cnt) {
-		if (copy_from_user(&(entry->buf[0]), ubuf, cnt)) {
-			cnt = -EFAULT;
-			goto error_and_trace;
-		}
-	}
-	if (call_filter_check_discard(call, entry, buffer, event))
-		goto out_unlock;
- error_and_trace:
-	__buffer_unlock_commit(buffer, event);
-	ftrace_trace_stack(&global_trace, buffer, trace_ctx, 6, NULL);
- out_unlock:
-	raw_local_irq_restore(irq_flags);
-	unpause_graph_tracing();
- out:
-	atomic_dec_return(&data->disabled);
-	preempt_enable_notrace();
-
 	return cnt;
 }
 
