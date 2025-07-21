@@ -1007,7 +1007,21 @@ static void hda_generic_machine_select(struct snd_sof_dev *sdev,
 		if (!*mach && codec_num <= 2) {
 			bool tplg_fixup = false;
 
-			hda_mach = snd_soc_acpi_intel_hda_machines;
+			/*
+			 * make a local copy of the match array since we might
+			 * be modifying it
+			 */
+			hda_mach = devm_kmemdup_array(sdev->dev,
+					snd_soc_acpi_intel_hda_machines,
+					2, /* we have one entry + sentinel in the array */
+					sizeof(snd_soc_acpi_intel_hda_machines[0]),
+					GFP_KERNEL);
+			if (!hda_mach) {
+				dev_err(bus->dev,
+					"%s: failed to duplicate the HDA match table\n",
+					__func__);
+				return;
+			}
 
 			dev_info(bus->dev, "using HDA machine driver %s now\n",
 				 hda_mach->drv_name);
@@ -1195,11 +1209,11 @@ static int check_tplg_quirk_mask(struct snd_soc_acpi_mach *mach)
 	return 0;
 }
 
-static char *remove_file_ext(const char *tplg_filename)
+static char *remove_file_ext(struct device *dev, const char *tplg_filename)
 {
 	char *filename, *tmp;
 
-	filename = kstrdup(tplg_filename, GFP_KERNEL);
+	filename = devm_kstrdup(dev, tplg_filename, GFP_KERNEL);
 	if (!filename)
 		return NULL;
 
@@ -1283,7 +1297,7 @@ struct snd_soc_acpi_mach *hda_machine_select(struct snd_sof_dev *sdev)
 		 */
 		if (!sof_pdata->tplg_filename) {
 			/* remove file extension if it exists */
-			tplg_filename = remove_file_ext(mach->sof_tplg_filename);
+			tplg_filename = remove_file_ext(sdev->dev, mach->sof_tplg_filename);
 			if (!tplg_filename)
 				return NULL;
 
