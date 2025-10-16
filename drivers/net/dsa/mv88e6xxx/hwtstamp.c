@@ -56,6 +56,21 @@ static int mv88e6xxx_ptp_read(struct mv88e6xxx_chip *chip, int addr,
 	return chip->info->ops->avb_ops->ptp_read(chip, addr, data, 1);
 }
 
+static int mv88e6xxx_can_embed_rxtstamp(struct mv88e6xxx_chip *chip)
+{
+	switch (chip->info->family) {
+	/* Families with "Generation 3" and later PTP IP */
+	case MV88E6XXX_FAMILY_6320:
+	case MV88E6XXX_FAMILY_6341:
+	case MV88E6XXX_FAMILY_6352:
+	case MV88E6XXX_FAMILY_6390:
+	case MV88E6XXX_FAMILY_6393:
+		return true;
+	default:
+		return false;
+	}
+}
+
 /* TX_TSTAMP_TIMEOUT: This limits the time spent polling for a TX
  * timestamp. When working properly, hardware will produce a timestamp
  * within 1ms. Software may enounter delays due to MDIO contention, so
@@ -301,22 +316,71 @@ static void mv88e6xxx_get_rxts(struct mv88e6xxx_chip *chip,
 	}
 }
 
+static void mv88e6xxx_get_rxts_from_header(struct mv88e6xxx_chip *chip,
+					   struct mv88e6xxx_port_hwtstamp *ps,
+					   struct sk_buff *skb,
+					   struct sk_buff_head *rxq)
+{
+	struct skb_shared_hwtstamps *shwt;
+	struct sk_buff_head received;
+	struct ptp_header *hdr;
+	unsigned long flags;
+	unsigned int type;
+	u64 ns;
+
+	__skb_queue_head_init(&received);
+	spin_lock_irqsave(&rxq->lock, flags);
+	skb_queue_splice_tail_init(rxq, &received);
+	spin_unlock_irqrestore(&rxq->lock, flags);
+
+	for ( ; skb; skb = __skb_dequeue(&received)) {
+		type = SKB_PTP_TYPE(skb);
+		hdr = ptp_parse_header(skb, type);
+		if (hdr) {
+			/* The hardware was configured to embed the timestamp
+			 * into the reserved field in the incoming packet.
+			 */
+			ns = be32_to_cpu(hdr->reserved2);
+
+			/* The hardware, however, did not update any applicable
+			 * checksums (such as for UDP) so reset the reserved
+			 * field to 0 so that it matches the state from when
+			 * the checksum was generated.
+			 */
+			hdr->reserved2 = 0;
+
+			mv88e6xxx_reg_lock(chip);
+			ns = timecounter_cyc2time(&chip->tstamp_tc, ns);
+			mv88e6xxx_reg_unlock(chip);
+			shwt = skb_hwtstamps(skb);
+			memset(shwt, 0, sizeof(*shwt));
+			shwt->hwtstamp = ns_to_ktime(ns);
+		}
+		netif_rx(skb);
+	}
+}
+
 static void mv88e6xxx_rxtstamp_work(struct mv88e6xxx_chip *chip,
 				    struct mv88e6xxx_port_hwtstamp *ps)
 {
 	const struct mv88e6xxx_ptp_ops *ptp_ops = chip->info->ops->ptp_ops;
 	struct sk_buff *skb;
 
-	skb = skb_dequeue(&ps->rx_queue);
+	if (mv88e6xxx_can_embed_rxtstamp(chip)) {
+		skb = skb_dequeue(&ps->rx_queue);
+		if (skb)
+			mv88e6xxx_get_rxts_from_header(chip, ps, skb, &ps->rx_queue);
+	} else {
+		skb = skb_dequeue(&ps->rx_queue);
+		if (skb)
+			mv88e6xxx_get_rxts(chip, ps, skb, ptp_ops->arr0_sts_reg,
+					   &ps->rx_queue);
 
-	if (skb)
-		mv88e6xxx_get_rxts(chip, ps, skb, ptp_ops->arr0_sts_reg,
-				   &ps->rx_queue);
-
-	skb = skb_dequeue(&ps->rx_queue2);
-	if (skb)
-		mv88e6xxx_get_rxts(chip, ps, skb, ptp_ops->arr1_sts_reg,
-				   &ps->rx_queue2);
+		skb = skb_dequeue(&ps->rx_queue2);
+		if (skb)
+			mv88e6xxx_get_rxts(chip, ps, skb, ptp_ops->arr1_sts_reg,
+					   &ps->rx_queue2);
+	}
 }
 
 static int is_pdelay_resp(const struct ptp_header *hdr)
@@ -343,7 +407,7 @@ bool mv88e6xxx_port_rxtstamp(struct dsa_switch *ds, int port,
 
 	SKB_PTP_TYPE(skb) = type;
 
-	if (is_pdelay_resp(hdr))
+	if (is_pdelay_resp(hdr) && !mv88e6xxx_can_embed_rxtstamp(chip))
 		skb_queue_tail(&ps->rx_queue2, skb);
 	else
 		skb_queue_tail(&ps->rx_queue, skb);
@@ -529,6 +593,20 @@ int mv88e6352_hwtstamp_port_disable(struct mv88e6xxx_chip *chip, int port)
 
 int mv88e6352_hwtstamp_port_enable(struct mv88e6xxx_chip *chip, int port)
 {
+	int err;
+
+	if (mv88e6xxx_can_embed_rxtstamp(chip)) {
+		/* Some versions of the Marvell PTP IP can be configured to
+		 * place timestamps into the 32-bit "reserved" field; this
+		 * avoids the possibility of timestamps being overwritten
+		 * because software hasn't read them in time.
+		 */
+		err = mv88e6xxx_port_ptp_write(chip, port, MV88E6XXX_PORT_PTP_CFG2,
+					       MV88E6XXX_PORT_PTP_CFG2_EMBED_ARRIVAL);
+		if (err)
+			return err;
+	}
+
 	return mv88e6xxx_port_ptp_write(chip, port, MV88E6XXX_PORT_PTP_CFG0,
 					MV88E6XXX_PORT_PTP_CFG0_DISABLE_TSPEC_MATCH);
 }
