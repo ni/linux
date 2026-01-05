@@ -1,4 +1,5 @@
 /dts-v1/;
+#include <dt-bindings/interrupt-controller/irq.h>
 /include/ "ni-zynq.dtsi"
 
 /* NIDEVCODE 78C7 */
@@ -86,6 +87,10 @@
 		compatible = "marvell,mv88e6085";
 		reg = <0x0>;
 		status = "okay";
+		interrupt-parent = <&intc>;
+		interrupts = <45 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
 
 		ports {
 			#address-cells = <1>;
@@ -122,14 +127,6 @@
 
 			swphy2: ethernet-phy@12 {
 				reg = <0x12>;
-			};
-
-			swphy3: ethernet-phy@13 {
-				reg = <0x13>;
-			};
-
-			swphy4: ethernet-phy@14 {
-				reg = <0x14>;
 			};
 		};
 	};
