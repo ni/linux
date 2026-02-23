@@ -80,14 +80,14 @@ int amdgpu_dpm_set_powergating_by_smu(struct amdgpu_device *adev,
 	enum ip_power_state pwr_state = gate ? POWER_STATE_OFF : POWER_STATE_ON;
 	bool is_vcn = block_type == AMD_IP_BLOCK_TYPE_VCN;
 
+	mutex_lock(&adev->pm.mutex);
+
 	if (atomic_read(&adev->pm.pwr_state[block_type]) == pwr_state &&
 			(!is_vcn || adev->vcn.num_vcn_inst == 1)) {
 		dev_dbg(adev->dev, "IP block%d already in the target %s state!",
 				block_type, gate ? "gate" : "ungate");
-		return 0;
+		goto out_unlock;
 	}
-
-	mutex_lock(&adev->pm.mutex);
 
 	switch (block_type) {
 	case AMD_IP_BLOCK_TYPE_UVD:
@@ -115,6 +115,7 @@ int amdgpu_dpm_set_powergating_by_smu(struct amdgpu_device *adev,
 	if (!ret)
 		atomic_set(&adev->pm.pwr_state[block_type], pwr_state);
 
+out_unlock:
 	mutex_unlock(&adev->pm.mutex);
 
 	return ret;
@@ -188,24 +189,6 @@ int amdgpu_dpm_set_mp1_state(struct amdgpu_device *adev,
 		ret = pp_funcs->set_mp1_state(
 				adev->powerplay.pp_handle,
 				mp1_state);
-
-		mutex_unlock(&adev->pm.mutex);
-	}
-
-	return ret;
-}
-
-int amdgpu_dpm_notify_rlc_state(struct amdgpu_device *adev, bool en)
-{
-	int ret = 0;
-	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
-
-	if (pp_funcs && pp_funcs->notify_rlc_state) {
-		mutex_lock(&adev->pm.mutex);
-
-		ret = pp_funcs->notify_rlc_state(
-				adev->powerplay.pp_handle,
-				en);
 
 		mutex_unlock(&adev->pm.mutex);
 	}

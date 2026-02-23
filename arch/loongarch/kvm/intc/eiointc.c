@@ -439,7 +439,7 @@ static int kvm_eiointc_ctrl_access(struct kvm_device *dev,
 	spin_lock_irqsave(&s->lock, flags);
 	switch (type) {
 	case KVM_DEV_LOONGARCH_EXTIOI_CTRL_INIT_NUM_CPU:
-		if (val >= EIOINTC_ROUTE_MAX_VCPUS)
+		if (val > EIOINTC_ROUTE_MAX_VCPUS)
 			ret = -EINVAL;
 		else
 			s->num_cpu = val;
@@ -679,6 +679,7 @@ static void kvm_eiointc_destroy(struct kvm_device *dev)
 	kvm_io_bus_unregister_dev(kvm, KVM_IOCSR_BUS, &eiointc->device);
 	kvm_io_bus_unregister_dev(kvm, KVM_IOCSR_BUS, &eiointc->device_vext);
 	kfree(eiointc);
+	kfree(dev);
 }
 
 static struct kvm_device_ops kvm_eiointc_dev_ops = {

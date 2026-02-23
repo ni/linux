@@ -196,6 +196,7 @@ static int io_import_umem(struct io_zcrx_ifq *ifq,
 					GFP_KERNEL_ACCOUNT);
 	if (ret) {
 		unpin_user_pages(pages, nr_pages);
+		kvfree(pages);
 		return ret;
 	}
 
@@ -599,29 +600,30 @@ int io_register_zcrx_ifq(struct io_ring_ctx *ctx,
 	if (ret)
 		goto err;
 
-	ifq->netdev = netdev_get_by_index(current->nsproxy->net_ns, reg.if_idx,
-					  &ifq->netdev_tracker, GFP_KERNEL);
+	ifq->netdev = netdev_get_by_index_lock(current->nsproxy->net_ns, reg.if_idx);
 	if (!ifq->netdev) {
 		ret = -ENODEV;
 		goto err;
 	}
+	netdev_hold(ifq->netdev, &ifq->netdev_tracker, GFP_KERNEL);
 
 	ifq->dev = netdev_queue_get_dma_dev(ifq->netdev, reg.if_rxq);
 	if (!ifq->dev) {
 		ret = -EOPNOTSUPP;
-		goto err;
+		goto netdev_put_unlock;
 	}
 	get_device(ifq->dev);
 
 	ret = io_zcrx_create_area(ifq, &area);
 	if (ret)
-		goto err;
+		goto netdev_put_unlock;
 
 	mp_param.mp_ops = &io_uring_pp_zc_ops;
 	mp_param.mp_priv = ifq;
-	ret = net_mp_open_rxq(ifq->netdev, reg.if_rxq, &mp_param);
+	ret = __net_mp_open_rxq(ifq->netdev, reg.if_rxq, &mp_param, NULL);
 	if (ret)
-		goto err;
+		goto netdev_put_unlock;
+	netdev_unlock(ifq->netdev);
 	ifq->if_rxq = reg.if_rxq;
 
 	reg.zcrx_id = id;
@@ -640,6 +642,9 @@ int io_register_zcrx_ifq(struct io_ring_ctx *ctx,
 		goto err;
 	}
 	return 0;
+netdev_put_unlock:
+	netdev_put(ifq->netdev, &ifq->netdev_tracker);
+	netdev_unlock(ifq->netdev);
 err:
 	scoped_guard(mutex, &ctx->mmap_lock)
 		xa_erase(&ctx->zcrx_ctxs, id);
@@ -927,74 +932,6 @@ static const struct memory_provider_ops io_uring_pp_zc_ops = {
 	.nl_fill		= io_pp_nl_fill,
 	.uninstall		= io_pp_uninstall,
 };
-
-#define IO_ZCRX_MAX_SYS_REFILL_BUFS		(1 << 16)
-#define IO_ZCRX_SYS_REFILL_BATCH		32
-
-static void io_return_buffers(struct io_zcrx_ifq *ifq,
-			      struct io_uring_zcrx_rqe *rqes, unsigned nr)
-{
-	int i;
-
-	for (i = 0; i < nr; i++) {
-		struct net_iov *niov;
-		netmem_ref netmem;
-
-		if (!io_parse_rqe(&rqes[i], ifq, &niov))
-			continue;
-
-		scoped_guard(spinlock_bh, &ifq->rq_lock) {
-			if (!io_zcrx_put_niov_uref(niov))
-				continue;
-		}
-
-		netmem = net_iov_to_netmem(niov);
-		if (!page_pool_unref_and_test(netmem))
-			continue;
-		io_zcrx_return_niov(niov);
-	}
-}
-
-int io_zcrx_return_bufs(struct io_ring_ctx *ctx,
-			void __user *arg, unsigned nr_arg)
-{
-	struct io_uring_zcrx_rqe rqes[IO_ZCRX_SYS_REFILL_BATCH];
-	struct io_uring_zcrx_rqe __user *user_rqes;
-	struct io_uring_zcrx_sync_refill zr;
-	struct io_zcrx_ifq *ifq;
-	unsigned nr, i;
-
-	if (nr_arg)
-		return -EINVAL;
-	if (copy_from_user(&zr, arg, sizeof(zr)))
-		return -EFAULT;
-	if (!zr.nr_entries || zr.nr_entries > IO_ZCRX_MAX_SYS_REFILL_BUFS)
-		return -EINVAL;
-	if (!mem_is_zero(&zr.__resv, sizeof(zr.__resv)))
-		return -EINVAL;
-
-	ifq = xa_load(&ctx->zcrx_ctxs, zr.zcrx_id);
-	if (!ifq)
-		return -EINVAL;
-	nr = zr.nr_entries;
-	user_rqes = u64_to_user_ptr(zr.rqes);
-
-	for (i = 0; i < nr;) {
-		unsigned batch = min(nr - i, IO_ZCRX_SYS_REFILL_BATCH);
-		size_t size = batch * sizeof(rqes[0]);
-
-		if (copy_from_user(rqes, user_rqes + i, size))
-			return i ? i : -EFAULT;
-		io_return_buffers(ifq, rqes, batch);
-
-		i += batch;
-
-		if (fatal_signal_pending(current))
-			return i;
-		cond_resched();
-	}
-	return nr;
-}
 
 static bool io_zcrx_queue_cqe(struct io_kiocb *req, struct net_iov *niov,
 			      struct io_zcrx_ifq *ifq, int off, int len)

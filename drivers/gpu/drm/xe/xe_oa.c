@@ -10,6 +10,7 @@
 
 #include <drm/drm_drv.h>
 #include <drm/drm_managed.h>
+#include <drm/drm_syncobj.h>
 #include <uapi/drm/xe_drm.h>
 
 #include <generated/xe_wa_oob.h>
@@ -1103,11 +1104,12 @@ static int xe_oa_enable_metric_set(struct xe_oa_stream *stream)
 			oag_buf_size_select(stream) |
 			oag_configure_mmio_trigger(stream, true));
 
-	xe_mmio_write32(mmio, __oa_regs(stream)->oa_ctx_ctrl, stream->periodic ?
-			(OAG_OAGLBCTXCTRL_COUNTER_RESUME |
+	xe_mmio_write32(mmio, __oa_regs(stream)->oa_ctx_ctrl,
+			OAG_OAGLBCTXCTRL_COUNTER_RESUME |
+			(stream->periodic ?
 			 OAG_OAGLBCTXCTRL_TIMER_ENABLE |
 			 REG_FIELD_PREP(OAG_OAGLBCTXCTRL_TIMER_PERIOD_MASK,
-					stream->period_exponent)) : 0);
+					 stream->period_exponent) : 0));
 
 	/*
 	 * Initialize Super Queue Internal Cnt Register
@@ -1252,6 +1254,9 @@ static int xe_oa_set_no_preempt(struct xe_oa *oa, u64 value,
 static int xe_oa_set_prop_num_syncs(struct xe_oa *oa, u64 value,
 				    struct xe_oa_open_param *param)
 {
+	if (XE_IOCTL_DBG(oa->xe, value > DRM_XE_MAX_SYNCS))
+		return -EINVAL;
+
 	param->num_syncs = value;
 	return 0;
 }
@@ -1341,7 +1346,7 @@ static int xe_oa_user_ext_set_property(struct xe_oa *oa, enum xe_oa_user_extn_fr
 		     ARRAY_SIZE(xe_oa_set_property_funcs_config));
 
 	if (XE_IOCTL_DBG(oa->xe, ext.property >= ARRAY_SIZE(xe_oa_set_property_funcs_open)) ||
-	    XE_IOCTL_DBG(oa->xe, ext.pad))
+	    XE_IOCTL_DBG(oa->xe, !ext.property) || XE_IOCTL_DBG(oa->xe, ext.pad))
 		return -EINVAL;
 
 	idx = array_index_nospec(ext.property, ARRAY_SIZE(xe_oa_set_property_funcs_open));
@@ -1389,7 +1394,9 @@ static int xe_oa_user_extensions(struct xe_oa *oa, enum xe_oa_user_extn_from fro
 	return 0;
 }
 
-static int xe_oa_parse_syncs(struct xe_oa *oa, struct xe_oa_open_param *param)
+static int xe_oa_parse_syncs(struct xe_oa *oa,
+			     struct xe_oa_stream *stream,
+			     struct xe_oa_open_param *param)
 {
 	int ret, num_syncs, num_ufence = 0;
 
@@ -1409,7 +1416,9 @@ static int xe_oa_parse_syncs(struct xe_oa *oa, struct xe_oa_open_param *param)
 
 	for (num_syncs = 0; num_syncs < param->num_syncs; num_syncs++) {
 		ret = xe_sync_entry_parse(oa->xe, param->xef, &param->syncs[num_syncs],
-					  &param->syncs_user[num_syncs], 0);
+					  &param->syncs_user[num_syncs],
+					  stream->ufence_syncobj,
+					  ++stream->ufence_timeline_value, 0);
 		if (ret)
 			goto err_syncs;
 
@@ -1539,7 +1548,7 @@ static long xe_oa_config_locked(struct xe_oa_stream *stream, u64 arg)
 		return -ENODEV;
 
 	param.xef = stream->xef;
-	err = xe_oa_parse_syncs(stream->oa, &param);
+	err = xe_oa_parse_syncs(stream->oa, stream, &param);
 	if (err)
 		goto err_config_put;
 
@@ -1635,6 +1644,7 @@ static void xe_oa_destroy_locked(struct xe_oa_stream *stream)
 	if (stream->exec_q)
 		xe_exec_queue_put(stream->exec_q);
 
+	drm_syncobj_put(stream->ufence_syncobj);
 	kfree(stream);
 }
 
@@ -1826,6 +1836,7 @@ static int xe_oa_stream_open_ioctl_locked(struct xe_oa *oa,
 					  struct xe_oa_open_param *param)
 {
 	struct xe_oa_stream *stream;
+	struct drm_syncobj *ufence_syncobj;
 	int stream_fd;
 	int ret;
 
@@ -1836,16 +1847,30 @@ static int xe_oa_stream_open_ioctl_locked(struct xe_oa *oa,
 		goto exit;
 	}
 
+	ret = drm_syncobj_create(&ufence_syncobj, DRM_SYNCOBJ_CREATE_SIGNALED,
+				 NULL);
+	if (ret)
+		goto exit;
+
 	stream = kzalloc(sizeof(*stream), GFP_KERNEL);
 	if (!stream) {
 		ret = -ENOMEM;
-		goto exit;
+		goto err_syncobj;
 	}
-
+	stream->ufence_syncobj = ufence_syncobj;
 	stream->oa = oa;
-	ret = xe_oa_stream_init(stream, param);
+
+	ret = xe_oa_parse_syncs(oa, stream, param);
 	if (ret)
 		goto err_free;
+
+	ret = xe_oa_stream_init(stream, param);
+	if (ret) {
+		while (param->num_syncs--)
+			xe_sync_entry_cleanup(&param->syncs[param->num_syncs]);
+		kfree(param->syncs);
+		goto err_free;
+	}
 
 	if (!param->disabled) {
 		ret = xe_oa_enable_locked(stream);
@@ -1870,6 +1895,8 @@ err_destroy:
 	xe_oa_stream_destroy(stream);
 err_free:
 	kfree(stream);
+err_syncobj:
+	drm_syncobj_put(ufence_syncobj);
 exit:
 	return ret;
 }
@@ -2083,22 +2110,14 @@ int xe_oa_stream_open_ioctl(struct drm_device *dev, u64 data, struct drm_file *f
 		goto err_exec_q;
 	}
 
-	ret = xe_oa_parse_syncs(oa, &param);
-	if (ret)
-		goto err_exec_q;
-
 	mutex_lock(&param.hwe->gt->oa.gt_lock);
 	ret = xe_oa_stream_open_ioctl_locked(oa, &param);
 	mutex_unlock(&param.hwe->gt->oa.gt_lock);
 	if (ret < 0)
-		goto err_sync_cleanup;
+		goto err_exec_q;
 
 	return ret;
 
-err_sync_cleanup:
-	while (param.num_syncs--)
-		xe_sync_entry_cleanup(&param.syncs[param.num_syncs]);
-	kfree(param.syncs);
 err_exec_q:
 	if (param.exec_q)
 		xe_exec_queue_put(param.exec_q);
@@ -2388,11 +2407,13 @@ int xe_oa_add_config_ioctl(struct drm_device *dev, u64 data, struct drm_file *fi
 		goto sysfs_err;
 	}
 
+	id = oa_config->id;
+
+	drm_dbg(&oa->xe->drm, "Added config %s id=%i\n", oa_config->uuid, id);
+
 	mutex_unlock(&oa->metrics_lock);
 
-	drm_dbg(&oa->xe->drm, "Added config %s id=%i\n", oa_config->uuid, oa_config->id);
-
-	return oa_config->id;
+	return id;
 
 sysfs_err:
 	mutex_unlock(&oa->metrics_lock);

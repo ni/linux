@@ -2548,8 +2548,15 @@ static int lineinfo_changed_notify(struct notifier_block *nb,
 		container_of(nb, struct gpio_chardev_data, lineinfo_changed_nb);
 	struct lineinfo_changed_ctx *ctx;
 	struct gpio_desc *desc = data;
+	struct file *fp;
 
 	if (!test_bit(gpio_chip_hwgpio(desc), cdev->watched_lines))
+		return NOTIFY_DONE;
+
+	/* Keep the file descriptor alive for the duration of the notification. */
+	fp = get_file_active(&cdev->fp);
+	if (!fp)
+		/* Chardev file descriptor was or is being released. */
 		return NOTIFY_DONE;
 
 	/*
@@ -2566,6 +2573,7 @@ static int lineinfo_changed_notify(struct notifier_block *nb,
 	ctx = kzalloc(sizeof(*ctx), GFP_ATOMIC);
 	if (!ctx) {
 		pr_err("Failed to allocate memory for line info notification\n");
+		fput(fp);
 		return NOTIFY_DONE;
 	}
 
@@ -2575,8 +2583,6 @@ static int lineinfo_changed_notify(struct notifier_block *nb,
 	/* Keep the GPIO device alive until we emit the event. */
 	ctx->gdev = gpio_device_get(desc->gdev);
 	ctx->cdev = cdev;
-	/* Keep the file descriptor alive too. */
-	get_file(ctx->cdev->fp);
 
 	INIT_WORK(&ctx->work, lineinfo_changed_func);
 	queue_work(ctx->gdev->line_state_wq, &ctx->work);
@@ -2715,7 +2721,7 @@ static int gpio_chrdev_open(struct inode *inode, struct file *file)
 
 	cdev = kzalloc(sizeof(*cdev), GFP_KERNEL);
 	if (!cdev)
-		return -ENODEV;
+		return -ENOMEM;
 
 	cdev->watched_lines = bitmap_zalloc(gdev->ngpio, GFP_KERNEL);
 	if (!cdev->watched_lines)
@@ -2815,15 +2821,20 @@ int gpiolib_cdev_register(struct gpio_device *gdev, dev_t devt)
 		return -ENOMEM;
 
 	ret = cdev_device_add(&gdev->chrdev, &gdev->dev);
-	if (ret)
+	if (ret) {
+		destroy_workqueue(gdev->line_state_wq);
 		return ret;
+	}
 
 	guard(srcu)(&gdev->srcu);
 	gc = srcu_dereference(gdev->chip, &gdev->srcu);
-	if (!gc)
+	if (!gc) {
+		cdev_device_del(&gdev->chrdev, &gdev->dev);
+		destroy_workqueue(gdev->line_state_wq);
 		return -ENODEV;
+	}
 
-	chip_dbg(gc, "added GPIO chardev (%d:%d)\n", MAJOR(devt), gdev->id);
+	gpiochip_dbg(gc, "added GPIO chardev (%d:%d)\n", MAJOR(devt), gdev->id);
 
 	return 0;
 }
