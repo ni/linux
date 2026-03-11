@@ -4642,6 +4642,14 @@ void amdgpu_device_fini_hw(struct amdgpu_device *adev)
 
 	amdgpu_ttm_set_buffer_funcs_status(adev, false);
 
+	/*
+	 * device went through surprise hotplug; we need to destroy topology
+	 * before ip_fini_early to prevent kfd locking refcount issues by calling
+	 * amdgpu_amdkfd_suspend()
+	 */
+	if (drm_dev_is_unplugged(adev_to_drm(adev)))
+		amdgpu_amdkfd_device_fini_sw(adev);
+
 	amdgpu_device_ip_fini_early(adev);
 
 	amdgpu_irq_fini_hw(adev);
@@ -5316,6 +5324,9 @@ int amdgpu_device_mode1_reset(struct amdgpu_device *adev)
 
 	if (ret)
 		goto mode1_reset_failed;
+
+	/* enable mmio access after mode 1 reset completed */
+	adev->no_hw_access = false;
 
 	amdgpu_device_load_pci_state(adev->pdev);
 	ret = amdgpu_psp_wait_for_bootloader(adev);
