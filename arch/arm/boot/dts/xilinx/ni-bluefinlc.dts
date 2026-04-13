@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+#include <dt-bindings/interrupt-controller/irq.h>
+/include/ "ni-zynq.dtsi"
+
+/* NIDEVCODE 7B37 */
+/* NIDEVCODE 7B38 */
+
+/ {
+	model = "NI Bluefin LC";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	leds {
+		compatible = "gpio-leds";
+
+		/* LED_STATUSy on GPIO46 */
+		status {
+			label = "nilrt:status:yellow";
+			gpios = <&gpio0 46 0>;
+			default-state = "on";
+		};
+
+		/* LED_ACTIVEg on GPIO47 */
+		active {
+			label = "nilrt:active:green";
+			gpios = <&gpio0 47 0>;
+			default-state = "off";
+		};
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* Reset switch is on GPIO48 */
+		reset_sw@0 {
+			label = "reset_sw";
+			gpios = <&gpio0 48 1 /* GPIO_ACTIVE_LOW */>;
+			linux,code = <408>; /* KEY_RESTART */
+			wakeup-source;
+		};
+	};
+
+	gpio_restart {
+		compatible = "gpio-restart";
+
+		/* ~PS_FORCE_RESET is on GPIO44 */
+		gpios = <&gpio0 44 1 /* GPIO_ACTIVE_LOW */>;
+		priority = <200>;
+	};
+};
+
+&i2c0 {
+	/* Override ni-zynq.dtsi; we do not have a CPLD at 0x40. */
+	nicpld@40 {
+		status = "disabled";
+	};
+
+	tmp451@4c {
+		compatible = "ti,tmp451";
+		reg = <0x4c>;
+		vcc-supply = <&regulator_vccpint>;
+	};
+};
+
+&gem0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+		reg = <0>;
+	};
+
+	mdio0: mdio {
+		status = "okay";
+	};
+};
+
+&mdio0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	switch: switch@0 {
+		compatible = "marvell,mv88e6085";
+		reg = <0>;
+		status = "okay";
+		interrupt-parent = <&intc>;
+		interrupts = <45 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				label = "cpu";
+				phy-mode = "rgmii-id";
+				ethernet = <&gem0>;
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				label = "sw0";
+				phy-handle = <&swphy1>;
+			};
+		};
+
+		mdio {
+			swphy1: ethernet-phy@11 {
+				reg = <0x11>;
+			};
+		};
+	};
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&watchdog0 {
+	status = "okay";
+	reset-on-timeout;
+};
