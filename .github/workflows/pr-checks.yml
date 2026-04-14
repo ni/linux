@@ -21,6 +21,8 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libelf-dev
+          sudo apt install python3-ply
+          sudo apt install python3-git
 
       - name: "[TEST] Build nati_x86_64_defconfig"
         run: |
