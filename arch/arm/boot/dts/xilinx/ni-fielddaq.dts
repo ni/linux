@@ -1,9 +1,14 @@
 /dts-v1/;
 #include <dt-bindings/interrupt-controller/irq.h>
 /include/ "ni-zynq.dtsi"
+/* NIDEVCODE 7A07 */
+/* NIDEVCODE 7945 */
+/* NIDEVCODE 7A32 */
 /* NIDEVCODE 79FF */
+/* NIDEVCODE 7A1C */
 /* NIDEVCODE 7943 */
 /* NIDEVCODE 7941 */
+/* NIDEVCODE 7001 */
 
 / {
 	model = "NI FieldDAQ";
