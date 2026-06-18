@@ -43,7 +43,6 @@ CONFIG_ZBOOT_ROM_BSS=0x0
 CONFIG_CMDLINE="console=ttyPS0,115200n8 root=/dev/ram rw initrd=0x00800000,16M earlyprintk mtdparts=physmap-flash.0:512K(nor-fsbl),512K(nor-u-boot),5M(nor-linux),9M(nor-user),1M(nor-scratch),-(nor-rootfs)"
 CONFIG_VFP=y
 CONFIG_NEON=y
-# CONFIG_CORE_DUMP_DEFAULT_ELF_HEADERS is not set
 # CONFIG_SUSPEND is not set
 CONFIG_NET=y
 CONFIG_PACKET=y
