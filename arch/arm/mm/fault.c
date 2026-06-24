@@ -268,9 +268,13 @@ do_kernel_address_page_fault(struct mm_struct *mm, unsigned long addr,
 		 * Fault from user mode for a kernel space address. User mode
 		 * should not be faulting in kernel space, which includes the
 		 * vector/khelper page. Handle the branch predictor hardening
-		 * while interrupts are still disabled, then send a SIGSEGV.
+		 * while interrupts are still disabled, enable interrupts if
+		 * they were enabled in the parent context, then send a SIGSEGV.
 		 */
 		harden_branch_predictor();
+		if (interrupts_enabled(regs))
+			local_irq_enable();
+
 		__do_user_fault(addr, fsr, SIGSEGV, SEGV_MAPERR, regs);
 	} else {
 		/*
@@ -513,9 +517,6 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
 
 	if (addr < TASK_SIZE)
 		return do_page_fault(addr, fsr, regs);
-
-	if (interrupts_enabled(regs))
-		local_irq_enable();
 
 	if (user_mode(regs))
 		goto bad_area;
