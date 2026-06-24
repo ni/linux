@@ -934,8 +934,6 @@ static int parse_probe_vars(char *orig_arg, const struct fetch_type *t,
 			code->op = FETCH_OP_COMM;
 			return 0;
 		}
-		/* backward compatibility */
-		ctx->offset = 0;
 		goto inval;
 	}
 
@@ -1500,6 +1498,12 @@ static int traceprobe_parse_probe_arg_body(const char *argv, ssize_t *size,
 	}
 	parg->offset = *size;
 	*size += parg->type->size * (parg->count ?: 1);
+
+	if (*size > MAX_PROBE_EVENT_SIZE) {
+		ret = -E2BIG;
+		trace_probe_log_err(ctx->offset, EVENT_TOO_BIG);
+		goto fail;
+	}
 
 	if (parg->count) {
 		len = strlen(parg->type->fmttype) + 6;
