@@ -97,6 +97,11 @@ modules.order
 /tar-install/
 
 #
+# ni specific install directory
+#
+/ni-install/
+
+#
 # pacman files (make pacman-pkg)
 #
 /PKGBUILD

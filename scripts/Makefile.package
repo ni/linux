@@ -189,6 +189,14 @@ tar-pkg: linux-$(KERNELRELEASE)-$(ARCH).tar
 tar%-pkg: linux-$(KERNELRELEASE)-$(ARCH).tar.% FORCE
 	@:
 
+# ni-pkg - generate an NI Zynq FIT image for all device models
+# ---------------------------------------------------------------------------
+
+PHONY += ni-pkg
+ni-pkg: FORCE
+	+$(Q)$(MAKE) -f $(srctree)/Makefile Image modules dtbs
+	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/package/buildnipkg
+
 # perf-tar*-src-pkg - generate a source tarball with perf source
 # ---------------------------------------------------------------------------
 
@@ -245,6 +253,7 @@ help:
 	@echo '  tarbz2-pkg          - Build the kernel as a bzip2 compressed tarball'
 	@echo '  tarxz-pkg           - Build the kernel as a xz compressed tarball'
 	@echo '  tarzst-pkg          - Build the kernel as a zstd compressed tarball'
+	@echo '  ni-pkg              - Build the kernel and needed files for NI targets'
 	@echo '  perf-tar-src-pkg    - Build the perf source tarball with no compression'
 	@echo '  perf-targz-src-pkg  - Build the perf source tarball with gzip compression'
 	@echo '  perf-tarbz2-src-pkg - Build the perf source tarball with bz2 compression'
