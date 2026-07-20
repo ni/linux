@@ -1315,9 +1315,9 @@ static noinline int __btrfs_ioctl_snap_create(struct file *file,
 		ret = btrfs_mksubvol(&file->f_path, idmap, name,
 				     namelen, NULL, readonly, inherit);
 	} else {
-		struct fd src = fdget(fd);
+		CLASS(fd, src)(fd);
 		struct inode *src_inode;
-		if (!fd_file(src)) {
+		if (fd_empty(src)) {
 			ret = -EINVAL;
 			goto out_drop_write;
 		}
@@ -1348,7 +1348,6 @@ static noinline int __btrfs_ioctl_snap_create(struct file *file,
 					       BTRFS_I(src_inode)->root,
 					       readonly, inherit);
 		}
-		fdput(src);
 	}
 out_drop_write:
 	mnt_drop_write_file(file);
@@ -3113,7 +3112,7 @@ static long btrfs_ioctl_space_info(struct btrfs_fs_info *fs_info,
 		return -ENOMEM;
 
 	space_args.total_spaces = 0;
-	dest = kmalloc(alloc_size, GFP_KERNEL);
+	dest = kzalloc(alloc_size, GFP_KERNEL);
 	if (!dest)
 		return -ENOMEM;
 	dest_orig = dest;
@@ -3169,7 +3168,8 @@ static long btrfs_ioctl_space_info(struct btrfs_fs_info *fs_info,
 	user_dest = (struct btrfs_ioctl_space_info __user *)
 		(arg + sizeof(struct btrfs_ioctl_space_args));
 
-	if (copy_to_user(user_dest, dest_orig, alloc_size))
+	if (copy_to_user(user_dest, dest_orig,
+		 space_args.total_spaces * sizeof(*dest_orig)))
 		ret = -EFAULT;
 
 	kfree(dest_orig);
