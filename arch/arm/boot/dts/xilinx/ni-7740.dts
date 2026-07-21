@@ -1,0 +1,6 @@
+/dts-v1/;
+/include/ "ni-solgood.dtsi"
+
+/ {
+	model = "NI cRIO-9063";
+};

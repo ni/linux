@@ -14,4 +14,28 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	zynq-zturn.dtb \
 	zynq-zturn-v5.dtb \
 	zynq-zybo.dtb \
-	zynq-zybo-z7.dtb
+	zynq-zybo-z7.dtb \
+	ni-7931.dtb \
+	ni-7932.dtb \
+	ni-7935.dtb \
+	ni-762F.dtb \
+	ni-76D3.dtb \
+	ni-76D6.dtb \
+	ni-76F2.dtb \
+	ni-7740.dtb \
+	ni-7741.dtb \
+	ni-7742.dtb \
+	ni-7743.dtb \
+	ni-7744.dtb \
+	ni-774C.dtb \
+	ni-774E.dtb \
+	ni-775E.dtb \
+	ni-77AC.dtb \
+	ni-77B1.dtb \
+	ni-77B2.dtb \
+	ni-77D4.dtb \
+	ni-77D5.dtb \
+	ni-77D6.dtb \
+	ni-7885.dtb \
+	ni-793C.dtb \
+	ni-7AAE.dtb

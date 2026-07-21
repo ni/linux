@@ -1,0 +1,138 @@
+/dts-v1/;
+/include/ "ni-zynq.dtsi"
+
+/ {
+	model = "NI cRIO-9068";
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+
+	amba@0 {
+		i2c0: i2c@e0004000 {
+			nicpld@40 {
+				watchdogs {
+					boot-watchdog {
+						interrupt-parent = <&gpio>;
+						interrupts = <46 2 /* IRQ_TYPE_EDGE_FALLING */>;
+					};
+				};
+
+				leds {
+					user1-0 {
+						label = "nilrt:user1:green";
+					};
+					user1-1 {
+						label = "nilrt:user1:yellow";
+					};
+					status-0 {
+						label = "nilrt:status:red";
+					};
+					status-1 {
+						label = "nilrt:status:yellow";
+						max-brightness = <0xFFFF>;
+					};
+					eth0-0 {
+						label = "nilrt:eth0:green";
+						linux,default-trigger =
+						  "e000b000.ethernet-ffffffff:00:100Mbps";
+					};
+					eth0-1 {
+						label = "nilrt:eth0:yellow";
+						linux,default-trigger =
+						  "e000b000.ethernet-ffffffff:00:1Gbps";
+					};
+					eth1-0 {
+						label = "nilrt:eth1:green";
+						linux,default-trigger =
+						  "e000b000.ethernet-ffffffff:01:100Mbps";
+					};
+					eth1-1 {
+						label = "nilrt:eth1:yellow";
+						linux,default-trigger =
+						  "e000b000.ethernet-ffffffff:01:1Gbps";
+					};
+				};
+			};
+
+			ds3231_rtc@68 {
+				status = "okay";
+			};
+		};
+	};
+};
+
+&gem0 {
+	status = "okay";
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	phy0: phy@0 {
+		compatible = "marvell,88e1512","ethernet-phy-ieee802.3-c22";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* Interrupt on GPIO1, shared with phy1. */
+		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
+		interrupt-parent = <&gpio>;
+
+		/* marvell,reg-init = <reg-page reg mask value>
+		 *
+		 * reg-page = MII_MARVELL_LED_PAGE (3)
+		 * reg = PHY_LED_CTRL (16)
+		 * value = 0x1881 (LED[0] = on:link, blink:activity, off:no link)
+		 */
+		marvell,reg-init = <3 16 0 0x1881>;
+	};
+
+	phy1: phy@1 {
+		compatible = "marvell,88e1512","ethernet-phy-ieee802.3-c22";
+		device_type = "ethernet-phy";
+		reg = <0x1>;
+		/* Interrupt on GPIO1, shared with phy0. */
+		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
+		interrupt-parent = <&gpio>;
+
+		/* marvell,reg-init = <reg-page reg mask value>
+		 *
+		 * reg-page = MII_MARVELL_LED_PAGE (3)
+		 * reg = PHY_LED_CTRL (16)
+		 * value = 0x1881 (LED[0] = on:link, blink:activity, off:no link)
+		 */
+		marvell,reg-init = <3 16 0 0x1881>;
+	};
+};
+
+&gem1 {
+	status = "okay";
+	clocks = <&clkc 31>, <&clkc 14>, <&clkc 15>;
+	clock-names = "pclk", "hclk", "tx_clk";
+	phy-handle = <&phy1>;
+	phy-mode = "rgmii-id";
+	cdns,no_mdio_bus;
+	emio-speed-gpios = <0>,
+			   <&gpio 54 0>;
+};
+
+&ni_uart0 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart1 {
+	status = "okay";
+	transceiver = "RS-232";
+};
+
+&ni_uart2 {
+	status = "okay";
+	transceiver = "RS-485";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&clkc {
+	/* Enable fclk1 for serial. */
+	fclk-enable = <0x2>;
+};
