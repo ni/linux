@@ -15,9 +15,6 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
 	zynq-zturn-v5.dtb \
 	zynq-zybo.dtb \
 	zynq-zybo-z7.dtb \
-	ni-7931.dtb \
-	ni-7932.dtb \
-	ni-7935.dtb \
 	ni-762F.dtb \
 	ni-76D3.dtb \
 	ni-76D6.dtb \
