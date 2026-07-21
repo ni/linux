@@ -243,7 +243,19 @@ static int ni16550_get_regs(struct platform_device *pdev,
 		port->iotype = UPIO_MEM;
 		port->mapbase = regs->start;
 		port->mapsize = resource_size(regs);
-		port->flags |= UPF_IOREMAP;
+
+		/*
+		 * Map the registers here (rather than relying on the generic
+		 * UPF_IOREMAP deferred-mapping mechanism, which only ioremaps
+		 * when the port is started) because this driver reads
+		 * hardware registers (FIFO sizes, PMR, etc.) directly during
+		 * probe(), before the port is ever started.
+		 */
+		port->membase = devm_ioremap(&pdev->dev, regs->start,
+					     resource_size(regs));
+		if (!port->membase)
+			return dev_err_probe(&pdev->dev, -ENOMEM,
+					     "cannot map registers\n");
 
 		return 0;
 	default:
