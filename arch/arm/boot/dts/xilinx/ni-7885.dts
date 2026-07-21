@@ -4,13 +4,13 @@
 / {
 	model = "NI ELVIS RIO CM";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
+};
 
-	amba@0 {
-		i2c0: i2c@e0004000 {
+&i2c0 {
 			nicpld@40 {
 				watchdogs {
 					boot-watchdog {
-						interrupt-parent = <&gpio>;
+						interrupt-parent = <&gpio0>;
 						interrupts = <24 2 /* IRQ_TYPE_EDGE_FALLING */>;
 					};
 				};
@@ -22,8 +22,6 @@
 					};
 				};
 			};
-		};
-	};
 };
 
 &ni_uart0 {

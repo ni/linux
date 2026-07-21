@@ -2,20 +2,20 @@
 
 / {
 	compatible = "ni,zynq", "xlnx,zynq-7000";
+};
 
-	amba@0 {
-		i2c0: i2c@e0004000 {
+&i2c0 {
 			nicpld@40 {
 				watchdogs {
 					boot-watchdog {
-						interrupt-parent = <&gpio>;
+						interrupt-parent = <&gpio0>;
 						interrupts = <24 2 /* IRQ_TYPE_EDGE_FALLING */>;
 					};
 				};
 
 				switches {
 					wifi-switch {
-						interrupt-parent = <&gpio>;
+						interrupt-parent = <&gpio0>;
 						interrupts = <25 2 /* IRQ_TYPE_EDGE_FALLING */>;
 					};
 				};
@@ -33,8 +33,6 @@
 					};
 				};
 			};
-		};
-	};
 };
 
 &sdhci0 {
@@ -55,7 +53,7 @@
 	wl12xx: wl12xx@0 {
 		compatible = "ti,wl1271";
 		reg = <2>;
-		interrupt-parent = <&gpio>;
+		interrupt-parent = <&gpio0>;
 		interrupts = <15 0x4>;
 		ref-clock-frequency = <38400000>;
 	};

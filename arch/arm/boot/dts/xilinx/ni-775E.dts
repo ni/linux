@@ -4,13 +4,13 @@
 / {
 	model = "NI sbRIO-9651";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
+};
 
-	amba@0 {
-		i2c0: i2c@e0004000 {
+&i2c0 {
 			nicpld@40 {
 				watchdogs {
 					boot-watchdog {
-						interrupt-parent = <&gpio>;
+						interrupt-parent = <&gpio0>;
 						interrupts = <15 2 /* IRQ_TYPE_EDGE_FALLING */>;
 					};
 				};
@@ -36,8 +36,6 @@
 			ds3231_rtc@68 {
 				status = "okay";
 			};
-		};
-	};
 };
 
 &gem0 {
@@ -54,7 +52,7 @@
 	#size-cells = <0x0>;
 
 	emio-speed-gpios = <0>,
-			   <&gpio 54 0>;
+			   <&gpio0 54 0>;
 
 	phy0: phy@0 {
 		compatible = "micrel,KSZ9031","ethernet-phy-ieee802.3-c22";
@@ -62,7 +60,7 @@
 		reg = <0x0>;
 		/* Interrupt on GPIO1. */
 		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
-		interrupt-parent = <&gpio>;
+		interrupt-parent = <&gpio0>;
 
 		/* Set RX_CLK Pad Skew [4:0] to 0b00000. */
 		rxc-skew-ps = <0>;
@@ -82,8 +80,8 @@
 	#address-cells = <0x1>;
 	#size-cells = <0x0>;
 
-	emio-speed-gpios = <&gpio 56 0>,
-			   <&gpio 55 0>;
+	emio-speed-gpios = <&gpio0 56 0>,
+			   <&gpio0 55 0>;
 
 	phy1: phy@1 {
 		compatible = "micrel,KSZ9031","ethernet-phy-ieee802.3-c22";
@@ -91,7 +89,7 @@
 		reg = <0x1>;
 		/* Interrupt on GPIO57. */
 		interrupts = <57 8 /* IRQ_TYPE_LEVEL_LOW */>;
-		interrupt-parent = <&gpio>;
+		interrupt-parent = <&gpio0>;
 	};
 };
 

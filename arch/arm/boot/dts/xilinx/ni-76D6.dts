@@ -4,13 +4,14 @@
 / {
 	model = "NI cRIO-9068";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
+};
 
-	amba@0 {
-		i2c0: i2c@e0004000 {
+
+&i2c0 {
 			nicpld@40 {
 				watchdogs {
 					boot-watchdog {
-						interrupt-parent = <&gpio>;
+						interrupt-parent = <&gpio0>;
 						interrupts = <46 2 /* IRQ_TYPE_EDGE_FALLING */>;
 					};
 				};
@@ -55,8 +56,6 @@
 			ds3231_rtc@68 {
 				status = "okay";
 			};
-		};
-	};
 };
 
 &gem0 {
@@ -72,7 +71,7 @@
 		reg = <0x0>;
 		/* Interrupt on GPIO1, shared with phy1. */
 		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
-		interrupt-parent = <&gpio>;
+		interrupt-parent = <&gpio0>;
 
 		/* marvell,reg-init = <reg-page reg mask value>
 		 *
@@ -89,7 +88,7 @@
 		reg = <0x1>;
 		/* Interrupt on GPIO1, shared with phy0. */
 		interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
-		interrupt-parent = <&gpio>;
+		interrupt-parent = <&gpio0>;
 
 		/* marvell,reg-init = <reg-page reg mask value>
 		 *
@@ -109,7 +108,7 @@
 	phy-mode = "rgmii-id";
 	cdns,no_mdio_bus;
 	emio-speed-gpios = <0>,
-			   <&gpio 54 0>;
+			   <&gpio0 54 0>;
 };
 
 &ni_uart0 {

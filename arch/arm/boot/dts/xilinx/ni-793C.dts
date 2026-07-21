@@ -4,13 +4,13 @@
 / {
 	model = "NI ELVIS III";
 	compatible = "ni,zynq", "xlnx,zynq-7000";
+};
 
-	amba@0 {
-		i2c0: i2c@e0004000 {
+&i2c0 {
 			nicpld@40 {
 				watchdogs {
 					boot-watchdog {
-						interrupt-parent = <&gpio>;
+						interrupt-parent = <&gpio0>;
 						interrupts = <1 2 /* IRQ_TYPE_EDGE_FALLING */>;
 					};
 				};
@@ -47,8 +47,6 @@
 					compatible = "truly,oel9m1027";
 				};
 			};
-		};
-	};
 };
 
 &gem0 {
@@ -58,7 +56,7 @@
 	phy-handle = <&phy0>;
 	phy-mode = "rgmii-id";
 	emio-speed-gpios = <0>,
-			   <&gpio 54 0>;
+			   <&gpio0 54 0>;
 
 	#address-cells = <0x1>;
 	#size-cells = <0x0>;
@@ -69,7 +67,7 @@
 		reg = <0x0>;
 		/* Interrupt on GPIO25, shared with phy1. */
 		interrupts = <25 8 /* IRQ_TYPE_LEVEL_LOW */>;
-		interrupt-parent = <&gpio>;
+		interrupt-parent = <&gpio0>;
 
 		/* RX_DV Pad Skew [7:4] = +0.30ns (0xC0) */
 		/* Default is 0b0111, or 7. 7 * 60 ps = 420 ps. 0.30 ns is 300
@@ -131,7 +129,7 @@
 	status = "okay";
 	transceiver = "RS-232";
 	emio-con-dio-multiplex-gpios = <0>,
-				       <&gpio 56 0>;
+				       <&gpio0 56 0>;
 };
 
 &ni_uart1 {
