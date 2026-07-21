@@ -172,3 +172,34 @@
 	arm,dynamic-clock-gating = <0>;
 	arm,standby-mode = <0>;
 };
+
+/*
+ * The CoreSight debug/trace macrocells are not accessible on NI Zynq-based
+ * targets: reading their AMBA peripheral-ID registers (done unconditionally
+ * by the kernel as soon as the device is created, before any driver binds)
+ * hangs the SoC indefinitely. Disable them so of_platform_populate() never
+ * touches them.
+ */
+&{/replicator} {
+	status = "disabled";
+};
+
+&{/axi/etb@f8801000} {
+	status = "disabled";
+};
+
+&{/axi/tpiu@f8803000} {
+	status = "disabled";
+};
+
+&{/axi/funnel@f8804000} {
+	status = "disabled";
+};
+
+&{/axi/ptm@f889c000} {
+	status = "disabled";
+};
+
+&{/axi/ptm@f889d000} {
+	status = "disabled";
+};
