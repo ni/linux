@@ -1559,8 +1559,7 @@ static void myrio_wifi_sw_uninit(struct nizynqcpld *cpld)
 	}
 }
 
-static int nizynqcpld_probe(struct i2c_client *client,
-			    const struct i2c_device_id *id)
+static int nizynqcpld_probe(struct i2c_client *client)
 {
 	struct nizynqcpld_desc *desc;
 	struct nizynqcpld *cpld;
@@ -1713,7 +1712,7 @@ err_cpld_alloc:
 	return err;
 }
 
-static int nizynqcpld_remove(struct i2c_client *client)
+static void nizynqcpld_remove(struct i2c_client *client)
 {
 	struct nizynqcpld *cpld = i2c_get_clientdata(client);
 	struct nizynqcpld_desc *desc = cpld->desc;
@@ -1732,7 +1731,6 @@ static int nizynqcpld_remove(struct i2c_client *client)
 	myrio_wifi_sw_uninit(cpld);
 
 	kfree(cpld);
-	return 0;
 }
 
 static const struct of_device_id nizynqcpld_dt_ids[] = {
