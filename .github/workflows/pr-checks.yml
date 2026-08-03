@@ -23,16 +23,48 @@ jobs:
           sudo apt install libelf-dev
           sudo apt install python3-ply
           sudo apt install python3-git
+          sudo apt install gcc-arm-linux-gnueabihf
+          sudo apt install u-boot-tools
 
       - name: "[TEST] Build nati_x86_64_defconfig"
         run: |
-          make nati_x86_64_defconfig
-          make -j8 bzImage modules
+          make O=build-x64 nati_x86_64_defconfig
+          make O=build-x64 -j8 bzImage modules
 
       - name: "[TEST] Does nati_x86_64_defconfig need update"
         run: |
-          make savedefconfig
-          diff defconfig arch/x86/configs/nati_x86_64_defconfig
+          make O=build-x64 savedefconfig
+          diff build-x64/defconfig arch/x86/configs/nati_x86_64_defconfig
+
+      - name: "[TEST] Build nati_zynq_defconfig"
+        run: |
+          make O=build-zynq ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- nati_zynq_defconfig
+          make O=build-zynq ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j8 ni-pkg
+
+      - name: "[TEST] Does nati_zynq_defconfig need update"
+        run: |
+          make O=build-zynq ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- savedefconfig
+          diff build-zynq/defconfig arch/arm/configs/nati_zynq_defconfig
+
+      - name: "[TEST] Build nati_bluefin_defconfig"
+        run: |
+          make O=build-bluefin ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- nati_bluefin_defconfig
+          make O=build-bluefin ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j8 ni-pkg
+
+      - name: "[TEST] Does nati_bluefin_defconfig need update"
+        run: |
+          make O=build-bluefin ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- savedefconfig
+          diff build-bluefin/defconfig arch/arm/configs/nati_bluefin_defconfig
+
+      - name: "[TEST] Build nati_slsc_defconfig"
+        run: |
+          make O=build-slsc ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- nati_slsc_defconfig
+          make O=build-slsc ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j8 ni-pkg
+
+      - name: "[TEST] Does nati_slsc_defconfig need update"
+        run: |
+          make O=build-slsc ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- savedefconfig
+          diff build-slsc/defconfig arch/arm/configs/nati_slsc_defconfig
 
       - name: "[TEST] Is rebase required"
         run: |
