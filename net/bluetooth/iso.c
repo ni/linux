@@ -1443,6 +1443,7 @@ static void iso_conn_big_sync(struct sock *sk)
 {
 	int err;
 	struct hci_dev *hdev;
+	struct iso_conn *conn;
 	bdaddr_t src, dst;
 	u8 src_type;
 
@@ -1465,8 +1466,17 @@ static void iso_conn_big_sync(struct sock *sk)
 	hci_dev_lock(hdev);
 	lock_sock(sk);
 
+	/* The socket lock was dropped for hci_get_route(), so the connection
+	 * may have been torn down meanwhile: iso_chan_del() clears conn and
+	 * the broadcast teardown path can clear conn->hcon on its own. Check
+	 * both before dereferencing conn->hcon.
+	 */
+	conn = iso_pi(sk)->conn;
+	if (!conn || !conn->hcon)
+		goto unlock;
+
 	if (!test_and_set_bit(BT_SK_BIG_SYNC, &iso_pi(sk)->flags)) {
-		err = hci_conn_big_create_sync(hdev, iso_pi(sk)->conn->hcon,
+		err = hci_conn_big_create_sync(hdev, conn->hcon,
 					       &iso_pi(sk)->qos,
 					       iso_pi(sk)->sync_handle,
 					       iso_pi(sk)->bc_num_bis,
@@ -1475,6 +1485,7 @@ static void iso_conn_big_sync(struct sock *sk)
 			bt_dev_err(hdev, "hci_big_create_sync: %d", err);
 	}
 
+unlock:
 	release_sock(sk);
 	hci_dev_unlock(hdev);
 	hci_dev_put(hdev);
@@ -2200,7 +2211,7 @@ done:
 
 static void iso_connect_cfm(struct hci_conn *hcon, __u8 status)
 {
-	if (hcon->type != ISO_LINK) {
+	if (hcon->type != CIS_LINK && hcon->type != BIS_LINK) {
 		if (hcon->type != LE_LINK)
 			return;
 
@@ -2241,7 +2252,7 @@ static void iso_connect_cfm(struct hci_conn *hcon, __u8 status)
 
 static void iso_disconn_cfm(struct hci_conn *hcon, __u8 reason)
 {
-	if (hcon->type != ISO_LINK)
+	if (hcon->type != CIS_LINK && hcon->type != BIS_LINK)
 		return;
 
 	BT_DBG("hcon %p reason %d", hcon, reason);

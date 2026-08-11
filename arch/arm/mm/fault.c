@@ -191,13 +191,16 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 
 /*
  * Something tried to access memory that isn't in our memory map..
- * User mode accesses just cause a SIGSEGV
+ * User mode accesses just cause a SIGSEGV. Ensure interrupts are enabled
+ * for preempt RT.
  */
 static void
 __do_user_fault(unsigned long addr, unsigned int fsr, unsigned int sig,
 		int code, struct pt_regs *regs)
 {
 	struct task_struct *tsk = current;
+
+	local_irq_enable();
 
 #ifdef CONFIG_DEBUG_USER
 	if (((user_debug & UDBG_SEGV) && (sig == SIGSEGV)) ||
@@ -595,7 +598,7 @@ do_sect_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	 * Interrupts are disabled here.
 	 */
 	if (addr >= TASK_SIZE && user_mode(regs))
-		harden_branch_predictor();
+	harden_branch_predictor();
 
 	if (interrupts_enabled(regs))
 		local_irq_enable();
