@@ -190,13 +190,16 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 
 /*
  * Something tried to access memory that isn't in our memory map..
- * User mode accesses just cause a SIGSEGV
+ * User mode accesses just cause a SIGSEGV. Ensure interrupts are enabled
+ * for preempt RT.
  */
 static void
 __do_user_fault(unsigned long addr, unsigned int fsr, unsigned int sig,
 		int code, struct pt_regs *regs)
 {
 	struct task_struct *tsk = current;
+
+	local_irq_enable();
 
 #ifdef CONFIG_DEBUG_USER
 	if (((user_debug & UDBG_SEGV) && (sig == SIGSEGV)) ||
@@ -230,14 +233,10 @@ void do_bad_area(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	 * If we are in kernel mode at this point, we
 	 * have no context to handle this fault with.
 	 */
-	if (user_mode(regs)) {
-		if (addr >= TASK_SIZE)
-			harden_branch_predictor();
-		local_irq_enable();
+	if (user_mode(regs))
 		__do_user_fault(addr, fsr, SIGSEGV, SEGV_MAPERR, regs);
-	} else {
+	else
 		__do_kernel_fault(mm, addr, fsr, regs);
-	}
 }
 
 #ifdef CONFIG_MMU
@@ -272,6 +271,7 @@ do_kernel_address_page_fault(struct mm_struct *mm, unsigned long addr,
 		 * should not be faulting in kernel space, which includes the
 		 * vector/khelper page. Handle the branch predictor hardening
 		 * while interrupts are still disabled, then send a SIGSEGV.
+		 * Note that __do_user_fault() will enable interrupts.
 		 */
 		harden_branch_predictor();
 		__do_user_fault(addr, fsr, SIGSEGV, SEGV_MAPERR, regs);
@@ -314,11 +314,8 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 		return do_kernel_address_page_fault(mm, addr, fsr, regs);
 
 	/* Enable interrupts if they were enabled in the parent context. */
-	if (interrupts_enabled(regs)) {
-		if (user_mode(regs) && addr >= TASK_SIZE)
-			harden_branch_predictor();
+	if (interrupts_enabled(regs))
 		local_irq_enable();
-	}
 
 	/*
 	 * If we're in an interrupt or have no user
