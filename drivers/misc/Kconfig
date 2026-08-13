@@ -694,6 +694,16 @@ config NI_WATCHDOG
 
 	  If unsure, say N (but it's safe to say "Y").
 
+config NI_IRQ_RESOLVER
+	bool "NI interrupt resolver"
+	depends on ARCH_ZYNQ
+	help
+	  Resolves the Linux virtual IRQ for the HW interrupts.
+	  Required for NI-RIO Zynq HW on kernels where the
+	  GIC allocates virtual IRQs dynamically.
+
+	  If unsure, say Y on NI-RIO Zynq targets.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

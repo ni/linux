@@ -17699,6 +17699,12 @@ T:	git git://git.kernel.org/pub/scm/linux/kernel/git/mtd/linux.git nand/next
 F:	drivers/mtd/nand/
 F:	include/linux/mtd/*nand*.h
 
+NATIONAL INSTRUMENTS DEVICETREE IRQ RESOLVER
+M:	Alison Montag <alison.montag@emerson.com>
+S:	Maintained
+F:	drivers/misc/niirqresolver.c
+F:	include/linux/niirqresolver.h
+
 NATIONAL INSTRUMENTS SERIAL DRIVER
 M:	Chaitanya Vadrevu <chaitanya.vadrevu@emerson.com>
 L:	linux-serial@vger.kernel.org
