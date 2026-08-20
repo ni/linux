@@ -105,6 +105,11 @@
 			clock-frequency = <58824000>;
 		};
 
+		fpgaperipheral@f8007000 {
+			compatible = "fpgaperipheral";
+			reg = <0xf8007000 0x100>;
+		};
+
 		i2c2: i2c@81000000 {
 			compatible = "xlnx,xps-iic-2.00.a";
 			status = "disabled";
@@ -171,6 +176,14 @@
 	prefetch-instr = <1>;
 	arm,dynamic-clock-gating = <0>;
 	arm,standby-mode = <0>;
+};
+
+&devcfg {
+	status = "disabled";
+};
+
+&fpga_full {
+	status = "disabled";
 };
 
 /*
