@@ -1160,6 +1160,73 @@ static const struct irq_domain_ops gic_irq_domain_hierarchy_ops = {
 	.free = irq_domain_free_irqs_top,
 };
 
+static const struct irq_domain_ops gic_irq_domain_legacy_ops = {
+	.map = gic_irq_domain_map,
+	.translate = gic_irq_domain_translate,
+	.alloc = gic_irq_domain_alloc,
+	.free = irq_domain_free_irqs_top,
+};
+
+static struct irq_domain *gic_create_irq_domain(struct gic_chip_data *gic,
+						struct fwnode_handle *handle,
+						unsigned int gic_irqs)
+{
+	struct irq_domain *domain;
+	unsigned int irq_count;
+	unsigned int irq;
+	int irq_base;
+
+	if (!IS_ENABLED(CONFIG_NI_ZYNQ_GIC_LEGACY_IRQDOMAIN) ||
+	    gic != &gic_data[0])
+		return irq_domain_create_linear(handle, gic_irqs,
+						&gic_irq_domain_hierarchy_ops,
+						gic);
+
+	if (gic_irqs <= NR_IRQS_LEGACY)
+		return NULL;
+
+	irq_count = gic_irqs - NR_IRQS_LEGACY;
+	irq_base = irq_alloc_descs(NR_IRQS_LEGACY, NR_IRQS_LEGACY,
+				   irq_count, numa_node_id());
+	if (irq_base != NR_IRQS_LEGACY) {
+		if (irq_base >= 0)
+			irq_free_descs(irq_base, irq_count);
+		pr_err("GIC: cannot reserve fixed IRQ range %u-%u (%d)\n",
+		       NR_IRQS_LEGACY, gic_irqs - 1, irq_base);
+		return NULL;
+	}
+
+	domain = irq_domain_create_legacy(handle, irq_count, NR_IRQS_LEGACY,
+					  NR_IRQS_LEGACY,
+					  &gic_irq_domain_legacy_ops, gic);
+	if (!domain) {
+		irq_free_descs(irq_base, irq_count);
+		return NULL;
+	}
+
+	for (irq = NR_IRQS_LEGACY; irq < gic_irqs; irq++) {
+		if (irq_find_mapping(domain, irq) != irq) {
+			unsigned int mapped_irq;
+
+			pr_err("GIC: failed to establish fixed mapping for IRQ%u\n",
+			       irq);
+			for (mapped_irq = NR_IRQS_LEGACY;
+			     mapped_irq < gic_irqs; mapped_irq++) {
+				if (irq_find_mapping(domain, mapped_irq) == mapped_irq)
+					irq_dispose_mapping(mapped_irq);
+				else
+					irq_free_desc(mapped_irq);
+			}
+			irq_domain_remove(domain);
+			return NULL;
+		}
+	}
+
+	pr_info("GIC: using fixed Linux IRQ mapping %u-%u\n",
+		NR_IRQS_LEGACY, gic_irqs - 1);
+	return domain;
+}
+
 static int gic_init_bases(struct gic_chip_data *gic,
 			  struct fwnode_handle *handle)
 {
@@ -1207,9 +1274,7 @@ static int gic_init_bases(struct gic_chip_data *gic,
 		gic_irqs = 1020;
 	gic->gic_irqs = gic_irqs;
 
-	gic->domain = irq_domain_create_linear(handle, gic_irqs,
-					       &gic_irq_domain_hierarchy_ops,
-					       gic);
+	gic->domain = gic_create_irq_domain(gic, handle, gic_irqs);
 	if (WARN_ON(!gic->domain)) {
 		ret = -ENODEV;
 		goto error;
