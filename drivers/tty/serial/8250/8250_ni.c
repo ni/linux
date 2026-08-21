@@ -18,11 +18,16 @@
 #include <linux/init.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/notifier.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/serial_core.h>
 #include <linux/types.h>
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+#include <misc/fpgaperipheral.h>
+#endif
 
 #include "8250.h"
 
@@ -77,7 +82,57 @@ struct ni16550_device_info {
 struct ni16550_data {
 	int line;
 	struct clk *clk;
+#ifdef CONFIG_FPGA_PERIPHERAL
+	struct notifier_block fpga_notifier;
+	bool fpga_notifier_registered;
+	bool fpga_suspended;
+#endif
 };
+
+#ifdef CONFIG_FPGA_PERIPHERAL
+static u32 ni16550_disabled_serial_in(struct uart_port *port,
+				      unsigned int offset)
+{
+	return 0;
+}
+
+static void ni16550_disabled_serial_out(struct uart_port *port,
+					unsigned int offset, u32 value)
+{
+}
+
+static int ni16550_fpga_notify(struct notifier_block *nb,
+			      unsigned long event, void *unused)
+{
+	struct ni16550_data *data = container_of(nb, struct ni16550_data,
+						 fpga_notifier);
+	struct uart_8250_port *uart = serial8250_get_port(data->line);
+
+	switch (event) {
+	case FPGA_PERIPHERAL_DOWN:
+		if (!data->fpga_suspended) {
+			serial8250_suspend_port(data->line);
+			uart->port.serial_in = ni16550_disabled_serial_in;
+			uart->port.serial_out = ni16550_disabled_serial_out;
+			data->fpga_suspended = true;
+		}
+		break;
+	case FPGA_PERIPHERAL_UP:
+		if (data->fpga_suspended) {
+			serial8250_set_defaults(uart);
+			serial8250_resume_port(data->line);
+			data->fpga_suspended = false;
+		}
+		break;
+	case FPGA_PERIPHERAL_FAILED:
+		break;
+	default:
+		return NOTIFY_DONE;
+	}
+
+	return NOTIFY_OK;
+}
+#endif
 
 static int ni16550_enable_transceivers(struct uart_port *port)
 {
@@ -405,6 +460,20 @@ static int ni16550_probe(struct platform_device *pdev)
 		return ret;
 	data->line = ret;
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	if (dev_of_node(dev)) {
+		data->fpga_notifier.notifier_call = ni16550_fpga_notify;
+		ret = blocking_notifier_chain_register(&fpgaperipheral_notifier_list,
+						       &data->fpga_notifier);
+		if (ret) {
+			serial8250_unregister_port(data->line);
+			return dev_err_probe(dev, ret,
+					     "failed to register FPGA notifier\n");
+		}
+		data->fpga_notifier_registered = true;
+	}
+#endif
+
 	platform_set_drvdata(pdev, data);
 	return 0;
 }
@@ -413,6 +482,11 @@ static void ni16550_remove(struct platform_device *pdev)
 {
 	struct ni16550_data *data = platform_get_drvdata(pdev);
 
+#ifdef CONFIG_FPGA_PERIPHERAL
+	if (data->fpga_notifier_registered)
+		blocking_notifier_chain_unregister(&fpgaperipheral_notifier_list,
+							 &data->fpga_notifier);
+#endif
 	serial8250_unregister_port(data->line);
 }
 
