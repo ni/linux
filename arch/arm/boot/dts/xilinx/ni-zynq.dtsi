@@ -138,11 +138,11 @@
 };
 
 &usb0 {
-	usb-phy = <&usb_phy0>;
+	phys = <&usb_phy0>;
 };
 
 &usb1 {
-	usb-phy = <&usb_phy1>;
+	phys = <&usb_phy1>;
 };
 
 &smcc {
