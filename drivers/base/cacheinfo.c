@@ -664,6 +664,9 @@ static ssize_t size_show(struct device *dev,
 {
 	struct cacheinfo *this_leaf = dev_get_drvdata(dev);
 
+	if (IS_ENABLED(CONFIG_NI_LEGACY_ARM_CACHEINFO_SIZE))
+		return sysfs_emit(buf, "%u\n", this_leaf->size);
+
 	return sysfs_emit(buf, "%uK\n", this_leaf->size >> 10);
 }
 

@@ -25,3 +25,12 @@ config NI_ZYNQ_GIC_LEGACY_IRQDOMAIN
 	  This preserves compatibility with NI drivers that use fixed IRQs.
 	  Enable this only on NI Zynq systems that require the legacy IRQ
 	  numbering contract.
+
+config NI_LEGACY_ARM_CACHEINFO_SIZE
+	bool "Use legacy cache size units on NI ARM targets"
+	depends on ARCH_ZYNQ
+	help
+	  Report CPU cache sizes in bytes through sysfs instead of using the
+	  generic cacheinfo K suffix. This preserves compatibility with released
+	  NI ARM software that expects the legacy NI kernel representation.
+	  Enable this only for systems that require this compatibility behavior.
