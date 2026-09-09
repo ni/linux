@@ -1295,7 +1295,7 @@ cifs_demultiplex_thread(void *p)
 		 * The right amount was read from socket - 4 bytes,
 		 * so we can now interpret the length field.
 		 */
-		pdu_length = get_rfc1002_length(buf);
+		pdu_length = get_rfc1002_len(buf);
 
 		cifs_dbg(FYI, "RFC1002 header 0x%x\n", pdu_length);
 		if (!is_smb_response(server, buf[0]))
@@ -4169,6 +4169,9 @@ cifs_umount(struct cifs_sb_info *cifs_sb)
 		spin_lock(&cifs_sb->tlink_tree_lock);
 	}
 	spin_unlock(&cifs_sb->tlink_tree_lock);
+
+	flush_workqueue(serverclose_wq);
+	flush_workqueue(fileinfo_put_wq);
 
 	kfree(cifs_sb->prepath);
 	call_rcu(&cifs_sb->rcu, delayed_free);

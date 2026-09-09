@@ -737,12 +737,13 @@ struct super_block *sget_fc(struct fs_context *fc,
 	int err;
 
 	/*
-	 * Never allow s_user_ns != &init_user_ns when FS_USERNS_MOUNT is
-	 * not set, as the filesystem is likely unprepared to handle it.
-	 * This can happen when fsconfig() is called from init_user_ns with
-	 * an fs_fd opened in another user namespace.
+	 * Never allow s_user_ns != &init_user_ns when FS_USERNS_MOUNT or
+	 * FS_USERNS_DELEGATABLE is not set, as the filesystem is likely
+	 * unprepared to handle it. This can happen when fsconfig() is called
+	 * from init_user_ns with an fs_fd opened in another user namespace.
 	 */
-	if (user_ns != &init_user_ns && !(fc->fs_type->fs_flags & FS_USERNS_MOUNT)) {
+	if (user_ns != &init_user_ns &&
+	    !(fc->fs_type->fs_flags & (FS_USERNS_MOUNT | FS_USERNS_DELEGATABLE))) {
 		errorfc(fc, "VFS: Mounting from non-initial user namespace is not allowed");
 		return ERR_PTR(-EPERM);
 	}
@@ -1138,18 +1139,35 @@ void emergency_remount(void)
 	}
 }
 
+static inline bool get_active_super(struct super_block *sb)
+{
+	bool active = false;
+
+	if (super_lock_excl(sb)) {
+		active = atomic_inc_not_zero(&sb->s_active);
+		super_unlock_excl(sb);
+	}
+	return active;
+}
+
 static void do_thaw_all_callback(struct super_block *sb, void *unused)
 {
+	if (!get_active_super(sb))
+		return;
+
+	/* fs_bdev_thaw() acquires s_umount so it must not be held here */
 	if (IS_ENABLED(CONFIG_BLOCK))
 		while (sb->s_bdev && !bdev_thaw(sb->s_bdev))
 			pr_warn("Emergency Thaw on %pg\n", sb->s_bdev);
-	thaw_super_locked(sb, FREEZE_HOLDER_USERSPACE, NULL);
-	return;
+
+	if (super_lock_excl(sb))
+		thaw_super_locked(sb, FREEZE_HOLDER_USERSPACE, NULL);
+	deactivate_super(sb);
 }
 
 static void do_thaw_all(struct work_struct *work)
 {
-	__iterate_supers(do_thaw_all_callback, NULL, SUPER_ITER_EXCL);
+	__iterate_supers(do_thaw_all_callback, NULL, SUPER_ITER_UNLOCKED);
 	kfree(work);
 	printk(KERN_WARNING "Emergency Thaw complete\n");
 }
@@ -1168,17 +1186,6 @@ void emergency_thaw_all(void)
 		INIT_WORK(work, do_thaw_all);
 		schedule_work(work);
 	}
-}
-
-static inline bool get_active_super(struct super_block *sb)
-{
-	bool active = false;
-
-	if (super_lock_excl(sb)) {
-		active = atomic_inc_not_zero(&sb->s_active);
-		super_unlock_excl(sb);
-	}
-	return active;
 }
 
 static const char *filesystems_freeze_ptr = "filesystems_freeze";

@@ -561,7 +561,7 @@ static int sync_rw_sb(struct dm_integrity_c *ic, blk_opf_t opf)
 		}
 	}
 
-	r = dm_io(&io_req, 1, &io_loc, NULL, IOPRIO_DEFAULT);
+	r = dm_io(&io_req, 1, &io_loc, NULL, NULL, IOPRIO_DEFAULT);
 	if (unlikely(r))
 		return r;
 
@@ -1034,12 +1034,14 @@ static void encrypt_journal(struct dm_integrity_c *ic, bool encrypt, unsigned in
 		return crypt_journal(ic, encrypt, section, n_sections, comp);
 }
 
-static void complete_journal_io(unsigned long error, void *context)
+static void complete_journal_io(unsigned long error, unsigned long unsup, void *context)
 {
 	struct journal_completion *comp = context;
 
 	if (unlikely(error != 0))
 		dm_integrity_io_error(comp->ic, "writing journal", -EIO);
+	else if (unlikely(unsup != 0))
+		dm_integrity_io_error(comp->ic, "writing journal", -EOPNOTSUPP);
 	complete_journal_op(comp);
 }
 
@@ -1054,7 +1056,7 @@ static void rw_journal_sectors(struct dm_integrity_c *ic, blk_opf_t opf,
 
 	if (unlikely(dm_integrity_failed(ic))) {
 		if (comp)
-			complete_journal_io(-1UL, comp);
+			complete_journal_io(-1UL, -1UL, comp);
 		return;
 	}
 
@@ -1079,13 +1081,13 @@ static void rw_journal_sectors(struct dm_integrity_c *ic, blk_opf_t opf,
 	io_loc.sector = ic->start + SB_SECTORS + sector;
 	io_loc.count = n_sectors;
 
-	r = dm_io(&io_req, 1, &io_loc, NULL, IOPRIO_DEFAULT);
+	r = dm_io(&io_req, 1, &io_loc, NULL, NULL, IOPRIO_DEFAULT);
 	if (unlikely(r)) {
 		dm_integrity_io_error(ic, (opf & REQ_OP_MASK) == REQ_OP_READ ?
 				      "reading journal" : "writing journal", r);
 		if (comp) {
 			WARN_ONCE(1, "asynchronous dm_io failed: %d", r);
-			complete_journal_io(-1UL, comp);
+			complete_journal_io(-1UL, -1UL, comp);
 		}
 	}
 }
@@ -1176,7 +1178,7 @@ static void copy_from_journal(struct dm_integrity_c *ic, unsigned int section, u
 	BUG_ON((target | n_sectors | offset) & (unsigned int)(ic->sectors_per_block - 1));
 
 	if (unlikely(dm_integrity_failed(ic))) {
-		fn(-1UL, data);
+		fn(-1UL, -1UL, data);
 		return;
 	}
 
@@ -1196,10 +1198,10 @@ static void copy_from_journal(struct dm_integrity_c *ic, unsigned int section, u
 	io_loc.sector = target;
 	io_loc.count = n_sectors;
 
-	r = dm_io(&io_req, 1, &io_loc, NULL, IOPRIO_DEFAULT);
+	r = dm_io(&io_req, 1, &io_loc, NULL, NULL, IOPRIO_DEFAULT);
 	if (unlikely(r)) {
 		WARN_ONCE(1, "asynchronous dm_io failed: %d", r);
-		fn(-1UL, data);
+		fn(-1UL, -1UL, data);
 	}
 }
 
@@ -1479,9 +1481,6 @@ thorough_test:
 			*metadata_offset = 0;
 		}
 
-		if (unlikely(!is_power_of_2(ic->tag_size)))
-			hash_offset = (hash_offset + to_copy) % ic->tag_size;
-
 		total_size -= to_copy;
 	} while (unlikely(total_size));
 
@@ -1495,12 +1494,14 @@ struct flush_request {
 	struct completion comp;
 };
 
-static void flush_notify(unsigned long error, void *fr_)
+static void flush_notify(unsigned long error, unsigned long unsup, void *fr_)
 {
 	struct flush_request *fr = fr_;
 
 	if (unlikely(error != 0))
 		dm_integrity_io_error(fr->ic, "flushing disk cache", -EIO);
+	else if (unlikely(unsup != 0))
+		dm_integrity_io_error(fr->ic, "flushing disk cache", -EOPNOTSUPP);
 	complete(&fr->comp);
 }
 
@@ -1523,7 +1524,7 @@ static void dm_integrity_flush_buffers(struct dm_integrity_c *ic, bool flush_dat
 		fr.io_reg.count = 0;
 		fr.ic = ic;
 		init_completion(&fr.comp);
-		r = dm_io(&fr.io_req, 1, &fr.io_reg, NULL, IOPRIO_DEFAULT);
+		r = dm_io(&fr.io_req, 1, &fr.io_reg, NULL, NULL, IOPRIO_DEFAULT);
 		BUG_ON(r);
 	}
 
@@ -1839,7 +1840,7 @@ static noinline void integrity_recheck(struct dm_integrity_io *dio, char *checks
 			buffer_offset = (sector - io_loc.sector) << SECTOR_SHIFT;
 			io_loc.count = round_up(io_loc.count, alignment);
 
-			r = dm_io(&io_req, 1, &io_loc, NULL, IOPRIO_DEFAULT);
+			r = dm_io(&io_req, 1, &io_loc, NULL, NULL, IOPRIO_DEFAULT);
 			if (unlikely(r)) {
 				dio->bi_status = errno_to_blk_status(r);
 				goto free_ret;
@@ -2522,6 +2523,9 @@ static int dm_integrity_map_inline(struct dm_integrity_io *dio, bool from_map)
 	if (unlikely((bio->bi_opf & REQ_PREFLUSH) != 0))
 		return DM_MAPIO_REMAPPED;
 
+	if (unlikely(!dm_integrity_check_limits(ic, bio->bi_iter.bi_sector, bio)))
+		return DM_MAPIO_KILL;
+
 retry:
 	if (!dio->integrity_payload) {
 		unsigned digest_size, extra_size;
@@ -2586,10 +2590,6 @@ skip_spinlock:
 
 	dio->bio_details.bi_iter = bio->bi_iter;
 
-	if (unlikely(!dm_integrity_check_limits(ic, bio->bi_iter.bi_sector, bio))) {
-		return DM_MAPIO_KILL;
-	}
-
 	bio->bi_iter.bi_sector += ic->start + SB_SECTORS;
 
 	bip = bio_integrity_alloc(bio, GFP_NOIO, 1);
@@ -2605,7 +2605,7 @@ skip_spinlock:
 			struct bio_vec bv = bio_iter_iovec(bio, dio->bio_details.bi_iter);
 			const char *mem = integrity_kmap(ic, bv.bv_page);
 			if (ic->tag_size < ic->tuple_size)
-				memset(dio->integrity_payload + pos + ic->tag_size, 0, ic->tuple_size - ic->tuple_size);
+				memset(dio->integrity_payload + pos + ic->tag_size, 0, ic->tuple_size - ic->tag_size);
 			integrity_sector_checksum(ic, &dio->ahash_req, dio->bio_details.bi_iter.bi_sector, mem, bv.bv_offset, dio->integrity_payload + pos);
 			integrity_kunmap(ic, mem);
 			pos += ic->tuple_size;
@@ -2893,7 +2893,7 @@ release_flush_bios:
 	}
 }
 
-static void complete_copy_from_journal(unsigned long error, void *context)
+static void complete_copy_from_journal(unsigned long error, unsigned long unsup, void *context)
 {
 	struct journal_io *io = context;
 	struct journal_completion *comp = io->comp;
@@ -2903,6 +2903,8 @@ static void complete_copy_from_journal(unsigned long error, void *context)
 	mempool_free(io, &ic->journal_io_mempool);
 	if (unlikely(error != 0))
 		dm_integrity_io_error(ic, "copying from journal", -EIO);
+	else if (unlikely(unsup != 0))
+		dm_integrity_io_error(ic, "copying from journal", -EOPNOTSUPP);
 	complete_journal_op(comp);
 }
 
@@ -3218,7 +3220,7 @@ next_chunk:
 	io_loc.sector = get_data_sector(ic, area, offset);
 	io_loc.count = n_sectors;
 
-	r = dm_io(&io_req, 1, &io_loc, NULL, IOPRIO_DEFAULT);
+	r = dm_io(&io_req, 1, &io_loc, NULL, NULL, IOPRIO_DEFAULT);
 	if (unlikely(r)) {
 		dm_integrity_io_error(ic, "reading data", r);
 		goto err;

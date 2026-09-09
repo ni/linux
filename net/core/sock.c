@@ -786,7 +786,6 @@ bool sk_mc_loop(const struct sock *sk)
 		return inet6_test_bit(MC6_LOOP, sk);
 #endif
 	}
-	WARN_ON_ONCE(1);
 	return true;
 }
 EXPORT_SYMBOL(sk_mc_loop);
@@ -2525,6 +2524,11 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 
 	cgroup_sk_clone(&newsk->sk_cgrp_data);
 
+	RCU_INIT_POINTER(newsk->sk_reuseport_cb, NULL);
+
+	if (sock_needs_netstamp(sk) && newsk->sk_flags & SK_FLAGS_TIMESTAMP)
+		net_enable_timestamp();
+
 	rcu_read_lock();
 	filter = rcu_dereference(sk->sk_filter);
 	if (filter != NULL)
@@ -2546,8 +2550,6 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 
 		goto free;
 	}
-
-	RCU_INIT_POINTER(newsk->sk_reuseport_cb, NULL);
 
 	if (bpf_sk_storage_clone(sk, newsk))
 		goto free;
@@ -2575,9 +2577,6 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 
 	if (newsk->sk_prot->sockets_allocated)
 		sk_sockets_allocated_inc(newsk);
-
-	if (sock_needs_netstamp(sk) && newsk->sk_flags & SK_FLAGS_TIMESTAMP)
-		net_enable_timestamp();
 out:
 	return newsk;
 free:
@@ -3900,13 +3899,8 @@ int sock_common_recvmsg(struct socket *sock, struct msghdr *msg, size_t size,
 			int flags)
 {
 	struct sock *sk = sock->sk;
-	int addr_len = 0;
-	int err;
 
-	err = sk->sk_prot->recvmsg(sk, msg, size, flags, &addr_len);
-	if (err >= 0)
-		msg->msg_namelen = addr_len;
-	return err;
+	return sk->sk_prot->recvmsg(sk, msg, size, flags);
 }
 EXPORT_SYMBOL(sock_common_recvmsg);
 
