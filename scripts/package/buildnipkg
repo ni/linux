@@ -78,7 +78,7 @@ cat > "${bootdir}/linux.its" <<EOF
 	#address-cells = <1>;
 
 	images {
-		kernel@1 {
+		kernel {
 			description = "Linux kernel";
 			version = "populate-kernel-export-version";
 			data = /incbin/("./vmlinux.gz");
@@ -88,7 +88,7 @@ cat > "${bootdir}/linux.its" <<EOF
 			compression = "gzip";
 			load = <0x00008000>;
 			entry = <0x00008000>;
-			hash@1 {
+			hash {
 				algo = "crc32";
 			};
 		};
@@ -97,13 +97,13 @@ EOF
 for devcode in ${dtb_list}; do
 	cat >> "${bootdir}/linux.its" <<EOF
 
-		fdt_${devcode}@1 {
+		fdt_${devcode} {
 			description = "${devcode} device tree";
 			data = /incbin/("./ni-${devcode}.dtb");
 			type = "flat_dt";
 			arch = "arm";
 			compression = "none";
-			hash@1 {
+			hash {
 				algo = "crc32";
 			};
 		};
@@ -112,13 +112,13 @@ done
 
 cat >> "${bootdir}/linux.its" <<EOF
 
-		bootscript@1 {
+		bootscript {
 			description = "boot script";
 			data = /incbin/("./bootscript.txt");
 			type = "script";
 			arch = "arm";
 			compression = "none";
-			hash@1 {
+			hash {
 				algo = "crc32";
 			};
 		};
@@ -130,10 +130,10 @@ EOF
 for devcode in ${dtb_list}; do
 	cat >> "${bootdir}/linux.its" <<EOF
 
-		config_0x${devcode}@1 {
+		config_0x${devcode} {
 			description = "${devcode} runmode configuration";
-			kernel = "kernel@1";
-			fdt = "fdt_${devcode}@1";
+			kernel = "kernel";
+			fdt = "fdt_${devcode}";
 		};
 EOF
 done
