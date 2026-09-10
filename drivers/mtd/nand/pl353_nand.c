@@ -1218,6 +1218,9 @@ static int pl353_nand_probe(struct platform_device *pdev)
 	nand_chip = &xnand->chip;
 	mtd = &xnand->chip.mtd;
 
+	/* Attach the DT node so ofpart can register the NAND partitions. */
+	nand_set_flash_node(nand_chip, pdev->dev.of_node);
+
 	nand_chip->priv = xnand;
 	mtd->owner = THIS_MODULE;
 	mtd->name = PL353_NAND_DRIVER_NAME;
