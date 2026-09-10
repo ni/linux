@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Device tree for the Digilent ADP5490 (device code 0x7ABB).
+ *
+ * Copyright (C) 2013-2026 National Instruments
+ */
+
+/dts-v1/;
+/include/ "ni-lci.dtsi"
+
+/ {
+	model = "Digilent ADP5490";
+};
+
+&gem0 {
+	status = "okay";
+};
