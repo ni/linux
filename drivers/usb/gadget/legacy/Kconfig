@@ -443,6 +443,20 @@ config USB_G_HID
 	  Say "y" to link the driver statically, or "m" to build a
 	  dynamically linked module called "g_hid".
 
+config USB_G_LCI
+	tristate "National Instruments LCI (VirtualBench) Gadget"
+	select USB_LIBCOMPOSITE
+	select USB_F_HID_BULK
+	select USB_F_MASS_STORAGE
+	help
+	  The LCI gadget presents an NI VirtualBench device to the
+	  host: four HID/bulk data interfaces plus an optional mass-storage
+	  CD-ROM. Configured via g_lci.* module parameters from the boot
+	  command line.
+
+	  Say "y" to link the driver statically, or "m" to build a
+	  dynamically linked module called "g_lci".
+
 # Standalone / single function gadgets
 config USB_G_DBGP
 	tristate "EHCI Debug Device Gadget"
