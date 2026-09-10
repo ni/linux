@@ -217,6 +217,9 @@ config USB_F_MIDI2
 config USB_F_HID
 	tristate
 
+config USB_F_HID_BULK
+	tristate
+
 config USB_F_PRINTER
 	tristate
 
