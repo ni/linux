@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Common device tree for NI LCI (VirtualBench) devices.
+ *
+ * Copyright (C) 2013-2026 National Instruments
+ */
+
+/include/ "ni-zynq.dtsi"
+
+/ {
+	compatible = "ni,zynq", "xlnx,zynq-7000";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&gem0 {
+	phy-handle = <&phy0>;
+	phy-mode = "rgmii-id";
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+
+	phy0: phy@0 {
+		compatible = "marvell,88e1512", "ethernet-phy-ieee802.3-c22";
+		device_type = "ethernet-phy";
+		reg = <0x0>;
+		/* LED Function, Polarity, and Timer (page 3, regs 16-18). */
+		marvell,reg-init = <3 16 0 0x1177>,
+				   <3 17 0 0x0015>,
+				   <3 18 0 0x4900>;
+	};
+};
+
+&pinctrl0 {
+	pinctrl_usb0_default: usb0-default {
+		mux {
+			groups = "usb0_0_grp";
+			function = "usb0";
+		};
+
+		conf {
+			groups = "usb0_0_grp";
+			slew-rate = <0>;
+			io-standard = <1>;
+		};
+
+		conf-rx {
+			pins = "MIO29", "MIO31", "MIO36";
+			bias-high-impedance;
+		};
+
+		conf-tx {
+			pins = "MIO28", "MIO30", "MIO32", "MIO33", "MIO34",
+			       "MIO35", "MIO37", "MIO38", "MIO39";
+			bias-disable;
+		};
+	};
+};
+
+&clkc {
+	fclk-enable = <0xf>;
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "peripheral";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb0_default>;
+};
+
+&i2c0 {
+	status = "disabled";
+};
+
+&{/amba@0/smcc@e000e000/nand@e1000000} {
+	partition@0 {
+		label = "fsbl";
+		reg = <0x0 0x20000>;
+		read-only;
+	};
+
+	partition@1 {
+		label = "u-boot";
+		reg = <0x20000 0x80000>;
+		read-only;
+	};
+
+	partition@2 {
+		label = "boot-config";
+		reg = <0xa0000 0x2800000>;
+	};
+
+	partition@3 {
+		label = "root";
+		reg = <0x28a0000 0xd760000>;
+	};
+};

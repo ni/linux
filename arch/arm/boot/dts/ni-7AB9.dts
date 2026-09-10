@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Device tree for the Digilent ADP5250 (device code 0x7AB9).
+ *
+ * Copyright (C) 2013-2026 National Instruments
+ */
+
+/dts-v1/;
+/include/ "ni-lci.dtsi"
+
+/ {
+	model = "Digilent ADP5250";
+};
