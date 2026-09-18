@@ -52,6 +52,7 @@
 #define NIRTF_PLATFORM_MISC_ID_DOGFISH		3
 #define NIRTF_PLATFORM_MISC_ID_HAMMERHEAD	4
 #define NIRTF_PLATFORM_MISC_ID_WINGHEAD		5
+#define NIRTF_PLATFORM_MISC_ID_PHOENIX		6
 
 #define NIRTF_CONTROLLER_MODE_NO_FPGA_SW	0x40
 #define NIRTF_CONTROLLER_MODE_HARD_BOOT_N	0x20
@@ -553,6 +554,12 @@ static struct nirtfeatures_desc nirtfeatures_descs[] = {
 	{
 		.backplane_id = NIRTF_PLATFORM_MISC_ID_WINGHEAD,
 		.name = "Winghead",
+		.leds = nirtfeatures_leds,
+		.num_leds = ARRAY_SIZE(nirtfeatures_leds),
+	},
+	{
+		.backplane_id = NIRTF_PLATFORM_MISC_ID_PHOENIX,
+		.name = "Phoenix",
 		.leds = nirtfeatures_leds,
 		.num_leds = ARRAY_SIZE(nirtfeatures_leds),
 	}
