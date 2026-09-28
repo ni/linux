@@ -155,7 +155,9 @@ int mlx5r_umr_resource_init(struct mlx5_ib_dev *dev)
 	if (dev->umrc.qp)
 		goto unlock;
 
-	cq = ib_alloc_cq(&dev->ib_dev, NULL, 128, 0, IB_POLL_SOFTIRQ);
+	cq = ib_alloc_cq(&dev->ib_dev, NULL, 128, 0,
+			IS_ENABLED(CONFIG_PREEMPT_RT) ?
+			IB_POLL_WORKQUEUE : IB_POLL_SOFTIRQ);
 	if (IS_ERR(cq)) {
 		mlx5_ib_dbg(dev, "Couldn't create CQ for sync UMR QP\n");
 		ret = PTR_ERR(cq);

@@ -129,7 +129,8 @@ int mlx5_ib_create_gsi(struct ib_pd *pd, struct mlx5_ib_qp *mqp,
 	gsi->port_num = port_num;
 
 	gsi->cq = ib_alloc_cq(pd->device, gsi, attr->cap.max_send_wr, 0,
-			      IB_POLL_SOFTIRQ);
+			IS_ENABLED(CONFIG_PREEMPT_RT) ?
+			IB_POLL_WORKQUEUE : IB_POLL_SOFTIRQ);
 	if (IS_ERR(gsi->cq)) {
 		mlx5_ib_warn(dev,
 			     "unable to create send CQ for GSI QP. error %pe\n",
