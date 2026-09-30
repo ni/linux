@@ -19,6 +19,7 @@
 #include <linux/usb/hcd.h>
 #include <linux/usb/ulpi.h>
 
+#include "bits.h"
 #include "ci.h"
 
 struct ci_hdrc_usb2_priv {
@@ -31,8 +32,17 @@ static const struct ci_hdrc_platform_data ci_default_pdata = {
 	.flags		= CI_HDRC_DISABLE_STREAMING,
 };
 
+static int ci_zynq_notify_event(struct ci_hdrc *ci, unsigned int event)
+{
+	if (event == CI_HDRC_CONTROLLER_RESET_EVENT)
+		hw_write(ci, OP_OTGSC, OTGSC_OT | OTGSC_INT_STATUS_BITS,
+			 OTGSC_OT);
+	return 0;
+}
+
 static struct ci_hdrc_platform_data ci_zynq_pdata = {
 	.capoffset	= DEF_CAPOFFSET,
+	.notify_event	= ci_zynq_notify_event,
 };
 
 static const struct of_device_id ci_hdrc_usb2_of_match[] = {
