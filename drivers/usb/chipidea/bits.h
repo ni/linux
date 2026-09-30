@@ -102,6 +102,7 @@
 #define PTS_HSIC              4
 
 /* OTGSC */
+#define OTGSC_OT	      BIT(3)
 #define OTGSC_IDPU	      BIT(5)
 #define OTGSC_HADP	      BIT(6)
 #define OTGSC_HABA	      BIT(7)
