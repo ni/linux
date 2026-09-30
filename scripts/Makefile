@@ -28,7 +28,7 @@ HOSTLOADLIBES_extract-cert = -lcrypto
 always		:= $(hostprogs-y) $(hostprogs-m)
 
 # Only attempt to build the target-runnable
-ifneq ($(strip $(CROSS_COMPILE)),)
+ifneq ($(if $(NILRT_NO_ONTARGET_TOOLS),,$(strip $(CROSS_COMPILE))),)
 TGTPRE		:= $(notdir $(CROSS_COMPILE))
 tgtrecordmcount := $(TGTPRE)recordmcount
 always += $(tgtrecordmcount)

@@ -12,7 +12,7 @@ hostprogs-y	:= fixdep
 hostprogs-$(CONFIG_BUILD_BIN2C)     += bin2c
 always		:= $(hostprogs-y)
 
-ifneq ($(CROSS_COMPILE),)
+ifneq ($(if $(NILRT_NO_ONTARGET_TOOLS),,$(strip $(CROSS_COMPILE))),)
 TGTPRE		:= $(notdir $(CROSS_COMPILE))
 tgtfixdep	:= $(TGTPRE)fixdep
 
