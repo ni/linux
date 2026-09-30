@@ -71,6 +71,10 @@
 	};
 };
 
+&watchdog0 {
+	reset-on-timeout;
+};
+
 &usb0 {
 	status = "okay";
 	dr_mode = "peripheral";
