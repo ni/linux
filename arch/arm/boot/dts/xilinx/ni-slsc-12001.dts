@@ -22,55 +22,55 @@
 		spi11 = &spiController11;
 		spi12 = &spiController12;
 	};
+};
 
-	amba: amba@0 {
+&gpio0 {
+		/* You can specify GPIO settings here:
+		 *
+		 *  gpioN-label      String label.
+		 *  gpioN-direction  "input" or "output".
+		 *  gpioN-settings   "output" - specifies the GPIO state as "high"
+		 *                              or "low".
+		 *                   "input"  - specifies GPIO interrupt settings as
+		 *                              "none", "level-low", "level-high",
+		 *                              "edge-falling", "edge-rising", or
+		 *                              "edge-both".
+		 */
 
-		gpio: gpio@e000a000 {
-			/* You can specify GPIO settings here:
-			 *
-			 *  gpioN-label      String label.
-			 *  gpioN-direction  "input" or "output".
-			 *  gpioN-settings   "output" - specifies the GPIO state as "high"
-			 *                              or "low".
-			 *                   "input"  - specifies GPIO interrupt settings as
-			 *                              "none", "level-low", "level-high",
-			 *                              "edge-falling", "edge-rising", or
-			 *                              "edge-both".
-			 */
+		/* GPIO1 (MIO1) */
+		gpio1-label     = "eth0_phy_interrupt";
+		gpio1-direction = "input";
+		gpio1-settings  = "level-low";
 
-			/* GPIO1 (MIO1) */
-			gpio1-label     = "eth0_phy_interrupt";
-			gpio1-direction = "input";
-			gpio1-settings  = "level-low";
+		/* GPIO15 (MIO15) */
+		gpio15-label     = "wdt_interrupt";
+		gpio15-direction = "input";
+		gpio15-settings  = "edge-falling";
 
-			/* GPIO15 (MIO15) */
-			gpio15-label     = "wdt_interrupt";
-			gpio15-direction = "input";
-			gpio15-settings  = "edge-falling";
+		/* GPIO54 (EMIO0) */
+		gpio54-label     = "eth0_link_speed";
+		gpio54-direction = "output";
+		gpio54-settings  = "low";
 
-			/* GPIO54 (EMIO0) */
-			gpio54-label     = "eth0_link_speed";
-			gpio54-direction = "output";
-			gpio54-settings  = "low";
+		/* GPIO55 (EMIO1) */
+		gpio55-label     = "eth1_link_speed_1000";
+		gpio55-direction = "output";
+		gpio55-settings  = "low";
 
-			/* GPIO55 (EMIO1) */
-			gpio55-label     = "eth1_link_speed_1000";
-			gpio55-direction = "output";
-			gpio55-settings  = "low";
+		/* GPIO56 (EMIO2) */
+		gpio56-label     = "eth1_link_speed_100";
+		gpio56-direction = "output";
+		gpio56-settings  = "low";
 
-			/* GPIO56 (EMIO2) */
-			gpio56-label     = "eth1_link_speed_100";
-			gpio56-direction = "output";
-			gpio56-settings  = "low";
+		/* GPIO57 (EMIO3) */
+		gpio57-label     = "eth1_phy_interrupt";
+		gpio57-direction = "input";
+		gpio57-settings  = "level-low";
+	};
 
-			/* GPIO57 (EMIO3) */
-			gpio57-label     = "eth1_phy_interrupt";
-			gpio57-direction = "input";
-			gpio57-settings  = "level-low";
-		};
-
-		spiController1: spi@0x80001000 {
-			compatible = "cdns,spi-r1p6";
+	&amba {
+		spiController1: spi@80001000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80001000 0x1000>;
 			interrupts = <0 31 4>;
@@ -80,16 +80,20 @@
 			#size-cells = <0>;
 
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot1";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot1";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -102,8 +106,8 @@
 		};
 
 
-		spiController2: spi@0x80002000 {
-			compatible = "cdns,spi-r1p6";
+		spiController2: spi@80002000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80002000 0x1000>;
 			interrupts = <0 32 4>;
@@ -112,16 +116,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot2";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot2";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -134,8 +142,8 @@
 		};
 
 
-		spiController3: spi@0x80003000 {
-			compatible = "cdns,spi-r1p6";
+		spiController3: spi@80003000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80003000 0x1000>;
 			interrupts = <0 33 4>;
@@ -144,16 +152,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot3";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot3";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -166,8 +178,8 @@
 		};
 
 
-		spiController4: spi@0x80004000 {
-			compatible = "cdns,spi-r1p6";
+		spiController4: spi@80004000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80004000 0x1000>;
 			interrupts = <0 34 4>;
@@ -176,16 +188,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot4";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot4";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -198,8 +214,8 @@
 		};
 
 
-		spiController5: spi@0x80005000 {
-			compatible = "cdns,spi-r1p6";
+		spiController5: spi@80005000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80005000 0x1000>;
 			interrupts = <0 35 4>;
@@ -208,16 +224,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot5";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot5";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -229,8 +249,8 @@
 			};
 		};
 
-		spiController6: spi@0x80006000 {
-			compatible = "cdns,spi-r1p6";
+		spiController6: spi@80006000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80006000 0x1000>;
 			interrupts = <0 36 4>;
@@ -239,16 +259,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot6";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot6";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -260,8 +284,8 @@
 			};
 		};
 
-		spiController7: spi@0x80007000 {
-			compatible = "cdns,spi-r1p6";
+		spiController7: spi@80007000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80007000 0x1000>;
 			interrupts = <0 52 4>;
@@ -270,16 +294,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot7";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot7";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -291,8 +319,8 @@
 			};
 		};
 
-		spiController8: spi@0x80008000 {
-			compatible = "cdns,spi-r1p6";
+		spiController8: spi@80008000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80008000 0x1000>;
 			interrupts = <0 53 4>;
@@ -301,16 +329,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot8";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot8";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -322,8 +354,8 @@
 			};
 		};
 
-		spiController9: spi@0x80009000 {
-			compatible = "cdns,spi-r1p6";
+		spiController9: spi@80009000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x80009000 0x1000>;
 			interrupts = <0 54 4>;
@@ -332,16 +364,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot9";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot9";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -353,8 +389,8 @@
 			};
 		};
 
-		spiController10: spi@0x8000A000 {
-			compatible = "cdns,spi-r1p6";
+		spiController10: spi@8000a000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x8000A000 0x1000>;
 			interrupts = <0 55 4>;
@@ -363,16 +399,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot10";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot10";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -385,8 +425,8 @@
 		};
 
 
-		spiController11: spi@0x8000B000 {
-			compatible = "cdns,spi-r1p6";
+		spiController11: spi@8000b000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x8000B000 0x1000>;
 			interrupts = <0 56 4>;
@@ -395,16 +435,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot11";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot11";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -417,8 +461,8 @@
 		};
 
 
-		spiController12: spi@0x8000C000 {
-			compatible = "cdns,spi-r1p6";
+		spiController12: spi@8000c000 {
+			compatible = "xlnx,zynq-spi-r1p6";
 			status = "okay";
 			reg = <0x8000C000 0x1000>;
 			interrupts = <0 57 4>;
@@ -427,16 +471,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			m25p80@0 {
-				#address-cells = <1>;
-				#size-cells = <1>;
-				compatible = "m25p80","jedec,spi-nor";
+			flash@0 {
+				compatible = "jedec,spi-nor";
 				reg = <0>;
 				spi-max-frequency = <1000000>;
 
-				partition@0 {
-					label = "slsc_slot12";
-					reg = <0x0 0x100000>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "slsc_slot12";
+						reg = <0x0 0x100000>;
+					};
 				};
 			};
 
@@ -453,11 +501,7 @@
 		   reg = <0x80000000 0x30000>;
 		   interrupts = <0 29 4>;
 		};
-
 	};
-
-
-};
 
 &watchdog0 {
 		reset-on-timeout;
@@ -477,7 +521,7 @@
 		#size-cells = <0x0>;
 
 		emio-speed-gpios = <0>,
-						   <&gpio 54 0>;
+						   <&gpio0 54 0>;
 
 		phy0: phy@0 {
 				compatible = "micrel,KSZ9031","ethernet-phy-ieee802.3-c22";
@@ -485,7 +529,7 @@
 				reg = <0x0>;
 				/* Interrupt on GPIO1. */
 				interrupts = <1 8 /* IRQ_TYPE_LEVEL_LOW */>;
-				interrupt-parent = <&gpio>;
+				interrupt-parent = <&gpio0>;
 
 				/* Set RX_CLK Pad Skew [4:0] to 0b00000. */
 				rxc-skew-ps = <0>;
@@ -497,7 +541,7 @@
 	nicpld@40 {
 		watchdogs {
 			boot-watchdog {
-				interrupt-parent = <&gpio>;
+				interrupt-parent = <&gpio0>;
 				interrupts = <15 2 /* IRQ_TYPE_EDGE_FALLING */>;
 			};
 		};
