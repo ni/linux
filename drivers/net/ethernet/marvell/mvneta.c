@@ -2340,7 +2340,7 @@ mvneta_swbm_rx_frame(struct mvneta_port *pp,
 
 	/* Prefetch header */
 	prefetch(data);
-	xdp_buff_clear_frags_flag(xdp);
+	xdp_reinit_buff(xdp);
 	xdp_prepare_buff(xdp, data, pp->rx_offset_correction + MVNETA_MH_SIZE,
 			 data_len, true);
 }
@@ -5904,6 +5904,9 @@ static int mvneta_resume(struct device *device)
 	mvneta_start_dev(pp);
 	rtnl_unlock();
 	mvneta_set_rx_mode(dev);
+
+	if (!pp->neta_armada3700)
+		on_each_cpu(mvneta_percpu_enable, pp, true);
 
 	return 0;
 }

@@ -78,6 +78,8 @@ ssize_t netfs_wait_for_read(struct netfs_io_request *rreq);
 ssize_t netfs_wait_for_write(struct netfs_io_request *rreq);
 void netfs_wait_for_paused_read(struct netfs_io_request *rreq);
 void netfs_wait_for_paused_write(struct netfs_io_request *rreq);
+int netfs_clear_stale_pre_isize(struct inode *inode, unsigned long long from,
+				unsigned long long to, bool nowait);
 
 /*
  * objects.c
@@ -234,6 +236,18 @@ static inline bool netfs_is_cache_enabled(struct netfs_inode *ctx)
 
 	return fscache_cookie_valid(cookie) && cookie->cache_priv &&
 		fscache_cookie_enabled(cookie);
+#else
+	return false;
+#endif
+}
+
+static inline bool netfs_is_cache_maybe_enabled(struct netfs_inode *ctx)
+{
+#if IS_ENABLED(CONFIG_FSCACHE)
+	struct fscache_cookie *cookie = ctx->cache;
+
+	return fscache_cookie_valid(cookie) &&
+		test_bit(FSCACHE_COOKIE_IS_CACHING, &cookie->flags);
 #else
 	return false;
 #endif

@@ -307,7 +307,7 @@ struct kvm_arch {
 	 * Stage 2 paging state for VMs with nested S2 using a virtual
 	 * VMID.
 	 */
-	struct kvm_s2_mmu *nested_mmus;
+	struct kvm_s2_mmu **nested_mmus;
 	size_t nested_mmus_size;
 	int nested_mmus_next;
 
@@ -396,9 +396,6 @@ struct kvm_arch {
 
 	/* Masks for VNCR-backed and general EL2 sysregs */
 	struct kvm_sysreg_masks	*sysreg_masks;
-
-	/* Count the number of VNCR_EL2 currently mapped */
-	atomic_t vncr_map_count;
 
 	/*
 	 * For an untrusted host VM, 'pkvm.handle' is used to lookup

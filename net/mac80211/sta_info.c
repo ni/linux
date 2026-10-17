@@ -137,6 +137,8 @@ static void __cleanup_single_sta(struct sta_info *sta)
 	struct ieee80211_local *local = sdata->local;
 	struct ps_data *ps;
 
+	cancel_work_sync(&sta->drv_deliver_wk);
+
 	if (test_sta_flag(sta, WLAN_STA_PS_STA) ||
 	    test_sta_flag(sta, WLAN_STA_PS_DRIVER) ||
 	    test_sta_flag(sta, WLAN_STA_PS_DELIVER)) {
@@ -165,8 +167,6 @@ static void __cleanup_single_sta(struct sta_info *sta)
 
 	if (ieee80211_vif_is_mesh(&sdata->vif))
 		mesh_sta_cleanup(sta);
-
-	cancel_work_sync(&sta->drv_deliver_wk);
 
 	/*
 	 * Destroy aggregation state here. It would be nice to wait for the
@@ -355,6 +355,15 @@ static void sta_info_free_link(struct link_sta_info *link_sta)
 	free_percpu(link_sta->pcpu_rx_stats);
 }
 
+static void sta_link_free_rcu(struct rcu_head *head)
+{
+	struct sta_link_alloc *alloc =
+		container_of(head, struct sta_link_alloc, rcu_head);
+
+	sta_info_free_link(&alloc->info);
+	kfree(alloc);
+}
+
 static void sta_accumulate_removed_link_stats(struct sta_info *sta, int link_id)
 {
 	struct link_sta_info *link_sta = wiphy_dereference(sta->local->hw.wiphy,
@@ -427,10 +436,8 @@ static void sta_remove_link(struct sta_info *sta, unsigned int link_id,
 
 	RCU_INIT_POINTER(sta->link[link_id], NULL);
 	RCU_INIT_POINTER(sta->sta.link[link_id], NULL);
-	if (alloc) {
-		sta_info_free_link(&alloc->info);
-		kfree_rcu(alloc, rcu_head);
-	}
+	if (alloc)
+		call_rcu(&alloc->rcu_head, sta_link_free_rcu);
 
 	ieee80211_sta_recalc_aggregates(&sta->sta);
 }
@@ -1521,6 +1528,8 @@ static void __sta_info_destroy_part2(struct sta_info *sta, bool recalc)
 	__sta_info_recalc_tim(sta, true);
 
 	sta->dead = true;
+
+	cancel_work_sync(&sta->drv_deliver_wk);
 
 	local->num_sta--;
 	local->sta_generation++;
