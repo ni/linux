@@ -1342,7 +1342,7 @@ static int kernel_bindconnect(struct socket *s, struct sockaddr *laddr,
 			return rv;
 	}
 
-	rv = s->ops->bind(s, laddr, size);
+	rv = s->ops->bind(s, (struct sockaddr_unsized *)laddr, size);
 	if (rv < 0)
 		return rv;
 
@@ -1669,9 +1669,12 @@ int siw_accept(struct iw_cm_id *id, struct iw_cm_conn_param *params)
 			   SIW_QP_ATTR_STATE | SIW_QP_ATTR_LLP_HANDLE |
 				   SIW_QP_ATTR_ORD | SIW_QP_ATTR_IRD |
 				   SIW_QP_ATTR_MPA);
+	if (rv) {
+		qp->cep = NULL;
+		siw_cep_put(cep);
+		goto error_unlock;
+	}
 	up_write(&qp->state_lock);
-	if (rv)
-		goto error;
 
 	siw_dbg_cep(cep, "[QP %u]: send mpa reply, %d byte pdata\n",
 		    qp_id(qp), params->private_data_len);
@@ -1790,7 +1793,7 @@ int siw_create_listen(struct iw_cm_id *id, int backlog)
 				goto error;
 			}
 		}
-		rv = s->ops->bind(s, (struct sockaddr *)laddr,
+		rv = s->ops->bind(s, (struct sockaddr_unsized *)laddr,
 				  sizeof(struct sockaddr_in));
 	} else {
 		struct sockaddr_in6 *laddr = &to_sockaddr_in6(id->local_addr);
@@ -1814,7 +1817,7 @@ int siw_create_listen(struct iw_cm_id *id, int backlog)
 				goto error;
 			}
 		}
-		rv = s->ops->bind(s, (struct sockaddr *)laddr,
+		rv = s->ops->bind(s, (struct sockaddr_unsized *)laddr,
 				  sizeof(struct sockaddr_in6));
 	}
 	if (rv) {
