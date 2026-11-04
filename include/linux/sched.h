@@ -1675,7 +1675,15 @@ static inline char task_state_to_char(struct task_struct *tsk)
 	return task_index_to_char(task_state_index(tsk));
 }
 
-extern struct pid *cad_pid;
+#ifdef CONFIG_SMP
+extern void kick_process(struct task_struct *tsk);
+#else
+static inline void kick_process(struct task_struct *tsk)
+{
+}
+#endif
+
+extern struct pid __rcu *cad_pid;
 
 /*
  * Per process flags
@@ -1704,7 +1712,7 @@ extern struct pid *cad_pid;
 						 * I am cleaning dirty pages from some other bdi. */
 #define PF_KTHREAD		0x00200000	/* I am a kernel thread */
 #define PF_RANDOMIZE		0x00400000	/* Randomize virtual address space */
-#define PF__HOLE__00800000	0x00800000
+#define PF_NO_NOTIFY_SIGNAL	0x00800000	/* see no_notify_signal_save() */
 #define PF__HOLE__01000000	0x01000000
 #define PF__HOLE__02000000	0x02000000
 #define PF_NO_SETAFFINITY	0x04000000	/* Userland is not allowed to meddle with cpus_mask */
@@ -1952,12 +1960,6 @@ extern struct task_struct *find_get_task_by_vpid(pid_t nr);
 extern int wake_up_state(struct task_struct *tsk, unsigned int state);
 extern int wake_up_process(struct task_struct *tsk);
 extern void wake_up_new_task(struct task_struct *tsk);
-
-#ifdef CONFIG_SMP
-extern void kick_process(struct task_struct *tsk);
-#else
-static inline void kick_process(struct task_struct *tsk) { }
-#endif
 
 extern void __set_task_comm(struct task_struct *tsk, const char *from, bool exec);
 

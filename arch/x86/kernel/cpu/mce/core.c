@@ -2135,6 +2135,9 @@ bool filter_mce(struct mce *m)
 static __always_inline void exc_machine_check_kernel(struct pt_regs *regs)
 {
 	irqentry_state_t irq_state;
+	unsigned long dr7;
+
+	dr7 = local_db_save();
 
 	WARN_ON_ONCE(user_mode(regs));
 
@@ -2143,20 +2146,26 @@ static __always_inline void exc_machine_check_kernel(struct pt_regs *regs)
 	 * mce_check_crashing_cpu() for details.
 	 */
 	if (mca_cfg.initialized && mce_check_crashing_cpu())
-		return;
+		goto out;
 
 	irq_state = irqentry_nmi_enter(regs);
 
 	do_machine_check(regs);
 
 	irqentry_nmi_exit(regs, irq_state);
+out:
+	local_db_restore(dr7);
 }
 
 static __always_inline void exc_machine_check_user(struct pt_regs *regs)
 {
+	unsigned long dr7;
+
 	irqentry_enter_from_user_mode(regs);
 
+	dr7 = local_db_save();
 	do_machine_check(regs);
+	local_db_restore(dr7);
 
 	irqentry_exit_to_user_mode(regs);
 }
@@ -2165,21 +2174,13 @@ static __always_inline void exc_machine_check_user(struct pt_regs *regs)
 /* MCE hit kernel mode */
 DEFINE_IDTENTRY_MCE(exc_machine_check)
 {
-	unsigned long dr7;
-
-	dr7 = local_db_save();
 	exc_machine_check_kernel(regs);
-	local_db_restore(dr7);
 }
 
 /* The user mode variant. */
 DEFINE_IDTENTRY_MCE_USER(exc_machine_check)
 {
-	unsigned long dr7;
-
-	dr7 = local_db_save();
 	exc_machine_check_user(regs);
-	local_db_restore(dr7);
 }
 
 #ifdef CONFIG_X86_FRED
@@ -2196,28 +2197,20 @@ DEFINE_IDTENTRY_MCE_USER(exc_machine_check)
  */
 DEFINE_FREDENTRY_MCE(exc_machine_check)
 {
-	unsigned long dr7;
-
-	dr7 = local_db_save();
 	if (user_mode(regs))
 		exc_machine_check_user(regs);
 	else
 		exc_machine_check_kernel(regs);
-	local_db_restore(dr7);
 }
 #endif
 #else
 /* 32bit unified entry point */
 DEFINE_IDTENTRY_RAW(exc_machine_check)
 {
-	unsigned long dr7;
-
-	dr7 = local_db_save();
 	if (user_mode(regs))
 		exc_machine_check_user(regs);
 	else
 		exc_machine_check_kernel(regs);
-	local_db_restore(dr7);
 }
 #endif
 
@@ -2403,13 +2396,13 @@ static void vendor_disable_error_reporting(void)
 	mce_disable_error_reporting();
 }
 
-static int mce_syscore_suspend(void)
+static int mce_syscore_suspend(void *data)
 {
 	vendor_disable_error_reporting();
 	return 0;
 }
 
-static void mce_syscore_shutdown(void)
+static void mce_syscore_shutdown(void *data)
 {
 	vendor_disable_error_reporting();
 }
@@ -2419,7 +2412,7 @@ static void mce_syscore_shutdown(void)
  * Only one CPU is active at this time, the others get re-added later using
  * CPU hotplug:
  */
-static void mce_syscore_resume(void)
+static void mce_syscore_resume(void *data)
 {
 	__mcheck_cpu_init_generic();
 	__mcheck_cpu_init_vendor(raw_cpu_ptr(&cpu_info));
@@ -2427,10 +2420,14 @@ static void mce_syscore_resume(void)
 	cr4_set_bits(X86_CR4_MCE);
 }
 
-static struct syscore_ops mce_syscore_ops = {
+static const struct syscore_ops mce_syscore_ops = {
 	.suspend	= mce_syscore_suspend,
 	.shutdown	= mce_syscore_shutdown,
 	.resume		= mce_syscore_resume,
+};
+
+static struct syscore mce_syscore = {
+	.ops = &mce_syscore_ops,
 };
 
 /*
@@ -2833,7 +2830,7 @@ static __init int mcheck_init_device(void)
 	if (err < 0)
 		goto err_out_online;
 
-	register_syscore_ops(&mce_syscore_ops);
+	register_syscore(&mce_syscore);
 
 	return 0;
 

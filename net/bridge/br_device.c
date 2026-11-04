@@ -488,7 +488,7 @@ void br_dev_setup(struct net_device *dev)
 	SET_NETDEV_DEVTYPE(dev, &br_type);
 	dev->priv_flags = IFF_EBRIDGE | IFF_NO_QUEUE;
 	dev->lltx = true;
-	dev->netns_local = true;
+	dev->netns_immutable = true;
 
 	dev->features = COMMON_FEATURES | NETIF_F_HW_VLAN_CTAG_TX |
 			NETIF_F_HW_VLAN_STAG_TX;
@@ -501,7 +501,6 @@ void br_dev_setup(struct net_device *dev)
 	spin_lock_init(&br->lock);
 	INIT_LIST_HEAD(&br->port_list);
 	INIT_HLIST_HEAD(&br->fdb_list);
-	INIT_HLIST_HEAD(&br->frame_type_list);
 #if IS_ENABLED(CONFIG_BRIDGE_MRP)
 	INIT_HLIST_HEAD(&br->mrp_list);
 #endif

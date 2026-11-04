@@ -461,7 +461,7 @@ static struct drm_framebuffer *vc4_fb_create(struct drm_device *dev,
 	struct vc4_dev *vc4 = to_vc4_dev(dev);
 	struct drm_mode_fb_cmd2 mode_cmd_local;
 
-	if (WARN_ON_ONCE(vc4->gen == VC4_GEN_5))
+	if (WARN_ON_ONCE(vc4->gen > VC4_GEN_4))
 		return ERR_PTR(-ENODEV);
 
 	/* If the user didn't specify a modifier, use the
@@ -1084,7 +1084,7 @@ int vc4_kms_load(struct drm_device *dev)
 
 	drm_mode_config_reset(dev);
 
-	drm_kms_helper_poll_init(dev);
+	drmm_kms_helper_poll_init(dev);
 
 	return 0;
 }

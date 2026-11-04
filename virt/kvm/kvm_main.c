@@ -136,8 +136,6 @@ static int kvm_no_compat_open(struct inode *inode, struct file *file)
 #define KVM_COMPAT(c)	.compat_ioctl	= kvm_no_compat_ioctl,	\
 			.open		= kvm_no_compat_open
 #endif
-static int kvm_enable_virtualization(void);
-static void kvm_disable_virtualization(void);
 
 static void kvm_io_bus_destroy(struct kvm_io_bus *bus);
 
@@ -1164,7 +1162,7 @@ static struct kvm *kvm_create_vm(unsigned long type, const char *fdname)
 	rcuwait_init(&kvm->mn_memslots_update_rcuwait);
 	xa_init(&kvm->vcpu_array);
 #ifdef CONFIG_KVM_GENERIC_MEMORY_ATTRIBUTES
-	xa_init(&kvm->mem_attr_array);
+	xa_init_flags(&kvm->mem_attr_array, XA_FLAGS_ACCOUNT);
 #endif
 
 	INIT_LIST_HEAD(&kvm->gpc_list);
@@ -2429,13 +2427,35 @@ bool kvm_range_has_memory_attributes(struct kvm *kvm, gfn_t start, gfn_t end,
 		return (kvm_get_memory_attributes(kvm, start) & mask) == attrs;
 
 	guard(rcu)();
-	if (!attrs)
-		return !xas_find(&xas, end - 1);
 
+	/*
+	 * Lookup the entry for each index instead of iterating over the xarray
+	 * as KVM deletes/nullifies entries to represent "no attributes", and
+	 * the xas index is effectively invalid when no entry is found.  I.e.
+	 * matching non-zero attributes for *every* entry effectively requires
+	 * a manually lookup for each index.
+	 *
+	 * Skip pre-allocated, reserved entries, or restart the lookup if the
+	 * xarray was concurrently modified, via xas_retry() ("retry" means the
+	 * entry holds an internal xarray value, i.e. is either invalid or NULL
+	 * from the caller's perspective).
+	 *
+	 * Use xas_next() when looking for non-zero attributes to optimize for
+	 * the case where the start of the range (or the entire range) doesn't
+	 * have any attributes, as xas_next() returns literally the next entry,
+	 * whereas xas_next_entry() returns the next non-NULL entry (bounded by
+	 * a maximum index).
+	 */
 	for (index = start; index < end; index++) {
 		do {
-			entry = xas_next(&xas);
+			entry = attrs ? xas_next(&xas) :
+					xas_next_entry(&xas, end - 1);
 		} while (xas_retry(&xas, entry));
+
+		if (!entry)
+			return !attrs;
+
+		WARN_ON_ONCE(!xa_to_value(entry));
 
 		if (xas.xa_index != index ||
 		    (xa_to_value(entry) & mask) != attrs)
@@ -5642,7 +5662,7 @@ static int kvm_offline_cpu(unsigned int cpu)
 	return 0;
 }
 
-static void kvm_shutdown(void)
+static void kvm_shutdown(void *data)
 {
 	/*
 	 * Disable hardware virtualization and set kvm_rebooting to indicate
@@ -5660,7 +5680,7 @@ static void kvm_shutdown(void)
 	on_each_cpu(kvm_disable_virtualization_cpu, NULL, 1);
 }
 
-static int kvm_suspend(void)
+static int kvm_suspend(void *data)
 {
 	/*
 	 * Secondary CPUs and CPU hotplug are disabled across the suspend/resume
@@ -5677,7 +5697,7 @@ static int kvm_suspend(void)
 	return 0;
 }
 
-static void kvm_resume(void)
+static void kvm_resume(void *data)
 {
 	lockdep_assert_not_held(&kvm_usage_lock);
 	lockdep_assert_irqs_disabled();
@@ -5685,13 +5705,17 @@ static void kvm_resume(void)
 	WARN_ON_ONCE(kvm_enable_virtualization_cpu());
 }
 
-static struct syscore_ops kvm_syscore_ops = {
+static const struct syscore_ops kvm_syscore_ops = {
 	.suspend = kvm_suspend,
 	.resume = kvm_resume,
 	.shutdown = kvm_shutdown,
 };
 
-static int kvm_enable_virtualization(void)
+static struct syscore kvm_syscore = {
+	.ops = &kvm_syscore_ops,
+};
+
+int kvm_enable_virtualization(void)
 {
 	int r;
 
@@ -5707,7 +5731,7 @@ static int kvm_enable_virtualization(void)
 	if (r)
 		goto err_cpuhp;
 
-	register_syscore_ops(&kvm_syscore_ops);
+	register_syscore(&kvm_syscore);
 
 	/*
 	 * Undo virtualization enabling and bail if the system is going down.
@@ -5729,25 +5753,27 @@ static int kvm_enable_virtualization(void)
 	return 0;
 
 err_rebooting:
-	unregister_syscore_ops(&kvm_syscore_ops);
+	unregister_syscore(&kvm_syscore);
 	cpuhp_remove_state(CPUHP_AP_KVM_ONLINE);
 err_cpuhp:
 	kvm_arch_disable_virtualization();
 	--kvm_usage_count;
 	return r;
 }
+EXPORT_SYMBOL_GPL(kvm_enable_virtualization);
 
-static void kvm_disable_virtualization(void)
+void kvm_disable_virtualization(void)
 {
 	guard(mutex)(&kvm_usage_lock);
 
 	if (--kvm_usage_count)
 		return;
 
-	unregister_syscore_ops(&kvm_syscore_ops);
+	unregister_syscore(&kvm_syscore);
 	cpuhp_remove_state(CPUHP_AP_KVM_ONLINE);
 	kvm_arch_disable_virtualization();
 }
+EXPORT_SYMBOL_GPL(kvm_disable_virtualization);
 
 static int kvm_init_virtualization(void)
 {
@@ -5763,19 +5789,9 @@ static void kvm_uninit_virtualization(void)
 		kvm_disable_virtualization();
 }
 #else /* CONFIG_KVM_GENERIC_HARDWARE_ENABLING */
-static int kvm_enable_virtualization(void)
-{
-	return 0;
-}
-
 static int kvm_init_virtualization(void)
 {
 	return 0;
-}
-
-static void kvm_disable_virtualization(void)
-{
-
 }
 
 static void kvm_uninit_virtualization(void)

@@ -389,9 +389,10 @@ mt7915_init_wiphy(struct mt7915_phy *phy)
 	if (!is_mt7915(&dev->mt76))
 		wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_STA_TX_PWR);
 
-	if (!mdev->dev->of_node ||
-	    !of_property_read_bool(mdev->dev->of_node,
-				   "mediatek,disable-radar-background"))
+	if (mt7915_eeprom_has_background_radar(phy->dev) &&
+	    (!mdev->dev->of_node ||
+	     !of_property_read_bool(mdev->dev->of_node,
+				    "mediatek,disable-radar-background")))
 		wiphy_ext_feature_set(wiphy,
 				      NL80211_EXT_FEATURE_RADAR_BACKGROUND);
 
@@ -1189,6 +1190,12 @@ static void mt7915_unregister_ext_phy(struct mt7915_dev *dev)
 
 static void mt7915_stop_hardware(struct mt7915_dev *dev)
 {
+	int i;
+
+	mt76_for_each_q_rx(&dev->mt76, i) {
+		if (!mt76_queue_is_wed_rro(&dev->mt76.q_rx[i]))
+			napi_disable(&dev->mt76.napi[i]);
+	}
 	mt7915_mcu_exit(dev);
 	mt76_connac2_tx_token_put(&dev->mt76);
 	mt7915_dma_cleanup(dev);
@@ -1281,6 +1288,8 @@ free_phy2:
 void mt7915_unregister_device(struct mt7915_dev *dev)
 {
 	cancel_work_sync(&dev->dump_work);
+	cancel_work_sync(&dev->reset_work);
+	cancel_work_sync(&dev->rc_work);
 	mt7915_unregister_ext_phy(dev);
 	mt7915_coredump_unregister(dev);
 	mt7915_unregister_thermal(&dev->phy);

@@ -494,7 +494,7 @@ static int bond_ipsec_add_sa(struct xfrm_state *xs,
 	    !real_dev->xfrmdev_ops->xdo_dev_state_add ||
 	    netif_is_bond_master(real_dev)) {
 		NL_SET_ERR_MSG_MOD(extack, "Slave does not support ipsec offload");
-		err = -EINVAL;
+		err = -EOPNOTSUPP;
 		goto out;
 	}
 
@@ -6088,7 +6088,7 @@ void bond_setup(struct net_device *bond_dev)
 	bond_dev->lltx = true;
 
 	/* Don't allow bond devices to change network namespaces. */
-	bond_dev->netns_local = true;
+	bond_dev->netns_immutable = true;
 
 	/* By default, we declare the bond to be fully
 	 * VLAN hardware accelerated capable. Special

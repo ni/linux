@@ -20,6 +20,7 @@
  * driver.
  */
 
+#include <linux/aperture.h>
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/device.h>
@@ -30,7 +31,6 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 
-#include <drm/drm_aperture.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_fbdev_dma.h>
@@ -98,7 +98,7 @@ static int vc4_get_param_ioctl(struct drm_device *dev, void *data,
 	if (args->pad != 0)
 		return -EINVAL;
 
-	if (WARN_ON_ONCE(vc4->gen == VC4_GEN_5))
+	if (WARN_ON_ONCE(vc4->gen > VC4_GEN_4))
 		return -ENODEV;
 
 	if (!vc4->v3d)
@@ -147,7 +147,7 @@ static int vc4_open(struct drm_device *dev, struct drm_file *file)
 	struct vc4_dev *vc4 = to_vc4_dev(dev);
 	struct vc4_file *vc4file;
 
-	if (WARN_ON_ONCE(vc4->gen == VC4_GEN_5))
+	if (WARN_ON_ONCE(vc4->gen > VC4_GEN_4))
 		return -ENODEV;
 
 	vc4file = kzalloc(sizeof(*vc4file), GFP_KERNEL);
@@ -165,7 +165,7 @@ static void vc4_close(struct drm_device *dev, struct drm_file *file)
 	struct vc4_dev *vc4 = to_vc4_dev(dev);
 	struct vc4_file *vc4file = file->driver_priv;
 
-	if (WARN_ON_ONCE(vc4->gen == VC4_GEN_5))
+	if (WARN_ON_ONCE(vc4->gen > VC4_GEN_4))
 		return;
 
 	if (vc4file->bin_bo_used)
@@ -301,7 +301,7 @@ static int vc4_drm_bind(struct device *dev)
 	else
 		gen = VC4_GEN_4;
 
-	if (gen == VC4_GEN_5)
+	if (gen > VC4_GEN_4)
 		driver = &vc5_drm_driver;
 	else
 		driver = &vc4_drm_driver;
@@ -356,9 +356,12 @@ static int vc4_drm_bind(struct device *dev)
 		}
 	}
 
-	ret = drm_aperture_remove_framebuffers(driver);
-	if (ret)
+	ret = aperture_remove_all_conflicting_devices(driver->name);
+	if (ret) {
+		if (firmware)
+			rpi_firmware_put(firmware);
 		goto err;
+	}
 
 	if (firmware) {
 		ret = rpi_firmware_property(firmware,

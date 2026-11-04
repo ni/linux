@@ -1224,8 +1224,6 @@ static int vrf_prepare_mac_header(struct sk_buff *skb,
 	skb->protocol = eth->h_proto;
 	skb->pkt_type = PACKET_HOST;
 
-	skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
-
 	skb_pull_inline(skb, ETH_HLEN);
 
 	return 0;
@@ -1626,7 +1624,7 @@ static void vrf_setup(struct net_device *dev)
 	dev->lltx = true;
 
 	/* don't allow vrf devices to change network namespaces. */
-	dev->netns_local = true;
+	dev->netns_immutable = true;
 
 	/* does not make sense for a VLAN to be added to a vrf device */
 	dev->features   |= NETIF_F_VLAN_CHALLENGED;

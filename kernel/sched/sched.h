@@ -796,7 +796,6 @@ struct scx_rq {
 	struct scx_dispatch_q	local_dsq;
 	struct list_head	runnable_list;		/* runnable tasks on this rq */
 	struct list_head	ddsp_deferred_locals;	/* deferred ddsps from enq */
-	unsigned long		ops_qseq;
 	u64			extra_enq_flags;	/* see move_task_to_local_dsq() */
 	u32			nr_running;
 	u32			flags;
@@ -1184,7 +1183,11 @@ struct rq {
 	 */
 	unsigned long 		nr_uninterruptible;
 
-	struct task_struct __rcu	*curr;
+	/* Scheduling and execution contexts coincide without proxy execution. */
+	union {
+		struct task_struct __rcu *donor;
+		struct task_struct __rcu *curr;
+	};
 	struct sched_dl_entity	*dl_server;
 	struct task_struct	*idle;
 	struct task_struct	*stop;
@@ -1326,7 +1329,8 @@ struct rq {
 	unsigned int		core_forceidle_seq;
 	unsigned int		core_forceidle_occupation;
 	u64			core_forceidle_start;
-#endif
+	unsigned int		core_pick_in_flight;
+#endif /* CONFIG_SCHED_CORE */
 
 	/* Scratch cpumask to be temporarily used under rq_lock */
 	cpumask_var_t		scratch_mask;
