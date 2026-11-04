@@ -142,8 +142,7 @@ struct rxrpc_backlog {
 struct rxrpc_sock {
 	/* WARNING: sk has to be the first member */
 	struct sock		sk;
-	rxrpc_notify_new_call_t	notify_new_call; /* Func to notify of new call */
-	rxrpc_discard_new_call_t discard_new_call; /* Func to discard a new call */
+	const struct rxrpc_kernel_ops *app_ops;	/* Table of kernel app notification funcs */
 	struct rxrpc_local	*local;		/* local endpoint */
 	struct rxrpc_backlog	*backlog;	/* Preallocation for services */
 	spinlock_t		incoming_lock;	/* Incoming call vs service shutdown lock */
@@ -334,6 +333,7 @@ struct rxrpc_peer {
 	struct hlist_head	error_targets;	/* targets for net error distribution */
 	struct rb_root		service_conns;	/* Service connections */
 	struct list_head	keepalive_link;	/* Link in net->peer_keepalive[] */
+	unsigned long		app_data;	/* Application data (e.g. afs_server) */
 	unsigned int		last_tx_at;	/* Last time packet sent here (time64_t LSW) */
 	seqlock_t		service_conn_lock;
 	spinlock_t		lock;		/* access lock */
@@ -344,18 +344,9 @@ struct rxrpc_peer {
 	int			debug_id;	/* debug ID for printks */
 	struct sockaddr_rxrpc	srx;		/* remote address */
 
-	/* calculated RTT cache */
-#define RXRPC_RTT_CACHE_SIZE 32
-	spinlock_t		rtt_input_lock;	/* RTT lock for input routine */
-	ktime_t			rtt_last_req;	/* Time of last RTT request */
-	unsigned int		rtt_count;	/* Number of samples we've got */
-
-	u32			srtt_us;	/* smoothed round trip time << 3 in usecs */
-	u32			mdev_us;	/* medium deviation			*/
-	u32			mdev_max_us;	/* maximal mdev for the last rtt period	*/
-	u32			rttvar_us;	/* smoothed mdev_max			*/
-	u32			rto_us;		/* Retransmission timeout in usec */
-	u8			backoff;	/* Backoff timeout (as shift) */
+	/* Calculated RTT cache */
+	unsigned int		recent_srtt_us;
+	unsigned int		recent_rto_us;
 
 	u8			cong_ssthresh;	/* Congestion slow-start threshold */
 };
@@ -684,6 +675,7 @@ struct rxrpc_call {
 
 	/* Received data tracking */
 	struct sk_buff_head	recvmsg_queue;	/* Queue of packets ready for recvmsg() */
+	struct sk_buff_head	rx_queue;	/* Queue of packets for this call to receive */
 	struct sk_buff_head	rx_oos_queue;	/* Queue of out of sequence packets */
 	void			*rx_dec_buffer;	/* Decryption buffer */
 	unsigned short		rx_dec_bsize;	/* rx_dec_buffer size */
@@ -739,6 +731,18 @@ struct rxrpc_call {
 	rxrpc_seq_t		acks_hard_ack;	/* Latest hard-ack point */
 	rxrpc_seq_t		acks_lowest_nak; /* Lowest NACK in the buffer (or ==tx_hard_ack) */
 	rxrpc_serial_t		acks_highest_serial; /* Highest serial number ACK'd */
+
+	/* Calculated RTT cache */
+	ktime_t			rtt_last_req;	/* Time of last RTT request */
+	unsigned int		rtt_count;	/* Number of samples we've got */
+	unsigned int		rtt_taken;	/* Number of samples taken (wrapping) */
+	struct minmax		min_rtt;	/* Estimated minimum RTT */
+	u32			srtt_us;	/* smoothed round trip time << 3 in usecs */
+	u32			mdev_us;	/* medium deviation			*/
+	u32			mdev_max_us;	/* maximal mdev for the last rtt period	*/
+	u32			rttvar_us;	/* smoothed mdev_max			*/
+	u32			rto_us;		/* Retransmission timeout in usec */
+	u8			backoff;	/* Backoff timeout (as shift) */
 };
 
 /*
@@ -872,7 +876,7 @@ void rxrpc_propose_delay_ACK(struct rxrpc_call *, rxrpc_serial_t,
 void rxrpc_shrink_call_tx_buffer(struct rxrpc_call *);
 void rxrpc_resend(struct rxrpc_call *call, struct sk_buff *ack_skb);
 
-bool rxrpc_input_call_event(struct rxrpc_call *call, struct sk_buff *skb);
+bool rxrpc_input_call_event(struct rxrpc_call *call);
 
 /*
  * call_object.c
@@ -1179,6 +1183,7 @@ struct rxrpc_peer *rxrpc_lookup_peer_rcu(struct rxrpc_local *,
 					 const struct sockaddr_rxrpc *);
 struct rxrpc_peer *rxrpc_lookup_peer(struct rxrpc_local *local,
 				     struct sockaddr_rxrpc *srx, gfp_t gfp);
+void rxrpc_assess_MTU_size(struct rxrpc_local *local, struct rxrpc_peer *peer);
 struct rxrpc_peer *rxrpc_alloc_peer(struct rxrpc_local *, gfp_t,
 				    enum rxrpc_peer_trace);
 void rxrpc_new_incoming_peer(struct rxrpc_local *local, struct rxrpc_peer *peer);
@@ -1219,10 +1224,12 @@ static inline int rxrpc_abort_eproto(struct rxrpc_call *call,
 /*
  * rtt.c
  */
-void rxrpc_peer_add_rtt(struct rxrpc_call *, enum rxrpc_rtt_rx_trace, int,
-			rxrpc_serial_t, rxrpc_serial_t, ktime_t, ktime_t);
-ktime_t rxrpc_get_rto_backoff(struct rxrpc_peer *peer, bool retrans);
-void rxrpc_peer_init_rtt(struct rxrpc_peer *);
+void rxrpc_call_add_rtt(struct rxrpc_call *call, enum rxrpc_rtt_rx_trace why,
+			int rtt_slot,
+			rxrpc_serial_t send_serial, rxrpc_serial_t resp_serial,
+			ktime_t send_time, ktime_t resp_time);
+ktime_t rxrpc_get_rto_backoff(struct rxrpc_call *call, bool retrans);
+void rxrpc_call_init_rtt(struct rxrpc_call *call);
 
 /*
  * rxkad.c
@@ -1319,6 +1326,13 @@ static inline bool after(u32 seq1, u32 seq2)
 static inline bool after_eq(u32 seq1, u32 seq2)
 {
         return (s32)(seq1 - seq2) >= 0;
+}
+
+static inline void rxrpc_queue_rx_call_packet(struct rxrpc_call *call, struct sk_buff *skb)
+{
+	rxrpc_get_skb(skb, rxrpc_skb_get_call_rx);
+	__skb_queue_tail(&call->rx_queue, skb);
+	rxrpc_poke_call(call, rxrpc_call_poke_rx_packet);
 }
 
 /*

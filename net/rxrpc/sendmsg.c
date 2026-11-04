@@ -93,9 +93,11 @@ no_wait:
  */
 static bool rxrpc_check_tx_space(struct rxrpc_call *call, rxrpc_seq_t *_tx_win)
 {
+	rxrpc_seq_t tx_bottom = READ_ONCE(call->tx_bottom);
+
 	if (_tx_win)
-		*_tx_win = call->tx_bottom;
-	return call->tx_prepared - call->tx_bottom < 256;
+		*_tx_win = tx_bottom;
+	return call->tx_prepared - tx_bottom < 256;
 }
 
 /*
@@ -131,13 +133,13 @@ static int rxrpc_wait_for_tx_window_waitall(struct rxrpc_sock *rx,
 	rxrpc_seq_t tx_start, tx_win;
 	signed long rtt, timeout;
 
-	rtt = READ_ONCE(call->peer->srtt_us) >> 3;
+	rtt = READ_ONCE(call->srtt_us) >> 3;
 	rtt = usecs_to_jiffies(rtt) * 2;
 	if (rtt < 2)
 		rtt = 2;
 
 	timeout = rtt;
-	tx_start = smp_load_acquire(&call->acks_hard_ack);
+	tx_start = READ_ONCE(call->acks_hard_ack);
 
 	for (;;) {
 		set_current_state(TASK_UNINTERRUPTIBLE);

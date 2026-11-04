@@ -173,6 +173,7 @@ static void unix_del_edge(struct scm_fp_list *fpl, struct unix_edge *edge)
 	if (!vertex->out_degree) {
 		edge->predecessor->vertex = NULL;
 		list_move_tail(&vertex->entry, &fpl->vertices);
+		list_del(&vertex->scc_entry);
 	}
 }
 
@@ -582,6 +583,8 @@ static void __unix_gc(struct work_struct *work)
 {
 	struct sk_buff_head hitlist;
 	struct sk_buff *skb;
+
+	WRITE_ONCE(gc_in_progress, true);
 
 	spin_lock(&unix_gc_lock);
 

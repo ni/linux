@@ -166,7 +166,7 @@ static int vmemmap_remap_range(unsigned long start, unsigned long end,
 	VM_BUG_ON(!PAGE_ALIGNED(start | end));
 
 	mmap_read_lock(&init_mm);
-	ret = walk_page_range_novma(&init_mm, start, end, &vmemmap_remap_ops,
+	ret = walk_kernel_page_table_range(start, end, &vmemmap_remap_ops,
 				    NULL, walk);
 	mmap_read_unlock(&init_mm);
 	if (ret)
@@ -238,11 +238,11 @@ static void vmemmap_remap_pte(pte_t *pte, unsigned long addr,
  * struct page, the special metadata (e.g. page->flags or page->mapping)
  * cannot copy to the tail struct page structs. The invalid value will be
  * checked in the free_tail_page_prepare(). In order to avoid the message
- * of "corrupted mapping in tail page". We need to reset at least 3 (one
- * head struct page struct and two tail struct page structs) struct page
+ * of "corrupted mapping in tail page". We need to reset at least 4 (one
+ * head struct page struct and three tail struct page structs) struct page
  * structs.
  */
-#define NR_RESET_STRUCT_PAGE		3
+#define NR_RESET_STRUCT_PAGE		4
 
 static inline void reset_struct_pages(struct page *start)
 {
