@@ -339,6 +339,8 @@ properties:
           - national,lm85c
             # I2C ±0.33°C Accurate, 12-Bit + Sign Temperature Sensor and Thermal Window Comparator
           - national,lm92
+            # NI Switch Load and Signal Conditioning (SLSC) SPI module
+          - ni,slsc-module
             # Nuvoton Temperature Sensor
           - nuvoton,w83773g
             # NXP ISP1301 USB transceiver
