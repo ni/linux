@@ -3921,9 +3921,16 @@ out:
 	 * subflow_finish_connect()
 	 */
 	if (unlikely(err)) {
-		/* avoid leaving a dangling token in an unconnected socket */
 		mptcp_token_destroy(msk);
 		mptcp_set_state(sk, TCP_CLOSE);
+
+		spin_lock_bh(&msk->fallback_lock);
+		msk->allow_subflows = true;
+		msk->allow_infinite_fallback = true;
+		clear_bit(MPTCP_FALLBACK_DONE, &msk->flags);
+		spin_unlock_bh(&msk->fallback_lock);
+
+		mptcp_subflow_ctx_reset(mptcp_subflow_ctx(ssk));
 		return err;
 	}
 
@@ -3964,7 +3971,7 @@ static struct proto mptcp_prot = {
 	.no_autobind	= true,
 };
 
-static int mptcp_bind(struct socket *sock, struct sockaddr_unsized *uaddr, int addr_len)
+static int mptcp_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
 	struct mptcp_sock *msk = mptcp_sk(sock->sk);
 	struct sock *ssk, *sk = sock->sk;
@@ -3978,10 +3985,10 @@ static int mptcp_bind(struct socket *sock, struct sockaddr_unsized *uaddr, int a
 	}
 
 	if (sk->sk_family == AF_INET)
-		err = inet_bind_sk(ssk, (struct sockaddr *)uaddr, addr_len);
+		err = inet_bind_sk(ssk, uaddr, addr_len);
 #if IS_ENABLED(CONFIG_MPTCP_IPV6)
 	else if (sk->sk_family == AF_INET6)
-		err = inet6_bind_sk(ssk, (struct sockaddr *)uaddr, addr_len);
+		err = inet6_bind_sk(ssk, uaddr, addr_len);
 #endif
 	if (!err)
 		mptcp_copy_inaddrs(sk, ssk);
