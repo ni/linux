@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Device tree for the NI VB-8054 (device code 0x78B4).
+ *
+ * Copyright (C) 2013-2026 National Instruments
+ */
+
+/dts-v1/;
+/include/ "ni-lci.dtsi"
+
+/ {
+	model = "NI VB-8054";
+};
+
+&gem0 {
+	status = "okay";
+};
